@@ -8,10 +8,17 @@
  */
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import { createTestRenderer } from "@opentui/core/testing"
 import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { Scheduler } from "../../src/sources/scheduler.ts"
 import { openDatabase } from "../../src/storage/db.ts"
+import { Frame } from "../../src/ui/chrome/frame.ts"
+import { panelFits } from "../../src/ui/chrome/panel.ts"
+import { applyFrameState, applyPanel, frameState } from "../../src/ui/chrome/state.ts"
+import { Navigation } from "../../src/ui/navigation.ts"
 import { composeScreen } from "../../src/ui/screen.ts"
+import { UNSORTED } from "../../src/ui/sort.ts"
+import { themeByName } from "../../src/ui/theme/themes.ts"
 
 const F = join(import.meta.dir, "../../fixtures/2026")
 const NAT = readFileSync(join(F, "vysledky.xml"), "utf8")
@@ -27,6 +34,21 @@ const heap = () => Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
 
 const start = heap()
 let maxKeyMs = 0
+let maxDrawMs = 0
+
+/**
+ * The real drawing path, through a real renderer (T167).
+ *
+ * The redesign added a renderable per row, a frame, a scroll bar and a side panel. The
+ * old soak measured composeScreen alone, which no longer accounts for most of the work,
+ * so this measures what the user actually waits for.
+ */
+const setup = await createTestRenderer({ width: 120, height: 34 })
+const frame = new Frame(setup.renderer)
+frame.attach(setup.renderer.root)
+const nav = new Navigation()
+nav.push({ kind: "district", nuts: "CZ0642" })
+const theme = themeByName("dark")
 
 for (let cycle = 0; cycle < CYCLES; cycle++) {
   // Each cycle the count advances slightly, so snapshots genuinely rotate.
@@ -53,6 +75,29 @@ for (let cycle = 0; cycle < CYCLES; cycle++) {
   composeScreen(db, { kind: "district", nuts: "CZ0642" }, opts)
   maxKeyMs = Math.max(maxKeyMs, performance.now() - t0)
 
+  // And the whole redraw, renderables included.
+  const t1 = performance.now()
+  applyPanel(frame, db, theme, panelFits(frame.rawContentWidth))
+  applyFrameState(
+    frame,
+    frameState({
+      db,
+      nav,
+      councilType: "OBEC",
+      query: "",
+      theme,
+      sort: UNSORTED,
+      width: 120,
+      contentWidth: frame.contentWidth > 0 ? frame.contentWidth : 117,
+      contentHeight: frame.contentHeight > 0 ? frame.contentHeight : 30,
+      warning: null,
+      notice: null,
+    }),
+    theme,
+  )
+  await setup.renderOnce()
+  maxDrawMs = Math.max(maxDrawMs, performance.now() - t1)
+
   if (cycle % 180 === 0) {
     const rows = db.query("SELECT COUNT(*) AS n FROM result_snapshot").get() as { n: number }
     console.log(
@@ -68,7 +113,9 @@ console.log(`\npo ${CYCLES} cyklech:`)
 console.log(`  heap ${start} MB -> ${end} MB`)
 console.log(`  snapshotů: ${rows.n}  (musí zůstat <= 2 na oblast)`)
 console.log(`  řádků stran: ${parties.n}`)
-console.log(`  nejdelší překreslení: ${maxKeyMs.toFixed(1)} ms (limit 100 ms)`)
+console.log(`  nejdelší složení obrazovky: ${maxKeyMs.toFixed(1)} ms (limit 100 ms)`)
+console.log(`  nejdelší celé překreslení včetně rámu: ${maxDrawMs.toFixed(1)} ms (limit 100 ms)`)
+console.log(`  řádkových renderable objektů v poolu: ${frame.rows.length}`)
 
 const areas = db
   .query(
@@ -77,4 +124,5 @@ const areas = db
   .all()
 for (const a of areas as unknown[]) console.log("  PŘEBÝVÁ:", JSON.stringify(a))
 console.log(`  oblastí s více než 2 snapshoty: ${areas.length}`)
-process.exit(areas.length === 0 && maxKeyMs < 100 ? 0 : 1)
+setup.renderer.destroy()
+process.exit(areas.length === 0 && maxKeyMs < 100 && maxDrawMs < 100 ? 0 : 1)

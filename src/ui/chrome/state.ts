@@ -21,7 +21,7 @@ import type { ActionContext } from "../palette/actions.ts"
 import type { SemanticRow } from "../row.ts"
 import { composeScreen, type ScreenContent } from "../screen.ts"
 import type { SortState } from "../sort.ts"
-import { styledBlock, styledRow } from "../theme/apply.ts"
+import { colorFor, styledBlock, styledRow } from "../theme/apply.ts"
 import type { Theme } from "../theme/themes.ts"
 import { breadcrumbFor } from "./breadcrumb.ts"
 import type { Frame } from "./frame.ts"
@@ -140,7 +140,8 @@ function markSelected(row: SemanticRow): SemanticRow {
 }
 
 /** Puts the state on screen. Nothing here decides anything; it only applies. */
-export function applyFrameState(frame: Frame, state: FrameState): void {
+export function applyFrameState(frame: Frame, state: FrameState, theme?: Theme): void {
+  if (theme !== undefined) frame.setBorderColor(colorFor(theme, "muted"))
   frame.setBreadcrumb(state.breadcrumb)
   frame.setWarning(state.warning)
   frame.setRows(state.styled)

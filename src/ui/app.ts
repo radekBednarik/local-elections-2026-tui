@@ -668,6 +668,7 @@ export class App {
         warning: staleWarning(this.deps.scheduler.all()),
         notice: this.notice,
       }),
+      this.theme,
     )
   }
 }

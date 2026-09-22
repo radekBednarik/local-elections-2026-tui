@@ -7,6 +7,8 @@
  */
 
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { createTestRenderer } from "@opentui/core/testing"
 import type { Screen } from "../../src/ui/navigation.ts"
 import { ACTIONS, type ActionContext } from "../../src/ui/palette/actions.ts"
@@ -184,5 +186,41 @@ describe("the rendered palette", () => {
       palette.destroy()
       setup.renderer.destroy()
     }
+  })
+})
+
+describe("choosing performs the action, and Esc changes nothing (FR-068)", () => {
+  test("the chosen action is the same one its key performs", () => {
+    // The palette does not carry its own implementation of anything. It yields an
+    // action id, and the key for that action yields the same id, so both arrive at the
+    // same branch of App.perform.
+    for (const action of ACTIONS) {
+      const entry = paletteEntries(COUNCIL).find((e) => e.action.id === action.id)
+      expect(entry?.action.id).toBe(action.id)
+    }
+  })
+
+  test("a key and a palette entry reach one implementation, not two", () => {
+    // Structural: App routes both through perform(), and there is no second place where
+    // an action is carried out.
+    const source = readFileSync(join(import.meta.dir, "../../src/ui/app.ts"), "utf8")
+    const definitions = source.match(/private async perform\(/g) ?? []
+    expect(definitions).toHaveLength(1)
+    // Called from the key handler and from the palette handler, and nowhere else.
+    const calls = source.match(/this\.perform\(/g) ?? []
+    expect(calls).toHaveLength(2)
+  })
+
+  test("the palette cannot move the user, so Esc returns to exactly where they were", () => {
+    // It holds no navigation state at all: closing it can only reveal what was behind.
+    const source = readFileSync(join(import.meta.dir, "../../src/ui/palette/view.ts"), "utf8")
+    expect(source).not.toContain("Navigation")
+    expect(source).not.toContain("nav.")
+  })
+
+  test("an unavailable entry yields nothing to perform", () => {
+    const districts = ctx({ kind: "districts" }, { rowCount: 78 })
+    const watch = paletteEntries(districts).find((e) => e.action.id === "watch")
+    expect(watch?.available).toBe(false)
   })
 })

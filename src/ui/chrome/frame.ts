@@ -21,6 +21,7 @@ import {
   type CliRenderer,
   type MouseEvent,
   type Renderable,
+  type RGBA,
   ScrollBoxRenderable,
   type StyledText,
   TextRenderable,
@@ -136,6 +137,24 @@ export class Frame {
 
   setStatus(text: string): void {
     this.statusBar.content = text
+  }
+
+  /**
+   * Colours the borders from the theme (T136).
+   *
+   * The borders are the one part of the frame the role system did not reach: they were
+   * drawn in the layout engine's own default grey whatever theme was chosen. They take
+   * the `muted` role, which is what they are.
+   *
+   * A theme that asks for no colour leaves them to the default rather than pinning a
+   * value. Pinning one would mean guessing whether the user's terminal is light or dark,
+   * and a border guessed wrong is invisible - worse than a border that is merely not
+   * themed.
+   */
+  setBorderColor(color: RGBA | undefined): void {
+    if (color === undefined) return
+    this.body.borderColor = color
+    this.panel.borderColor = color
   }
 
   /** Shows a warning, or hides the row entirely when there is none. */

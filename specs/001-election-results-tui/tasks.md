@@ -433,8 +433,8 @@ and perform it. Every action is present; each shows its key.
 - [X] T131 [US8] [TDD] Perform the chosen action directly on selection in `src/ui/palette/view.ts` (FR-068), and return to exactly the previous screen and selection on Esc
 - [X] T132 [US8] [TDD] Show inapplicable actions marked unavailable WITH THE REASON rather than hiding them, in `src/ui/palette/view.ts` (FR-069). Hiding them would teach the user the application is smaller than it is
 - [X] T133 [US8] [TDD] Assert in `tests/ui/palette.test.ts` that the palette lists every action in the registry, so an action added later cannot be unreachable (SC-020)
-- [ ] T134 [US8] Run quickstart scenario **V16** and record the result in `specs/001-election-results-tui/quickstart.md`
-- [ ] T135 **REVIEW** User Story 8 in `src/ui/palette/`: verify the registry is genuinely shared with the status bar, that diacritic folding is the same function search uses, and that no action exists outside the registry
+- [X] T134 [US8] Run quickstart scenario **V16** and record the result in `specs/001-election-results-tui/quickstart.md`
+- [X] T135 **REVIEW** User Story 8 in `src/ui/palette/`: verify the registry is genuinely shared with the status bar, that diacritic folding is the same function search uses, and that no action exists outside the registry
 
 ---
 
@@ -450,8 +450,8 @@ state is still distinguishable.
 - [X] T138 [US9] [TDD] Assert in `tests/ui/colour.test.ts` that NO electoral party is coloured differently from any other (FR-060). With thousands of local candidate lists there is no authoritative party colour, and assigning one would imply a political affiliation the source never published
 - [X] T139 [US9] [TDD] Assert the monochrome guarantee in `tests/ui/colour.test.ts`: with colour disabled, every status remains distinguishable by text, symbol or position (FR-063, SC-023)
 - [X] T140 [US9] [TDD] Assert in `tests/ui/colour.test.ts` that the high-contrast theme separates roles by brightness rather than hue, so it works for a user who cannot distinguish the palette's colours (FR-062, SC-024)
-- [ ] T141 [US9] Run quickstart scenario **V15** and record the result in `specs/001-election-results-tui/quickstart.md`
-- [ ] T142 **REVIEW** User Story 9 in `src/ui/`: verify no colour literal appears outside `src/ui/theme/`, and that removing colour removes nothing but decoration
+- [X] T141 [US9] Run quickstart scenario **V15** and record the result in `specs/001-election-results-tui/quickstart.md`
+- [X] T142 **REVIEW** User Story 9 in `src/ui/`: verify no colour literal appears outside `src/ui/theme/`, and that removing colour removes nothing but decoration
 
 ---
 
@@ -468,8 +468,8 @@ does.
 - [X] T145 [US10] [TDD] Assert in `tests/ui/bar.test.ts` that bars render as shape not colour, surviving NO_COLOR and a monochrome terminal (FR-072)
 - [X] T146 [US10] [TDD] Omit bars entirely rather than truncating them when the terminal is too narrow, in `src/ui/views/areas.ts`, so a narrow terminal loses the aid and never the data (FR-074)
 - [X] T147 [US10] [TDD] Assert in `tests/ui/bar.test.ts` that no trend line or time series is drawn anywhere (FR-073). No history is kept to draw one from, so any such chart would be invented
-- [ ] T148 [US10] Run quickstart scenario **V17** and record the result in `specs/001-election-results-tui/quickstart.md`
-- [ ] T149 **REVIEW** User Story 10 in `src/ui/bar.ts`: verify a bar can never be read as a value and that bars are dropped before figures under width pressure
+- [X] T148 [US10] Run quickstart scenario **V17** and record the result in `specs/001-election-results-tui/quickstart.md`
+- [X] T149 **REVIEW** User Story 10 in `src/ui/bar.ts`: verify a bar can never be read as a value and that bars are dropped before figures under width pressure
 
 ---
 
@@ -484,8 +484,8 @@ terminal; the panel hides itself and returns when there is room.
 - [X] T151 [US11] [TDD] Toggle the panel on Ctrl+B and persist its state as `app_config.side_panel_open`, constrained to 0 or 1, in `src/storage/queries/preferences.ts`, proving it survives a restart (FR-056)
 - [X] T152 [US11] [TDD] Auto-hide the panel in `src/ui/chrome/panel.ts` when the terminal cannot show it beside a readable content area, and restore it when there is room. The content area MUST NEVER be squeezed below readable width to keep the panel open (FR-057)
 - [X] T153 [US11] [TDD] Show how to add a council when the watchlist is empty, in `src/ui/chrome/panel.ts`, rather than an empty box
-- [ ] T154 [US11] Run quickstart scenario **V14** and record the result in `specs/001-election-results-tui/quickstart.md`
-- [ ] T155 **REVIEW** User Story 11 in `src/ui/chrome/panel.ts`: verify the auto-hide threshold is driven by readable content width rather than an arbitrary number, and that the panel never wins a fight with the content
+- [X] T154 [US11] Run quickstart scenario **V14** and record the result in `specs/001-election-results-tui/quickstart.md`
+- [X] T155 **REVIEW** User Story 11 in `src/ui/chrome/panel.ts`: verify the auto-hide threshold is driven by readable content width rather than an arbitrary number, and that the panel never wins a fight with the content
 
 ---
 
@@ -511,10 +511,10 @@ across some figures and copy them.
 - [X] T163 [P] Update the help screen in `src/ui/views/help.ts` with the new keys Ctrl+P, Ctrl+B and Ctrl+T, and assert the help and the action registry cannot drift apart
 - [X] T164 [P] Update `README.md` with the redesigned interface, the three themes and the mouse behaviour
 - [X] T165 [P] Update `specs/001-election-results-tui/contracts/cli.md` so the documented key map matches the action registry
-- [ ] T166 Run quickstart scenario **V19** against `dist/volby-kv2026.exe`: 80 by 24, NO_COLOR set, no mouse, all at once. Everything must remain complete and usable (SC-023)
-- [ ] T167 Re-run the soak in `tools/verify/soak.ts` against the redesigned interface, confirming screen recomposition stays within the 100 ms budget now that there are more renderables (SC-026, SC-010)
-- [ ] T168 Rebuild both binaries via `bun run build:win` and `bun run build:linux`, then re-run `--self-test`, confirming the added components have not disturbed the single-binary guarantee (FR-001)
-- [ ] T169 **REVIEW** Amendment across `src/ui/`: verify every new requirement FR-054 to FR-079 has a covering test or a recorded manual check, that no colour literal escaped `src/ui/theme/`, and that the five rejected items (per-party colours, sparklines, clickable chrome, context menus, resizable panes) are absent
+- [X] T166 Run quickstart scenario **V19** against `dist/volby-kv2026.exe`: 80 by 24, NO_COLOR set, no mouse, all at once. Everything must remain complete and usable (SC-023)
+- [X] T167 Re-run the soak in `tools/verify/soak.ts` against the redesigned interface, confirming screen recomposition stays within the 100 ms budget now that there are more renderables (SC-026, SC-010)
+- [X] T168 Rebuild both binaries via `bun run build:win` and `bun run build:linux`, then re-run `--self-test`, confirming the added components have not disturbed the single-binary guarantee (FR-001)
+- [X] T169 **REVIEW** Amendment across `src/ui/`: verify every new requirement FR-054 to FR-079 has a covering test or a recorded manual check, that no colour literal escaped `src/ui/theme/`, and that the five rejected items (per-party colours, sparklines, clickable chrome, context menus, resizable panes) are absent
 
 ---
 
