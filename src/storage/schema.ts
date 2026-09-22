@@ -25,6 +25,18 @@ import type { Database } from "bun:sqlite"
 /** Bumped whenever the statements below change in a way that needs a rebuild. */
 export const SCHEMA_VERSION = 1
 
+/*
+ * Reference tables carry NO foreign keys between them, deliberately.
+ *
+ * Each one is loaded from a separately published file, and those files are not
+ * guaranteed to be mutually consistent - 311 of 565 party codes in cvs_slozeni.xml have
+ * no row in cns.xml. More importantly, FR-011 requires that a missing or unreadable
+ * code list degrade to showing numeric codes rather than preventing the application
+ * from starting. A foreign key would turn that graceful degradation into a hard failure.
+ *
+ * The result tables below DO use foreign keys, because both sides are written by this
+ * application inside one transaction and consistency is ours to guarantee.
+ */
 const REFERENCE_TABLES = `
 CREATE TABLE IF NOT EXISTS region (
   numnuts      TEXT PRIMARY KEY,
@@ -33,16 +45,19 @@ CREATE TABLE IF NOT EXISTS region (
   name_folded  TEXT NOT NULL
 );
 
+-- The 78 districts, being exactly the six-character NUTS codes in CNUMNUTS. This list
+-- is what determines which per-district result files exist and are polled (FR-008).
 CREATE TABLE IF NOT EXISTS district (
   nuts         TEXT PRIMARY KEY,
-  region_nuts  TEXT REFERENCES region(nuts),
+  numnuts      TEXT,
+  region_nuts  TEXT,
   name         TEXT NOT NULL,
   name_folded  TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS municipality (
   obec           TEXT PRIMARY KEY,
-  district_nuts  TEXT REFERENCES district(nuts),
+  district_nuts  TEXT,
   name           TEXT NOT NULL,
   name_folded    TEXT NOT NULL
 );
@@ -50,19 +65,26 @@ CREATE TABLE IF NOT EXISTS municipality (
 -- The unit results are actually reported for: a municipal or borough assembly.
 CREATE TABLE IF NOT EXISTS council (
   kodzastup         TEXT PRIMARY KEY,
-  obec              TEXT REFERENCES municipality(obec),
-  district_nuts     TEXT REFERENCES district(nuts),
+  obec              TEXT,
+  -- The registry's numeric OKRES code. NOT reliably the district whose result file
+  -- covers this council: Prague's councils carry 1100, which maps to the REGION CZ010,
+  -- while Prague's district file is CZ0100 (NUMNUTS 1199). Kept for reference only.
+  okres_code        TEXT,
+  -- The district whose result document actually contains this council. Filled when a
+  -- district document is ingested, because membership is only reliable from the
+  -- document itself, not from the registry code above.
+  district_nuts     TEXT,
   name              TEXT NOT NULL,
   name_folded       TEXT NOT NULL,
   -- OBEC = municipal assembly, MCMO = borough or city-district assembly (FR-035).
   oznac_typu        TEXT NOT NULL CHECK (oznac_typu IN ('OBEC', 'MCMO')),
-  druhzastup        TEXT REFERENCES council_type(druhzastup),
-  typzastup         TEXT REFERENCES council_class(typzastup),
+  druhzastup        TEXT,
+  typzastup         TEXT,
   mandaty           INTEGER,
   cobvodu           INTEGER,
   stav_obce         TEXT,
   -- Set for boroughs so FR-035 can attribute them to their parent municipality.
-  parent_kodzastup  TEXT REFERENCES council(kodzastup)
+  parent_kodzastup  TEXT
 );
 
 CREATE TABLE IF NOT EXISTS council_type (
@@ -97,23 +119,50 @@ CREATE TABLE IF NOT EXISTS electoral_party (
   typvs        TEXT
 );
 
+-- No foreign key to political_party, deliberately.
+--
+-- The publisher's own files are not referentially consistent: 311 of the 565 distinct
+-- NSTRANA codes in cvs_slozeni.xml have no matching row in cns.xml. Enforcing the
+-- reference would mean either discarding more than half the coalition composition or
+-- refusing to start because of someone else's data quality. Instead the row is kept and
+-- an unresolvable code degrades to being shown as a code, which is what FR-011 asks for.
 CREATE TABLE IF NOT EXISTS electoral_party_composition (
-  vstrana  TEXT NOT NULL REFERENCES electoral_party(vstrana),
-  nstrana  TEXT NOT NULL REFERENCES political_party(nstrana),
+  vstrana  TEXT NOT NULL,
+  nstrana  TEXT NOT NULL,
   PRIMARY KEY (vstrana, nstrana)
 );
 
--- Full candidate lists, from the KVRK registry. The largest table by far: every
--- candidate in every municipality nationwide.
+-- THE BRIDGE between a result and a candidate list, from the KV_ROS registry.
+--
+-- Result documents identify a party by VSTRANA (its nationwide code). Candidate lists
+-- identify it by OSTRANA (its number within that one council). Nothing else carries
+-- both, so without this table FR-034 cannot connect a party's result to its candidates.
+CREATE TABLE IF NOT EXISTS council_party (
+  kodzastup     TEXT NOT NULL,
+  ostrana       TEXT NOT NULL,
+  vstrana       TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  name_folded   TEXT NOT NULL,
+  ballot_order  INTEGER,
+  PRIMARY KEY (kodzastup, ostrana)
+);
+
+-- Full candidate lists, from the KVRK registry, including candidates not elected.
+-- The largest table by far: 110 MB uncompressed for the whole country.
 CREATE TABLE IF NOT EXISTS candidate (
-  kodzastup    TEXT NOT NULL REFERENCES council(kodzastup),
-  vstrana      TEXT NOT NULL,
+  kodzastup    TEXT NOT NULL,
+  ostrana      TEXT NOT NULL,
   por_str_hl   INTEGER NOT NULL,
   name         TEXT NOT NULL,
   name_folded  TEXT NOT NULL,
-  pstrana      TEXT REFERENCES political_affiliation(pstrana),
+  pstrana      TEXT,
+  nstrana      TEXT,
   cobvodu      INTEGER,
-  PRIMARY KEY (kodzastup, vstrana, por_str_hl)
+  age          INTEGER,
+  occupation   TEXT,
+  votes        INTEGER,
+  elected      INTEGER NOT NULL DEFAULT 0 CHECK (elected IN (0, 1)),
+  PRIMARY KEY (kodzastup, ostrana, por_str_hl)
 );
 `
 
@@ -215,7 +264,8 @@ CREATE INDEX IF NOT EXISTS idx_council_district      ON council(district_nuts);
 CREATE INDEX IF NOT EXISTS idx_council_parent        ON council(parent_kodzastup);
 CREATE INDEX IF NOT EXISTS idx_council_folded        ON council(name_folded);
 CREATE INDEX IF NOT EXISTS idx_municipality_folded   ON municipality(name_folded);
-CREATE INDEX IF NOT EXISTS idx_candidate_list        ON candidate(kodzastup, vstrana);
+CREATE INDEX IF NOT EXISTS idx_candidate_list        ON candidate(kodzastup, ostrana);
+CREATE INDEX IF NOT EXISTS idx_council_party_vstrana ON council_party(kodzastup, vstrana);
 CREATE INDEX IF NOT EXISTS idx_candidate_folded      ON candidate(name_folded);
 CREATE INDEX IF NOT EXISTS idx_electoral_party_fold  ON electoral_party(name_folded);
 -- The hottest read path: every render asks for an area's current snapshot.

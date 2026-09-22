@@ -97,16 +97,16 @@ exist until 9 October 2026 (research R9).
 - [X] T027 [TDD] Write the Zod schema for the national result in `src/parsing/schemas/national.ts`. Numeric fields are **explicitly coerced in the schema**, so a malformed number fails validation instead of silently becoming a string (research R4). Unknown fields are ignored; missing required fields are fatal to the document
 - [X] T028 [P] [TDD] Write the Zod schema for the district result in `src/parsing/schemas/district.ts`, including `OZNAC_TYPU` distinguishing `OBEC` from `MCMO`
 - [X] T029 [P] [TDD] Write the Zod schema for the council result in `src/parsing/schemas/council.ts`, including per-party votes and per-candidate `POCHLASU` / `MANDAT`
-- [ ] T030 [P] [TDD] Write Zod schemas for the registry documents in `src/parsing/schemas/registry.ts`: `KVRZCOCO`, `KVROS`, `KVROS_SLOZENI`, `KVRK`
-- [ ] T031 [P] [TDD] Write Zod schemas for the code lists in `src/parsing/schemas/codelists.ts`: `CNUMNUTS`, `CNS`, `CPP`, `CVS`, `CVS_SLOZENI`, `KVDRUHZ`, `KVTYPZAS`, `KV_COCO`
+- [X] T030 [P] [TDD] Write Zod schemas for the registry documents in `src/parsing/schemas/registry.ts`: `KVRZCOCO`, `KVROS`, `KVROS_SLOZENI`, `KVRK`
+- [X] T031 [P] [TDD] Write Zod schemas for the code lists in `src/parsing/schemas/codelists.ts`: `CNUMNUTS`, `CNS`, `CPP`, `CVS`, `CVS_SLOZENI`, `KVDRUHZ`, `KVTYPZAS`, `KV_COCO`
 - [X] T032 [TDD] Implement the parse-and-validate pipeline in `src/parsing/pipeline.ts` returning a discriminated result (valid document or rejection reason). Test with `fixtures/edge-cases/malformed.xml` and `truncated.xml` that **the document is rejected whole** and no partial figures escape (FR-025)
 
 ### Reference data loading
 
-- [ ] T033 [TDD] Implement ZIP extraction in `src/reference/archive.ts` using `fflate`, tested against `fixtures/2026/reg.zip`
-- [ ] T034 [TDD] Implement the first-run reference loader in `src/reference/loader.ts`: download, extract, validate, and store all registries and code lists in one transaction. Populate every `name_folded` column during load
-- [ ] T035 [TDD] Implement reference reuse in `src/reference/loader.ts`: on later runs read from storage and **retrieve nothing**, re-retrieving only when the stored copy is absent or unusable or `--refresh-reference` is passed (FR-020a, SC-014). Test asserts zero requests on a second run
-- [ ] T036 [TDD] Implement graceful degradation in `src/reference/resolve.ts`: when reference data is missing, results still display using numeric codes plus a warning, and a council or party absent from reference data is shown with its code and a note rather than dropped (FR-011 edge cases)
+- [X] T033 [TDD] Implement ZIP extraction in `src/reference/archive.ts` using `fflate`, tested against `fixtures/2026/reg.zip`
+- [X] T034 [TDD] Implement the first-run reference loader in `src/reference/loader.ts`: download, extract, validate, and store all registries and code lists in one transaction. Populate every `name_folded` column during load
+- [X] T035 [TDD] Implement reference reuse in `src/reference/loader.ts`: on later runs read from storage and **retrieve nothing**, re-retrieving only when the stored copy is absent or unusable or `--refresh-reference` is passed (FR-020a, SC-014). Test asserts zero requests on a second run
+- [X] T036 [TDD] Implement graceful degradation in `src/reference/resolve.ts`: when reference data is missing, results still display using numeric codes plus a warning, and a council or party absent from reference data is shown with its code and a note rather than dropped (FR-011 edge cases)
 
 ### Domain utilities
 
