@@ -427,12 +427,12 @@ orientation gain and is worth shipping alone.
 and perform it. Every action is present; each shows its key.
 
 - [X] T127 [US8] [TDD] Build the action registry in `src/ui/palette/actions.ts`: every action with its label, shortcut, and a predicate for whether it applies to the current screen. This registry MUST be the single source of truth shared with the status bar, so the two cannot disagree (Principle I)
-- [ ] T128 [US8] [TDD] Build the palette view in `src/ui/palette/view.ts` from `InputRenderable` and `SelectRenderable`, opened by Ctrl+P from any screen (FR-065)
-- [ ] T129 [US8] [TDD] Show each action's shortcut beside its entry in `src/ui/palette/view.ts`, so a user reaching an action through the palette learns the key for next time (FR-066)
-- [ ] T130 [US8] [TDD] Filter palette entries as the user types in `src/ui/palette/view.ts`, reusing `fold()` from `src/domain/folding.ts` so matching is insensitive to case and Czech diacritics exactly as search is (FR-067). Reusing the function rather than reimplementing it is what keeps the two behaviours identical
-- [ ] T131 [US8] [TDD] Perform the chosen action directly on selection in `src/ui/palette/view.ts` (FR-068), and return to exactly the previous screen and selection on Esc
-- [ ] T132 [US8] [TDD] Show inapplicable actions marked unavailable WITH THE REASON rather than hiding them, in `src/ui/palette/view.ts` (FR-069). Hiding them would teach the user the application is smaller than it is
-- [ ] T133 [US8] [TDD] Assert in `tests/ui/palette.test.ts` that the palette lists every action in the registry, so an action added later cannot be unreachable (SC-020)
+- [X] T128 [US8] [TDD] Build the palette view in `src/ui/palette/view.ts` from `InputRenderable` and `SelectRenderable`, opened by Ctrl+P from any screen (FR-065)
+- [X] T129 [US8] [TDD] Show each action's shortcut beside its entry in `src/ui/palette/view.ts`, so a user reaching an action through the palette learns the key for next time (FR-066)
+- [X] T130 [US8] [TDD] Filter palette entries as the user types in `src/ui/palette/view.ts`, reusing `fold()` from `src/domain/folding.ts` so matching is insensitive to case and Czech diacritics exactly as search is (FR-067). Reusing the function rather than reimplementing it is what keeps the two behaviours identical
+- [X] T131 [US8] [TDD] Perform the chosen action directly on selection in `src/ui/palette/view.ts` (FR-068), and return to exactly the previous screen and selection on Esc
+- [X] T132 [US8] [TDD] Show inapplicable actions marked unavailable WITH THE REASON rather than hiding them, in `src/ui/palette/view.ts` (FR-069). Hiding them would teach the user the application is smaller than it is
+- [X] T133 [US8] [TDD] Assert in `tests/ui/palette.test.ts` that the palette lists every action in the registry, so an action added later cannot be unreachable (SC-020)
 - [ ] T134 [US8] Run quickstart scenario **V16** and record the result in `specs/001-election-results-tui/quickstart.md`
 - [ ] T135 **REVIEW** User Story 8 in `src/ui/palette/`: verify the registry is genuinely shared with the status bar, that diacritic folding is the same function search uses, and that no action exists outside the registry
 
@@ -445,11 +445,11 @@ and perform it. Every action is present; each shows its key.
 **Independent Test**: cycle themes and restart; the choice persists. Run with NO_COLOR set; every
 state is still distinguishable.
 
-- [ ] T136 [US9] [TDD] Apply roles across every view in `src/ui/views/` via the styled rendering from T109. No view may name a colour directly; a view names a role (FR-059)
-- [ ] T137 [US9] [TDD] Implement theme cycling on Ctrl+T in `src/ui/app.ts`, persisting through T113 (FR-061)
-- [ ] T138 [US9] [TDD] Assert in `tests/ui/colour.test.ts` that NO electoral party is coloured differently from any other (FR-060). With thousands of local candidate lists there is no authoritative party colour, and assigning one would imply a political affiliation the source never published
-- [ ] T139 [US9] [TDD] Assert the monochrome guarantee in `tests/ui/colour.test.ts`: with colour disabled, every status remains distinguishable by text, symbol or position (FR-063, SC-023)
-- [ ] T140 [US9] [TDD] Assert in `tests/ui/colour.test.ts` that the high-contrast theme separates roles by brightness rather than hue, so it works for a user who cannot distinguish the palette's colours (FR-062, SC-024)
+- [X] T136 [US9] [TDD] Apply roles across every view in `src/ui/views/` via the styled rendering from T109. No view may name a colour directly; a view names a role (FR-059)
+- [X] T137 [US9] [TDD] Implement theme cycling on Ctrl+T in `src/ui/app.ts`, persisting through T113 (FR-061)
+- [X] T138 [US9] [TDD] Assert in `tests/ui/colour.test.ts` that NO electoral party is coloured differently from any other (FR-060). With thousands of local candidate lists there is no authoritative party colour, and assigning one would imply a political affiliation the source never published
+- [X] T139 [US9] [TDD] Assert the monochrome guarantee in `tests/ui/colour.test.ts`: with colour disabled, every status remains distinguishable by text, symbol or position (FR-063, SC-023)
+- [X] T140 [US9] [TDD] Assert in `tests/ui/colour.test.ts` that the high-contrast theme separates roles by brightness rather than hue, so it works for a user who cannot distinguish the palette's colours (FR-062, SC-024)
 - [ ] T141 [US9] Run quickstart scenario **V15** and record the result in `specs/001-election-results-tui/quickstart.md`
 - [ ] T142 **REVIEW** User Story 9 in `src/ui/`: verify no colour literal appears outside `src/ui/theme/`, and that removing colour removes nothing but decoration
 
@@ -463,11 +463,11 @@ state is still distinguishable.
 on 7.62 and 7.76 percent are visibly different. Narrow the terminal; bars vanish before any figure
 does.
 
-- [ ] T143 [US10] [TDD] Implement bars in `src/ui/bar.ts` using the Unicode eighth-block characters, giving eight sub-steps per column. Full blocks alone would resolve only ten steps in a ten-column bar, too coarse to separate 7.62 from 7.76 percent (research R16)
-- [ ] T144 [US10] [TDD] Draw the bar in `src/ui/bar.ts` from the PUBLISHED percentage and always beside the exact figure. The bar is an aid; the published figure is the result, and no figure may ever be derived from a bar length (FR-070, FR-071, FR-029)
-- [ ] T145 [US10] [TDD] Assert in `tests/ui/bar.test.ts` that bars render as shape not colour, surviving NO_COLOR and a monochrome terminal (FR-072)
-- [ ] T146 [US10] [TDD] Omit bars entirely rather than truncating them when the terminal is too narrow, in `src/ui/views/areas.ts`, so a narrow terminal loses the aid and never the data (FR-074)
-- [ ] T147 [US10] [TDD] Assert in `tests/ui/bar.test.ts` that no trend line or time series is drawn anywhere (FR-073). No history is kept to draw one from, so any such chart would be invented
+- [X] T143 [US10] [TDD] Implement bars in `src/ui/bar.ts` using the Unicode eighth-block characters, giving eight sub-steps per column. Full blocks alone would resolve only ten steps in a ten-column bar, too coarse to separate 7.62 from 7.76 percent (research R16)
+- [X] T144 [US10] [TDD] Draw the bar in `src/ui/bar.ts` from the PUBLISHED percentage and always beside the exact figure. The bar is an aid; the published figure is the result, and no figure may ever be derived from a bar length (FR-070, FR-071, FR-029)
+- [X] T145 [US10] [TDD] Assert in `tests/ui/bar.test.ts` that bars render as shape not colour, surviving NO_COLOR and a monochrome terminal (FR-072)
+- [X] T146 [US10] [TDD] Omit bars entirely rather than truncating them when the terminal is too narrow, in `src/ui/views/areas.ts`, so a narrow terminal loses the aid and never the data (FR-074)
+- [X] T147 [US10] [TDD] Assert in `tests/ui/bar.test.ts` that no trend line or time series is drawn anywhere (FR-073). No history is kept to draw one from, so any such chart would be invented
 - [ ] T148 [US10] Run quickstart scenario **V17** and record the result in `specs/001-election-results-tui/quickstart.md`
 - [ ] T149 **REVIEW** User Story 10 in `src/ui/bar.ts`: verify a bar can never be read as a value and that bars are dropped before figures under width pressure
 
@@ -480,10 +480,10 @@ does.
 **Independent Test**: watch two councils, toggle the panel, restart. The state persists. Narrow the
 terminal; the panel hides itself and returns when there is room.
 
-- [ ] T150 [US11] [TDD] Build the side panel in `src/ui/chrome/panel.ts` as a flex sibling of the content area, showing each watched council with its live figures (FR-056)
-- [ ] T151 [US11] [TDD] Toggle the panel on Ctrl+B and persist its state as `app_config.side_panel_open`, constrained to 0 or 1, in `src/storage/queries/preferences.ts`, proving it survives a restart (FR-056)
-- [ ] T152 [US11] [TDD] Auto-hide the panel in `src/ui/chrome/panel.ts` when the terminal cannot show it beside a readable content area, and restore it when there is room. The content area MUST NEVER be squeezed below readable width to keep the panel open (FR-057)
-- [ ] T153 [US11] [TDD] Show how to add a council when the watchlist is empty, in `src/ui/chrome/panel.ts`, rather than an empty box
+- [X] T150 [US11] [TDD] Build the side panel in `src/ui/chrome/panel.ts` as a flex sibling of the content area, showing each watched council with its live figures (FR-056)
+- [X] T151 [US11] [TDD] Toggle the panel on Ctrl+B and persist its state as `app_config.side_panel_open`, constrained to 0 or 1, in `src/storage/queries/preferences.ts`, proving it survives a restart (FR-056)
+- [X] T152 [US11] [TDD] Auto-hide the panel in `src/ui/chrome/panel.ts` when the terminal cannot show it beside a readable content area, and restore it when there is room. The content area MUST NEVER be squeezed below readable width to keep the panel open (FR-057)
+- [X] T153 [US11] [TDD] Show how to add a council when the watchlist is empty, in `src/ui/chrome/panel.ts`, rather than an empty box
 - [ ] T154 [US11] Run quickstart scenario **V14** and record the result in `specs/001-election-results-tui/quickstart.md`
 - [ ] T155 **REVIEW** User Story 11 in `src/ui/chrome/panel.ts`: verify the auto-hide threshold is driven by readable content width rather than an arbitrary number, and that the panel never wins a fight with the content
 

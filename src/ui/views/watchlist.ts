@@ -76,10 +76,10 @@ export function buildWatchlistRows(db: Database, width = 100): WatchlistRows {
           withChange(formatProgress(council.districtsCounted, council.districtsTotal), council.countedChange),
           roleForChange(council.countedChange),
         ),
-        cell(withChange(formatPercent(council.turnoutPct), council.turnoutChange), {
-          bar: council.turnoutPct === null ? undefined : council.turnoutPct / 100,
-          role: roleForChange(council.turnoutChange),
-        }),
+        cell(
+          withChange(formatPercent(council.turnoutPct), council.turnoutChange),
+          roleForChange(council.turnoutChange),
+        ),
         cell(formatInteger(council.seatsTotal)),
         cell(council.isFinal ? "konečné" : "průběžné"),
       ],

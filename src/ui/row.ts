@@ -5,6 +5,10 @@
  * the UX amendment forced: a plain string cannot carry a colour role or a bar value, so
  * FR-059 and FR-070 could not be expressed in the old `string[]` return type.
  *
+ * A bar is NOT a cell property. It is a column of its own, produced by the view with
+ * `bar()` and carried as ordinary text, so that the plain and styled renderings cannot
+ * disagree about it and a narrow table can drop the column whole (FR-074, src/ui/bar.ts).
+ *
  * Rendering happens two ways from one source of truth:
  *
  *   toText()   plain text, for exports and for the existing test assertions
@@ -24,13 +28,6 @@ export type Role = "heading" | "selection" | "warning" | "increase" | "decrease"
 export interface Cell {
   text: string
   role?: Role
-  /**
-   * A proportion from 0 to 1, drawn as a bar after the text (FR-070).
-   *
-   * The bar is an aid beside the published figure, never a value in itself: nothing
-   * reads a figure back out of a bar length (FR-071).
-   */
-  bar?: number
 }
 
 export interface SemanticRow {
@@ -48,20 +45,9 @@ export interface SemanticRow {
   columns?: Column[]
 }
 
-/**
- * A cell, optionally with a role and a bar.
- *
- * The second argument takes a bare role for the common case and an object when a bar
- * rides along too, so the great majority of call sites stay `cell(text)` or
- * `cell(text, "muted")` rather than every one of them growing an options literal.
- */
-export function cell(text: string, style?: Role | { role?: Role; bar?: number }): Cell {
-  if (style === undefined) return { text }
-  if (typeof style === "string") return { text, role: style }
-  const result: Cell = { text }
-  if (style.role !== undefined) result.role = style.role
-  if (style.bar !== undefined) result.bar = style.bar
-  return result
+/** A cell with an optional role. The common case. */
+export function cell(text: string, role?: Role): Cell {
+  return role === undefined ? { text } : { text, role }
 }
 
 /** A row of plain cells. */
@@ -141,11 +127,6 @@ export function toChunks(r: SemanticRow, columns?: Column[], gap = 1): StyledChu
   return chunks
 }
 
-/** True when any cell in the view carries a bar, so callers can reserve width. */
-export function hasBars(rows: SemanticRow[]): boolean {
-  return rows.some((r) => r.cells.some((c) => c.bar !== undefined))
-}
-
 /**
  * A change becomes a role, so a renderer can colour it without knowing what it means.
  *
@@ -157,4 +138,34 @@ export function roleForChange(change: ChangeKind): Role | undefined {
   if (change === "increased") return "increase"
   if (change === "decreased") return "decrease"
   return undefined
+}
+
+/**
+ * Truncates a chunk sequence to `width` display cells.
+ *
+ * The plain-text path clamps through `clampLines`; without the same clamp here a
+ * summary line assembled from a template literal would overflow the terminal when
+ * styled while fitting when plain. Both forms must be cut in the same place, or the
+ * tests measure one thing and the user sees another.
+ */
+export function clampChunks(chunks: StyledChunk[], width: number): StyledChunk[] {
+  const total = chunks.reduce((sum, c) => sum + [...c.text].length, 0)
+  if (total <= width || width <= 0) return chunks
+
+  const out: StyledChunk[] = []
+  let used = 0
+  for (const chunk of chunks) {
+    const chars = [...chunk.text]
+    if (used + chars.length <= width - 1) {
+      out.push(chunk)
+      used += chars.length
+      continue
+    }
+    // This chunk is where the line runs out. Keep what fits, then the ellipsis that
+    // `pad` would have written.
+    const keep = Math.max(0, width - 1 - used)
+    out.push({ ...chunk, text: `${chars.slice(0, keep).join("")}…` })
+    return out
+  }
+  return out
 }

@@ -12,6 +12,7 @@
 import type { Database } from "bun:sqlite"
 import { ageSeconds, formatAge, statusLabel } from "../../domain/status.ts"
 import { readNationalParties, readNationalTotals } from "../../storage/queries/national.ts"
+import { BAR_WIDTH, bar, barsFit } from "../bar.ts"
 import {
   type Column,
   formatInteger,
@@ -90,11 +91,15 @@ export function buildNationalRows(db: Database, options: NationalRowsOptions = {
     return rows
   }
 
-  const fixed = 12 + 11 + 11 + 9
+  const fixed = 12 + 11 + 11 + 9 + 4
+  // The same budget the council table keeps: a name column below thirty columns stops
+  // saying which party a row belongs to, and the name outranks the aid (FR-074).
+  const bars = barsFit(width, fixed + 30)
   const columns: Column[] = [
-    { header: "Volební strana", width: Math.max(20, width - fixed - 4) },
+    { header: "Volební strana", width: Math.max(20, width - fixed - (bars ? BAR_WIDTH + 1 : 0)) },
     { header: "Hlasy", width: 12, align: "right" },
     { header: "Podíl", width: 11, align: "right" },
+    ...(bars ? [{ header: "", width: BAR_WIDTH } satisfies Column] : []),
     { header: "Mandáty", width: 11, align: "right" },
     { header: "Podíl", width: 9, align: "right" },
   ]
@@ -108,14 +113,11 @@ export function buildNationalRows(db: Database, options: NationalRowsOptions = {
       columns,
       cells: [
         cell(party.name),
-        // The bar rides along with the vote count; whether it is drawn is the view's
-        // decision at render time, and the published figure is always shown (FR-071).
-        {
-          text: withChange(formatInteger(party.votes), party.votesChange),
-          role: roleForChange(party.votesChange),
-          bar: party.votesPct === null ? undefined : party.votesPct / 100,
-        },
+        cell(withChange(formatInteger(party.votes), party.votesChange), roleForChange(party.votesChange)),
+        // The bar is a column of its own beside the published share, never a
+        // replacement for it (FR-070, FR-071).
         cell(formatPercent(party.votesPct)),
+        ...(bars ? [cell(bar(party.votesPct === null ? null : party.votesPct / 100), "muted")] : []),
         cell(withChange(formatInteger(party.seatsWon), party.seatsChange), roleForChange(party.seatsChange)),
         cell(formatPercent(party.seatsPct)),
       ],

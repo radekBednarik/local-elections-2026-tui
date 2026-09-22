@@ -19,6 +19,7 @@ import { listCouncilsInDistrict } from "../../src/storage/queries/areas.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
 import { applyFrameState, frameState } from "../../src/ui/chrome/state.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
+import { themeByName } from "../../src/ui/theme/themes.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
 const read = (name: string) => readFileSync(join(FIXTURES, name), "utf8")
@@ -46,6 +47,7 @@ async function draw(): Promise<string> {
       db,
       nav,
       councilType: "OBEC",
+      theme: themeByName("dark"),
       query: "",
       width: WIDTH,
       contentWidth: frame.contentWidth > 0 ? frame.contentWidth : WIDTH - 2,

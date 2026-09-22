@@ -27,13 +27,25 @@ import { ingestCouncil, ingestDistrict, ingestNational } from "../sources/ingest
 import type { Scheduler } from "../sources/scheduler.ts"
 import { type SourceKey, type SourceLocation, urlForKey } from "../sources/urls.ts"
 import { availableCouncilTypes } from "../storage/queries/national.ts"
+import {
+  readSidePanelOpen,
+  readTheme,
+  writeSidePanelOpen,
+  writeTheme,
+} from "../storage/queries/preferences.ts"
 import { toggleWatchlist, watchedCodes } from "../storage/queries/watchlist.ts"
 import { Frame } from "./chrome/frame.ts"
-import { applyFrameState, frameState } from "./chrome/state.ts"
+import { panelFits } from "./chrome/panel.ts"
+import { applyFrameState, applyPanel, applyPlainLines, frameState } from "./chrome/state.ts"
 import { isTooSmall, staleWarning, tooSmallMessage } from "./components/status.ts"
+import { type Intent, intentFor } from "./keymap.ts"
 import { Navigation } from "./navigation.ts"
+import type { ActionContext, ActionId } from "./palette/actions.ts"
+import { Palette } from "./palette/view.ts"
 import { composeScreen, type ScreenContent, sourcesForScreen } from "./screen.ts"
 import { applySearchKey, type KeyEvent } from "./search-input.ts"
+import { type ColorEnvironment, isMonochrome, readColorEnvironment, resolveTheme } from "./theme/detect.ts"
+import { nextTheme, type Theme, type ThemeName, themeLabel } from "./theme/themes.ts"
 
 export interface AppDependencies {
   db: Database
@@ -45,6 +57,9 @@ export interface AppDependencies {
 export class App {
   private renderer: CliRenderer | null = null
   private frame: Frame | null = null
+  private palette: Palette | null = null
+  /** Whether the user WANTS the panel. Whether it fits is decided every draw (FR-057). */
+  private sidePanelOpen = true
   private loop: ReturnType<typeof setInterval> | null = null
   private readonly abort = new AbortController()
   private readonly nav = new Navigation()
@@ -53,6 +68,15 @@ export class App {
   private notice: string | null = null
   private councilType = "OBEC"
   private stopped = false
+  /**
+   * The chosen theme, or null when none was stored and detection should decide.
+   *
+   * Held separately from the resolved theme because "no colour available" outranks a
+   * stored preference: the name is what the user picked, the theme is what the terminal
+   * can actually show (FR-061, FR-063).
+   */
+  private themeName: ThemeName | null = null
+  private colorEnvironment: ColorEnvironment = readColorEnvironment()
 
   constructor(private readonly deps: AppDependencies) {}
 
@@ -72,6 +96,16 @@ export class App {
     frame.attach(renderer.root)
     this.frame = frame
 
+    const palette = new Palette(renderer)
+    frame.attachOverlay(palette.root)
+    this.palette = palette
+    // Typing narrows the list. Driven from the input's own event, so the palette and
+    // the key handler never both try to own a keystroke.
+    palette.input.on("input", () => {
+      palette.refresh(this.actionContext(this.currentContent()))
+      this.draw()
+    })
+
     renderer.keyInput.on("keypress", (key: KeyEvent) => {
       void this.onKey(key)
     })
@@ -84,6 +118,16 @@ export class App {
     }
     process.once("SIGINT", shutdown)
     process.once("SIGTERM", shutdown)
+
+    this.themeName = readTheme(this.deps.db)
+    this.sidePanelOpen = readSidePanelOpen(this.deps.db)
+    // The renderer knows what the terminal reported about itself; without colour support
+    // the monochrome path is taken whatever the stored preference says.
+    this.colorEnvironment = {
+      ...this.colorEnvironment,
+      ansi256: renderer.capabilities?.ansi256 ?? null,
+      reportedScheme: renderer.themeMode ?? null,
+    }
 
     this.subscribeDistricts()
     this.syncSubscriptions()
@@ -103,6 +147,7 @@ export class App {
     this.renderer?.destroy()
     this.renderer = null
     this.frame = null
+    this.palette = null
   }
 
   /**
@@ -159,95 +204,171 @@ export class App {
   }
 
   private async onKey(key: KeyEvent): Promise<void> {
-    const name = key.name ?? ""
     // A confirmation only survives until the next keystroke.
     this.notice = null
 
-    // Ctrl+C always quits. A bare "q" must NOT, while the search box has focus, or the
-    // user could never type a name containing the letter.
-    if (key.ctrl === true && name === "c") {
+    const intent = intentFor(key)
+    if (intent?.kind === "force-quit") {
       this.stop()
       return
     }
 
+    if (this.palette?.open === true) {
+      await this.onPaletteKey(this.palette, key, intent)
+      return
+    }
+
+    // The search box owns letter keys while it has focus, or the user could never type
+    // a name containing "q".
     if (this.nav.screen.kind === "search" && this.handleSearchKey(key)) {
       this.draw()
       return
     }
 
-    if (name === "q") {
-      this.stop()
-      return
-    }
+    if (intent === null) return
 
     const content = this.currentContent()
 
-    switch (name) {
-      case "up":
-        this.nav.move(-1, content.rowCount)
-        break
-      case "down":
-        this.nav.move(1, content.rowCount)
-        break
-      case "pageup":
-        this.nav.move(-10, content.rowCount)
-        break
-      case "pagedown":
-        this.nav.move(10, content.rowCount)
-        break
-      case "home":
-        this.nav.moveTo("first", content.rowCount)
-        break
-      case "end":
-        this.nav.moveTo("last", content.rowCount)
-        break
-      case "return":
-      case "enter": {
-        this.open(content)
-        break
-      }
-      case "escape":
-      case "backspace":
-        if (this.nav.pop()) this.syncSubscriptions()
-        break
-      case "/":
-      case "slash":
-        this.query = ""
-        this.nav.push({ kind: "search" })
-        break
-      case "w": {
-        // Shift distinguishes the two: "w" toggles, "W" opens the list. The key name
-        // arrives lower-cased either way, so the sequence is what tells them apart.
-        if (key.shift === true || key.sequence === "W") {
-          this.nav.push({ kind: "watchlist" })
-          this.syncSubscriptions()
-          break
-        }
-        this.toggleWatch()
-        break
-      }
-      case "?":
-      case "questionmark":
-        if (this.nav.screen.kind !== "help") this.nav.push({ kind: "help" })
-        break
-      case "e": {
-        // "e" exports the displayed table, "E" produces the summary report.
-        await this.exportCurrent(key.shift === true || key.sequence === "E")
-        break
-      }
-      case "t": {
-        this.cycleCouncilType()
-        break
-      }
-      case "r": {
-        await this.refreshNow()
-        break
-      }
-      default:
-        return
+    if (intent.kind === "move") {
+      this.nav.move(intent.delta, content.rowCount)
+    } else if (intent.kind === "jump") {
+      this.nav.moveTo(intent.to, content.rowCount)
+    } else {
+      await this.perform(intent.id, content)
     }
 
     this.draw()
+  }
+
+  /**
+   * Keys while the palette is open.
+   *
+   * Esc, Enter and the arrows are the palette's; everything else falls through to the
+   * focused input, which is doing the typing. Returning early rather than handling the
+   * rest here is what stops two key handlers fighting over the same keystroke.
+   */
+  private async onPaletteKey(palette: Palette, key: KeyEvent, intent: Intent | null): Promise<void> {
+    const name = key.name ?? ""
+
+    if (name === "escape") {
+      // Esc returns to exactly the screen and selection the user left (FR-068).
+      palette.hide()
+      this.frame?.setContentVisible(true)
+      this.draw()
+      return
+    }
+
+    if (name === "return" || name === "enter") {
+      const action = palette.chosen()
+      palette.hide()
+      this.frame?.setContentVisible(true)
+      if (action === null) {
+        // The highlighted entry does nothing here. Say so rather than closing silently.
+        this.notice = "Tento příkaz zde není dostupný."
+      } else {
+        await this.perform(action.id, this.currentContent())
+      }
+      this.draw()
+      return
+    }
+
+    if (intent?.kind === "move") {
+      palette.move(intent.delta < 0 ? -1 : 1)
+      this.draw()
+      return
+    }
+
+    // Anything else is typing. The input has focus and will take it; the palette
+    // re-filters from its INPUT event.
+  }
+
+  /**
+   * Performs one action, whatever asked for it.
+   *
+   * The key map and the command palette both arrive here, so an action behaves the same
+   * way however it was reached (FR-068).
+   */
+  private async perform(id: ActionId, content: ScreenContent): Promise<void> {
+    switch (id) {
+      case "move":
+        // Movement comes from the arrows, not from the registry entry that describes it.
+        break
+      case "open":
+        this.open(content)
+        break
+      case "back":
+        if (this.nav.pop()) this.syncSubscriptions()
+        break
+      case "search":
+        this.query = ""
+        this.nav.push({ kind: "search" })
+        break
+      case "watch":
+        this.toggleWatch()
+        break
+      case "watchlist":
+        this.nav.push({ kind: "watchlist" })
+        this.syncSubscriptions()
+        break
+      case "export-csv":
+        await this.exportCurrent(false)
+        break
+      case "export-report":
+        await this.exportCurrent(true)
+        break
+      case "council-type":
+        this.cycleCouncilType()
+        break
+      case "refresh":
+        await this.refreshNow()
+        break
+      case "palette":
+        this.openPalette(content)
+        break
+      case "side-panel":
+        this.toggleSidePanel()
+        break
+      case "theme":
+        this.cycleTheme()
+        break
+      case "help":
+        if (this.nav.screen.kind !== "help") this.nav.push({ kind: "help" })
+        break
+      case "quit":
+        this.stop()
+        break
+    }
+  }
+
+  private openPalette(content: ScreenContent): void {
+    if (this.palette === null) return
+    this.palette.show(this.actionContext(content))
+    this.frame?.setContentVisible(false)
+  }
+
+  /**
+   * Shows or hides the side panel, remembering the choice (FR-056).
+   *
+   * Only the user's intent is stored. Whether it is actually on screen also depends on
+   * whether it fits, which is decided every draw and is not a preference.
+   */
+  private toggleSidePanel(): void {
+    this.sidePanelOpen = !this.sidePanelOpen
+    writeSidePanelOpen(this.deps.db, this.sidePanelOpen)
+    if (this.sidePanelOpen && this.frame !== null && !panelFits(this.frame.rawContentWidth)) {
+      this.notice = "Panel se zobrazí, až bude okno širší."
+    }
+  }
+
+  /** What the action registry needs to judge which actions apply here (FR-064). */
+  private actionContext(content: ScreenContent): ActionContext {
+    return {
+      screen: this.nav.screen,
+      depth: this.nav.depth,
+      rowCount: content.rowCount,
+      councilTypes: availableCouncilTypes(this.deps.db).length,
+      searchActive: this.nav.screen.kind === "search",
+    }
   }
 
   /** Opens whatever the selected row leads to. */
@@ -276,6 +397,27 @@ export class App {
     this.notice = watched
       ? "Přidáno mezi sledovaná zastupitelstva."
       : "Odebráno ze sledovaných zastupitelstev."
+  }
+
+  /** The theme to render with, after the environment has had its say (FR-063). */
+  private get theme(): Theme {
+    return resolveTheme(this.themeName, this.colorEnvironment)
+  }
+
+  /**
+   * Cycles dark, light, high contrast, and remembers the choice (FR-061).
+   *
+   * The preference is stored even when the terminal cannot show colour, so that a user
+   * who sets a theme over SSH still has it when they come back on a terminal that can.
+   */
+  private cycleTheme(): void {
+    const next = nextTheme(this.themeName ?? this.theme.name)
+    this.themeName = next
+    writeTheme(this.deps.db, next)
+    const showing = this.theme
+    this.notice = isMonochrome(showing)
+      ? `Motiv: ${themeLabel(next)} (terminál nezobrazuje barvy)`
+      : `Motiv: ${themeLabel(next)}`
   }
 
   private cycleCouncilType(): void {
@@ -405,10 +547,14 @@ export class App {
     if (isTooSmall(width, height)) {
       frame.setBreadcrumb("")
       frame.setWarning(null)
-      frame.setLines(tooSmallMessage(width, height))
+      applyPlainLines(frame, tooSmallMessage(width, height), width)
       frame.setStatus("")
       return
     }
+
+    // The panel is shown only when the user wants it AND it fits beside a readable
+    // content area. The content area never loses columns to keep it open (FR-057).
+    applyPanel(frame, this.deps.db, this.theme, this.sidePanelOpen && panelFits(frame.rawContentWidth))
 
     applyFrameState(
       frame,
@@ -417,6 +563,7 @@ export class App {
         nav: this.nav,
         councilType: this.councilType,
         query: this.query,
+        theme: this.theme,
         width,
         contentWidth: this.contentWidth(),
         contentHeight: frame.contentHeight,

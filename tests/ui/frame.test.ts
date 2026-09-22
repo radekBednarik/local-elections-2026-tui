@@ -34,7 +34,7 @@ describe("three regions (FR-054)", () => {
   test("the title bar, the content area and the status bar are all present", async () => {
     const { frame } = await render(80, 24, (f) => {
       f.setBreadcrumb("ČR › Okres Brno-město › Brno-Bohunice")
-      f.setLines(BODY_LINES)
+      f.setRows(BODY_LINES)
       f.setStatus("↑↓ výběr   ⏎ otevřít   esc zpět")
     })
 
@@ -46,7 +46,7 @@ describe("three regions (FR-054)", () => {
   test("the content area is bordered, which is what separates it from the other two", async () => {
     const { lines } = await render(80, 24, (f) => {
       f.setBreadcrumb("ČR")
-      f.setLines(BODY_LINES)
+      f.setRows(BODY_LINES)
       f.setStatus("q konec")
     })
 
@@ -66,7 +66,7 @@ describe("three regions (FR-054)", () => {
   test("the body content sits inside the border", async () => {
     const { lines } = await render(80, 24, (f) => {
       f.setBreadcrumb("ČR")
-      f.setLines(["ANO 2011"])
+      f.setRows(["ANO 2011"])
       f.setStatus("q konec")
     })
     const top = lines.findIndex((l) => l.includes("┌"))
@@ -81,7 +81,7 @@ describe("the warning row (FR-044)", () => {
   test("appears only when there is a warning", async () => {
     const without = await render(80, 24, (f) => {
       f.setBreadcrumb("ČR")
-      f.setLines(BODY_LINES)
+      f.setRows(BODY_LINES)
       f.setStatus("q konec")
       f.setWarning(null)
     })
@@ -89,7 +89,7 @@ describe("the warning row (FR-044)", () => {
 
     const with_ = await render(80, 24, (f) => {
       f.setBreadcrumb("ČR")
-      f.setLines(BODY_LINES)
+      f.setRows(BODY_LINES)
       f.setStatus("q konec")
       f.setWarning("! ZASTARALÁ DATA (national): spojení selhalo.")
     })
@@ -99,12 +99,12 @@ describe("the warning row (FR-044)", () => {
   test("costs no row when absent, so the content keeps it", async () => {
     const without = await render(80, 24, (f) => {
       f.setBreadcrumb("ČR")
-      f.setLines(BODY_LINES)
+      f.setRows(BODY_LINES)
       f.setStatus("q konec")
     })
     const with_ = await render(80, 24, (f) => {
       f.setBreadcrumb("ČR")
-      f.setLines(BODY_LINES)
+      f.setRows(BODY_LINES)
       f.setStatus("q konec")
       f.setWarning("! ZASTARALÁ DATA")
     })
@@ -118,7 +118,7 @@ describe("the minimum terminal (FR-041, T124)", () => {
   test("every region still fits at 80 by 24", async () => {
     const { lines } = await render(80, 24, (f) => {
       f.setBreadcrumb("ČR › Okresy › Okres Brno-město › Brno-Bohunice")
-      f.setLines(Array.from({ length: 60 }, (_, i) => `řádek ${i}`))
+      f.setRows(Array.from({ length: 60 }, (_, i) => `řádek ${i}`))
       f.setStatus("↑↓ výběr   ⏎ otevřít   esc zpět   q konec")
     })
 
@@ -137,7 +137,7 @@ describe("the minimum terminal (FR-041, T124)", () => {
       frame.attach(test.renderer.root)
       frame.setBreadcrumb("ČR")
       frame.setStatus("q konec")
-      frame.setLines(["a"])
+      frame.setRows(["a"])
       await test.renderOnce()
       // Chrome costs four rows: breadcrumb, two borders, status bar. Anything more and
       // a council table stops being readable at the documented minimum.
@@ -162,7 +162,7 @@ describe("the scroll bar stays on the right edge", () => {
       frame.setStatus("q konec")
 
       for (const count of [82, 7, 27, 3, 40]) {
-        frame.setLines(Array.from({ length: count }, (_, i) => `  řádek ${i}`))
+        frame.setRows(Array.from({ length: count }, (_, i) => `  řádek ${i}`))
         await test.renderOnce()
         const body = test
           .captureCharFrame()

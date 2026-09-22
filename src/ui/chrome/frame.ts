@@ -21,11 +21,10 @@ import {
   type CliRenderer,
   type Renderable,
   ScrollBoxRenderable,
+  type StyledText,
   TextRenderable,
 } from "@opentui/core"
-
-/** Width of the side panel when it is shown. Enough for a council name and a turnout. */
-export const PANEL_WIDTH = 22
+import { PANEL_COST, PANEL_WIDTH } from "./panel.ts"
 
 /** The vertical scroll bar overlays the last column of the viewport. */
 const SCROLLBAR_WIDTH = 1
@@ -45,6 +44,7 @@ export class Frame {
   /** How many pooled rows currently carry content. */
   private visibleRows = 0
   private panelVisible = false
+  private overlay: (Renderable & { visible: boolean }) | null = null
 
   constructor(private readonly renderer: CliRenderer) {
     this.root = new BoxRenderable(renderer, { flexDirection: "column", flexGrow: 1 })
@@ -98,6 +98,31 @@ export class Frame {
     this.root.add(this.statusBar)
   }
 
+  /**
+   * Adds a region that takes the whole content area when shown, such as the command
+   * palette. Added once and toggled, never added and removed: swapping children of the
+   * body is what put the scroll bar on the wrong edge.
+   */
+  attachOverlay(node: Renderable & { visible: boolean }): void {
+    this.overlay = node
+    this.root.add(node)
+  }
+
+  /**
+   * Shows either the content area or the overlay.
+   *
+   * The regions above and below are untouched, so the breadcrumb and the status bar stay
+   * exactly where they were while the palette is open (FR-054).
+   */
+  setContentVisible(visible: boolean): void {
+    this.body.visible = visible
+    this.body.flexGrow = visible ? 1 : 0
+    // "auto" hands the row back to flex; a fixed 0 is what collapses it.
+    this.body.height = visible ? "auto" : 0
+    if (this.overlay === null) return
+    this.overlay.visible = !visible
+  }
+
   /** Adds the frame to a parent, usually `renderer.root`. */
   attach(parent: { add: (child: Renderable) => number }): void {
     parent.add(this.root)
@@ -129,8 +154,9 @@ export class Frame {
     return this.panelVisible
   }
 
-  setPanelContent(lines: string[]): void {
-    this.panelText.content = lines.join("\n")
+  /** The panel is one text object, so it takes one block rather than a row each. */
+  setPanelContent(content: string | StyledText): void {
+    this.panelText.content = content
   }
 
   /**
@@ -149,8 +175,11 @@ export class Frame {
    *
    * The pool settles at the largest screen the user has visited, which is the district
    * list at 78 rows or a large district at a few hundred. That is bounded and small.
+   *
+   * Takes plain strings or styled text indifferently: the two carry the same characters
+   * in the same columns, and only the colour differs.
    */
-  setLines(lines: string[]): void {
+  setRows(lines: (string | StyledText)[]): void {
     this.growRows(lines.length)
     this.rowNodes.forEach((node, index) => {
       const text = lines[index]
@@ -186,7 +215,12 @@ export class Frame {
    * written to the full width loses its final character underneath it.
    */
   get contentWidth(): number {
-    return Math.max(0, this.body.width - 2 - SCROLLBAR_WIDTH - (this.panelVisible ? PANEL_WIDTH : 0))
+    return Math.max(0, this.rawContentWidth - (this.panelVisible ? PANEL_COST : 0))
+  }
+
+  /** What the content area would have if the panel were closed, for the fit rule. */
+  get rawContentWidth(): number {
+    return Math.max(0, this.body.width - 2 - SCROLLBAR_WIDTH)
   }
 
   private growRows(count: number): void {

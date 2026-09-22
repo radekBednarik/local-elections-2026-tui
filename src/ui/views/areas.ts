@@ -23,6 +23,7 @@ import {
   readCouncil,
   readDistrictName,
 } from "../../storage/queries/areas.ts"
+import { BAR_WIDTH, bar, barsFit } from "../bar.ts"
 import {
   type Column,
   clampLines,
@@ -55,6 +56,15 @@ export interface BuiltView {
 export const OKRSKY_NOTE =
   "Výsledky po jednotlivých okrscích nejsou k dispozici: zveřejňují se pouze dávkově, " +
   "což je mimo rozsah této aplikace."
+
+/**
+ * The narrowest party-name column worth keeping.
+ *
+ * Coalition names run long - "Lidovci a Starostové (KDU-ČSL + Starostové a nezávislí)" -
+ * so a name column below this stops saying which party a row belongs to. It is the
+ * budget a bar has to fit around, not the other way about (FR-074).
+ */
+const MIN_NAME_COLUMNS = 30
 
 /** How many councils are still waiting for data (FR-018b). */
 function loadingNote(loaded: number, known: number): string | null {
@@ -162,10 +172,10 @@ function councilCells(council: CouncilRow): Cell[] {
       withChange(formatProgress(council.districtsCounted, council.districtsTotal), council.countedChange),
       roleForChange(council.countedChange),
     ),
-    cell(withChange(formatPercent(council.turnoutPct), council.turnoutChange), {
-      bar: council.turnoutPct === null ? undefined : council.turnoutPct / 100,
-      role: roleForChange(council.turnoutChange),
-    }),
+    cell(
+      withChange(formatPercent(council.turnoutPct), council.turnoutChange),
+      roleForChange(council.turnoutChange),
+    ),
     cell(formatInteger(council.seatsTotal)),
     cell(council.isFinal ? "konečné" : "průběžné"),
   ]
@@ -228,11 +238,17 @@ export function buildCouncilRows(db: Database, kodzastup: string, width: number)
     return { rows, firstRow: rows.length }
   }
 
+  // Bars are affordable only once the table itself has what it needs. Below that they
+  // are dropped whole rather than squeezed: losing the aid is always better than losing
+  // or distorting a figure (FR-074).
+  const FIXED = 4 + 12 + 11 + 10 + 4
+  const bars = barsFit(width, FIXED + MIN_NAME_COLUMNS)
   const columns: Column[] = [
     { header: "Č.", width: 4, align: "right" },
-    { header: "Volební strana", width: Math.max(20, width - 46) },
+    { header: "Volební strana", width: Math.max(20, width - FIXED - (bars ? BAR_WIDTH + 1 : 0)) },
     { header: "Hlasy", width: 12, align: "right" },
     { header: "Podíl", width: 11, align: "right" },
+    ...(bars ? [{ header: "", width: BAR_WIDTH } satisfies Column] : []),
     { header: "Mandáty", width: 10, align: "right" },
   ]
   const [header, underline] = headerRow(columns)
@@ -246,11 +262,10 @@ export function buildCouncilRows(db: Database, kodzastup: string, width: number)
         cell(party.ballotOrder === null ? "–" : String(party.ballotOrder), "muted"),
         cell(party.name),
         cell(withChange(formatInteger(party.votes), party.votesChange), roleForChange(party.votesChange)),
-        // The bar rides with the published share and is drawn beside it, never instead
-        // of it (FR-070, FR-071).
-        cell(formatPercent(party.votesPct), {
-          bar: party.votesPct === null ? undefined : party.votesPct / 100,
-        }),
+        // The bar sits BESIDE the published share, in its own column, and the share is
+        // shown whether or not the bar is (FR-070, FR-071).
+        cell(formatPercent(party.votesPct)),
+        ...(bars ? [cell(bar(party.votesPct === null ? null : party.votesPct / 100), "muted")] : []),
         cell(withChange(formatInteger(party.seatsWon), party.seatsChange), roleForChange(party.seatsChange)),
       ],
     })

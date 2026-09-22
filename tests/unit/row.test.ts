@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { type Column, dataRow } from "../../src/ui/format.ts"
-import { blank, cell, hasBars, line, row, toChunks, toText, toTextLines } from "../../src/ui/row.ts"
+import { blank, cell, line, row, toChunks, toText, toTextLines } from "../../src/ui/row.ts"
 
 const COLUMNS: Column[] = [
   { header: "Strana", width: 20 },
@@ -25,11 +25,6 @@ describe("plain-text rendering is identical to the old output", () => {
     const plain = row("ANO 2011", "16752", "18,80 %")
     const styled = row(cell("ANO 2011", "heading"), cell("16752", "increase"), "18,80 %")
     expect(toText(styled, COLUMNS)).toBe(toText(plain, COLUMNS))
-  })
-
-  test("a bar does not change the text form", () => {
-    const withBar = { cells: [{ text: "ANO 2011" }, { text: "16752", bar: 0.188 }, { text: "18,80 %" }] }
-    expect(toText(withBar, COLUMNS)).toBe(dataRow(COLUMNS, ["ANO 2011", "16752", "18,80 %"]))
   })
 
   test("a missing cell renders blank, as before", () => {
@@ -99,12 +94,12 @@ describe("styled chunks", () => {
   })
 })
 
-describe("hasBars", () => {
-  test("detects a bar anywhere in the view", () => {
-    expect(hasBars([row("a"), { cells: [{ text: "b", bar: 0.5 }] }])).toBe(true)
-  })
-
-  test("is false when no cell carries one", () => {
-    expect(hasBars([row("a"), line("b")])).toBe(false)
+describe("a bar is not a cell property", () => {
+  // It was, briefly. A bar has to occupy its own column so that rows align and so that a
+  // narrow table can drop it whole, which makes it ordinary text produced by the view -
+  // see src/ui/bar.ts. Keeping the field would have left two ways to express one thing.
+  test("a cell carries text and a role, and nothing else", () => {
+    expect(Object.keys(cell("ANO 2011", "heading")).sort()).toEqual(["role", "text"])
+    expect(Object.keys(cell("ANO 2011"))).toEqual(["text"])
   })
 })
