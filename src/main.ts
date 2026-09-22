@@ -13,6 +13,7 @@ import { resolvePaths } from "./config/paths.ts"
 import { createLogger } from "./logging/logger.ts"
 import { extractArchive } from "./reference/archive.ts"
 import { invalidateReference, isReferenceLoaded, loadReference } from "./reference/loader.ts"
+import { runSelfTest } from "./self-test.ts"
 import { fetchArchive } from "./sources/client.ts"
 import { Scheduler } from "./sources/scheduler.ts"
 import { registryArchiveUrl, type SourceLocation } from "./sources/urls.ts"
@@ -43,6 +44,9 @@ async function main(): Promise<number> {
     process.stdout.write(USAGE)
     return 0
   }
+  // Before anything touches the filesystem or the network: this is what CI runs, and
+  // it must always terminate.
+  if (options.selfTest) return await runSelfTest(VERSION)
 
   const paths = resolvePaths({ platform: process.platform, env: process.env, override: options.dataDir })
   try {

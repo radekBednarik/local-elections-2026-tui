@@ -36,6 +36,8 @@ export interface CliOptions {
   logLevel: LogLevel
   showHelp: boolean
   showVersion: boolean
+  /** Run the built-in checks and exit, instead of starting the interface. */
+  selfTest: boolean
 }
 
 export type ParseResult =
@@ -130,6 +132,7 @@ export function parseCliArgs(argv: string[]): ParseResult {
       logLevel,
       showHelp: values.help === true,
       showVersion: values.version === true,
+      selfTest: values["self-test"] === true,
     },
   }
 }
@@ -144,6 +147,7 @@ const OPTION_SPEC = {
   "refresh-reference": { type: "boolean" },
   "log-level": { type: "string" },
   help: { type: "boolean" },
+  "self-test": { type: "boolean" },
   version: { type: "boolean" },
 } as const
 
@@ -158,5 +162,6 @@ export const USAGE = `Použití: volby-kv2026 [přepínače]
   --refresh-reference    Znovu stáhnout registry a číselníky
   --log-level <úroveň>   error | warn | info | debug, výchozí info
   --version              Vypsat verzi a skončit
+  --self-test            Ověřit funkčnost binárky a skončit
   --help                 Vypsat tuto nápovědu a skončit
 `

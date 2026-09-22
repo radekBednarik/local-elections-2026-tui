@@ -92,9 +92,16 @@ describe("--log-level", () => {
   })
 })
 
-describe("--help and --version", () => {
-  test("both request an immediate clean exit", () => {
+describe("immediate commands", () => {
+  test("help and version request a clean exit", () => {
     expect(ok(["--help"]).options.showHelp).toBe(true)
     expect(ok(["--version"]).options.showVersion).toBe(true)
+  })
+
+  test("--self-test is recognised", () => {
+    // CI runs this instead of the bare binary, which would launch the interface and
+    // wait for a keypress that never arrives on a runner.
+    expect(ok(["--self-test"]).options.selfTest).toBe(true)
+    expect(ok([]).options.selfTest).toBe(false)
   })
 })
