@@ -155,21 +155,21 @@ user action as the harness advances, and that the completion percentage and time
 **Independent Test**: From the national view, open a named district then a named council and verify parties,
 votes, seats, and elected candidates match the fixture data.
 
-- [ ] T053 [US2] [TDD] Implement background prefetch of all 77 district sources in `src/sources/districts.ts`, started at launch and refreshed on schedule (FR-018). Must yield between documents so the interface stays responsive
-- [ ] T054 [P] [US2] [TDD] Implement on-demand council fetching in `src/sources/councils.ts`: retrieved when opened, refreshed only while on screen or watched. **Must never poll all councils** (FR-018a) – test asserts an idle application with nothing open polls only the 78 national and district sources
-- [ ] T055 [P] [US2] [TDD] Implement district queries in `src/storage/queries/district.ts`: municipalities of a district with turnout, count progress, and seat totals
-- [ ] T056 [P] [US2] [TDD] Implement council queries in `src/storage/queries/council.ts`: electoral parties with votes, vote share, and seats; candidates by party with ballot position, personal votes, and elected status
-- [ ] T057 [US2] [TDD] Implement borough grouping in `src/domain/councils.ts` using `parent_kodzastup`, so a subdivided municipality presents each council separately and attributed to its parent (FR-035)
-- [ ] T058 [US2] [TDD] Implement the district view in `src/ui/views/district.ts` with a scrollable municipality list that stays responsive in the largest districts (edge case: hundreds of municipalities)
-- [ ] T059 [P] [US2] [TDD] Implement the council view in `src/ui/views/council.ts` showing per-party votes, share, and seats
-- [ ] T060 [P] [US2] [TDD] Implement the candidate view in `src/ui/views/candidates.ts` listing ballot position, personal votes, and elected status (FR-034)
-- [ ] T061 [US2] [TDD] Implement navigation state in `src/ui/navigation.ts`: `Enter` descends, `Esc`/`Backspace` ascends, and **a refresh while a view is open preserves the user's position** (US2 acceptance scenario 5)
-- [ ] T062 [P] [US2] [TDD] Implement column sorting in `src/ui/components/table.ts` via `s` (FR-037). Where the source reports a tie, **preserve source order rather than inventing one** (FR-029, edge case: ties)
-- [ ] T063 [US2] [TDD] Implement explicit status display for councils with no result in `src/ui/views/council.ts` – election not held or annulled shows that status, **never zero votes** (edge case: councils with no result)
-- [ ] T064 [US2] [TDD] Implement the FR-013 boundary message in `src/ui/views/council.ts`: where a user would expect per-polling-district detail, state that this level is not available because it is published only in batch form, rather than showing an empty view
-- [ ] T065 [US2] [TDD] Implement progressive availability in `src/ui/views/district.ts`: districts not yet retrieved are marked as still loading rather than blocking the interface (FR-018b)
-- [ ] T066 [US2] Run quickstart scenario **V3** end to end and record the result
-- [ ] T067 **REVIEW** User Story 2: verify councils are never bulk-polled, that ties and no-result councils are not misrepresented, and that the FR-013 boundary is visible to a user
+- [X] T053 [US2] [TDD] Implement background prefetch of all 77 district sources in `src/sources/districts.ts`, started at launch and refreshed on schedule (FR-018). Must yield between documents so the interface stays responsive
+- [X] T054 [P] [US2] [TDD] Implement on-demand council fetching in `src/sources/councils.ts`: retrieved when opened, refreshed only while on screen or watched. **Must never poll all councils** (FR-018a) – test asserts an idle application with nothing open polls only the 78 national and district sources
+- [X] T055 [P] [US2] [TDD] Implement district queries in `src/storage/queries/district.ts`: municipalities of a district with turnout, count progress, and seat totals
+- [X] T056 [P] [US2] [TDD] Implement council queries in `src/storage/queries/council.ts`: electoral parties with votes, vote share, and seats; candidates by party with ballot position, personal votes, and elected status
+- [X] T057 [US2] [TDD] Implement borough grouping in `src/domain/councils.ts` using `parent_kodzastup`, so a subdivided municipality presents each council separately and attributed to its parent (FR-035)
+- [X] T058 [US2] [TDD] Implement the district view in `src/ui/views/district.ts` with a scrollable municipality list that stays responsive in the largest districts (edge case: hundreds of municipalities)
+- [X] T059 [P] [US2] [TDD] Implement the council view in `src/ui/views/council.ts` showing per-party votes, share, and seats
+- [X] T060 [P] [US2] [TDD] Implement the candidate view in `src/ui/views/candidates.ts` listing ballot position, personal votes, and elected status (FR-034)
+- [X] T061 [US2] [TDD] Implement navigation state in `src/ui/navigation.ts`: `Enter` descends, `Esc`/`Backspace` ascends, and **a refresh while a view is open preserves the user's position** (US2 acceptance scenario 5)
+- [X] T062 [P] [US2] [TDD] Implement column sorting in `src/ui/components/table.ts` via `s` (FR-037). Where the source reports a tie, **preserve source order rather than inventing one** (FR-029, edge case: ties)
+- [X] T063 [US2] [TDD] Implement explicit status display for councils with no result in `src/ui/views/council.ts` – election not held or annulled shows that status, **never zero votes** (edge case: councils with no result)
+- [X] T064 [US2] [TDD] Implement the FR-013 boundary message in `src/ui/views/council.ts`: where a user would expect per-polling-district detail, state that this level is not available because it is published only in batch form, rather than showing an empty view
+- [X] T065 [US2] [TDD] Implement progressive availability in `src/ui/views/district.ts`: districts not yet retrieved are marked as still loading rather than blocking the interface (FR-018b)
+- [X] T066 [US2] Run quickstart scenario **V3** end to end and record the result
+- [X] T067 **REVIEW** User Story 2: verify councils are never bulk-polled, that ties and no-result councils are not misrepresented, and that the FR-013 boundary is visible to a user
 
 **Checkpoint**: Full drill-down works alongside the national overview.
 

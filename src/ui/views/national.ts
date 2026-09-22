@@ -10,6 +10,7 @@ import { ageSeconds, formatAge, statusLabel } from "../../domain/status.ts"
 import { readNationalParties, readNationalTotals } from "../../storage/queries/national.ts"
 import {
   type Column,
+  clampLines,
   dataRow,
   formatInteger,
   formatPercent,
@@ -39,6 +40,11 @@ export interface NationalViewOptions {
  * screen, when there is no data yet (FR-045).
  */
 export function renderNationalView(db: Database, options: NationalViewOptions = {}): string[] {
+  const w = Math.max(40, options.width ?? 100)
+  return clampLines(buildNationalView(db, options), w)
+}
+
+function buildNationalView(db: Database, options: NationalViewOptions): string[] {
   const oznacTypu = options.oznacTypu ?? "OBEC"
   const width = Math.max(40, options.width ?? 100)
   const now = options.now ?? new Date()

@@ -58,6 +58,18 @@ export function rule(width: number, char = "─"): string {
   return char.repeat(Math.max(0, width))
 }
 
+/**
+ * Truncates every line to `width`, so no view can overflow the terminal.
+ *
+ * Applied at the end of each view rather than trusted line by line: summary lines are
+ * assembled from template literals rather than the column system, and one of them did
+ * overflow a narrow terminal before this existed. Clamping centrally means FR-041
+ * cannot be broken by adding a line that forgets to measure itself.
+ */
+export function clampLines(lines: string[], width: number): string[] {
+  return lines.map((line) => ([...line].length <= width ? line : pad(line, width)))
+}
+
 export interface Column {
   header: string
   width: number

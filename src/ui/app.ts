@@ -1,13 +1,15 @@
 /**
- * Application shell (tasks T045, T049, T050).
+ * Application shell (tasks T045, T049, T050, T053, T054, T061).
  *
- * Owns the renderer, the key map, and the background refresh loop.
+ * Owns the renderer, the key map, navigation, and the background refresh loop.
  *
- * Two rules shape the design:
+ * Three rules shape the design:
  *   - The renderer must be destroyed on EVERY exit path, or the terminal is left in raw
  *     mode with the alternate screen active (FR-006).
  *   - Fetching must never block input (SC-010), so refresh work runs as async tasks and
  *     one document is processed at a time with a yield between documents (research R8).
+ *   - Councils are fetched ON DEMAND and unsubscribed when left (FR-018a). Roughly 6,000
+ *     exist; subscribing to them all would breach the polling budget immediately.
  */
 
 import type { Database } from "bun:sqlite"
@@ -17,16 +19,11 @@ import type { Logger } from "../logging/logger.ts"
 import { fetchDocument } from "../sources/client.ts"
 import { ingestCouncil, ingestDistrict, ingestNational } from "../sources/ingest.ts"
 import type { Scheduler } from "../sources/scheduler.ts"
-import { type SourceLocation, urlForKey } from "../sources/urls.ts"
+import { type SourceKey, type SourceLocation, urlForKey } from "../sources/urls.ts"
 import { availableCouncilTypes } from "../storage/queries/national.ts"
-import {
-  isTooSmall,
-  keyHintLine,
-  NATIONAL_HINTS,
-  staleWarning,
-  tooSmallMessage,
-} from "./components/status.ts"
-import { renderNationalView } from "./views/national.ts"
+import { isTooSmall, type KeyHint, keyHintLine, staleWarning, tooSmallMessage } from "./components/status.ts"
+import { Navigation } from "./navigation.ts"
+import { composeScreen, sourcesForScreen } from "./screen.ts"
 
 export interface AppDependencies {
   db: Database
@@ -35,6 +32,15 @@ export interface AppDependencies {
   scheduler: Scheduler
 }
 
+const HINTS: KeyHint[] = [
+  { key: "↑↓", label: "výběr" },
+  { key: "⏎", label: "otevřít" },
+  { key: "esc", label: "zpět" },
+  { key: "t", label: "typ" },
+  { key: "r", label: "obnovit" },
+  { key: "q", label: "konec" },
+]
+
 export class App {
   private renderer: CliRenderer | null = null
   private body: TextRenderable | null = null
@@ -42,6 +48,7 @@ export class App {
   private warning: TextRenderable | null = null
   private loop: ReturnType<typeof setInterval> | null = null
   private readonly abort = new AbortController()
+  private readonly nav = new Navigation()
   private councilType = "OBEC"
   private stopped = false
 
@@ -59,7 +66,7 @@ export class App {
     const renderer = await createCliRenderer({ exitOnCtrlC: false })
     this.renderer = renderer
 
-    const panel = new BoxRenderable(renderer, { flexDirection: "column", padding: 0, flexGrow: 1 })
+    const panel = new BoxRenderable(renderer, { flexDirection: "column", flexGrow: 1 })
     this.warning = new TextRenderable(renderer, { content: "" })
     this.body = new TextRenderable(renderer, { content: "Načítám…" })
     this.footer = new TextRenderable(renderer, { content: "" })
@@ -75,17 +82,14 @@ export class App {
       this.draw()
     })
 
-    // Every shutdown path must restore the terminal, including a signal (FR-006).
     const shutdown = () => {
       this.stop()
     }
     process.once("SIGINT", shutdown)
     process.once("SIGTERM", shutdown)
 
+    this.subscribeDistricts()
     this.draw()
-    // Fire one pass immediately so the first screen is not an empty wait, then settle
-    // into the polling rhythm. The interval is short because the scheduler, not this
-    // timer, decides what is actually due.
     void this.tick()
     this.loop = setInterval(() => {
       void this.tick()
@@ -102,26 +106,124 @@ export class App {
     this.renderer = null
   }
 
+  /**
+   * Subscribes to every district at startup (FR-018, T053).
+   *
+   * The whole set is retrieved in the background so drilling into any district shows
+   * data immediately. The scheduler spreads them, so this is a steady trickle rather
+   * than 78 simultaneous requests.
+   */
+  private subscribeDistricts(): void {
+    const districts = this.deps.db.query("SELECT nuts FROM district ORDER BY nuts").all() as {
+      nuts: string
+    }[]
+    if (districts.length === 0) return
+    this.deps.scheduler.subscribeAll(
+      districts.map((d) => ({
+        key: `district:${d.nuts}` as SourceKey,
+        areaKind: "district",
+        areaId: d.nuts,
+      })),
+    )
+    this.deps.log.info("Okresy přihlášeny k odběru", { count: districts.length })
+  }
+
+  /**
+   * Subscribes to what the current screen needs and drops what it no longer does.
+   *
+   * A council left behind is unsubscribed unless it is pinned to the watchlist, which
+   * is what keeps the polling set bounded (FR-018a).
+   */
+  private syncSubscriptions(): void {
+    const { scheduler } = this.deps
+    const needed = new Set(sourcesForScreen(this.nav.screen).map((s) => s.key))
+
+    for (const source of sourcesForScreen(this.nav.screen)) {
+      scheduler.subscribeAll([
+        { key: source.key as SourceKey, areaKind: source.areaKind, areaId: source.areaId },
+      ])
+    }
+
+    for (const sub of scheduler.all()) {
+      if (sub.areaKind !== "council") continue
+      if (!needed.has(sub.sourceKey) && !sub.pinned) scheduler.unsubscribe(sub.sourceKey)
+    }
+  }
+
   private async onKey(key: { name?: string; ctrl?: boolean }): Promise<void> {
-    if (key.name === "q" || (key.ctrl === true && key.name === "c")) {
+    const name = key.name ?? ""
+
+    if (name === "q" || (key.ctrl === true && name === "c")) {
       this.stop()
       return
     }
-    if (key.name === "t") {
-      const types = availableCouncilTypes(this.deps.db)
-      if (types.length > 1) {
-        const index = types.indexOf(this.councilType)
-        this.councilType = types[(index + 1) % types.length] ?? "OBEC"
-        this.draw()
+
+    const content = this.currentContent()
+
+    switch (name) {
+      case "up":
+        this.nav.move(-1, content.rowCount)
+        break
+      case "down":
+        this.nav.move(1, content.rowCount)
+        break
+      case "pageup":
+        this.nav.move(-10, content.rowCount)
+        break
+      case "pagedown":
+        this.nav.move(10, content.rowCount)
+        break
+      case "home":
+        this.nav.moveTo("first", content.rowCount)
+        break
+      case "end":
+        this.nav.moveTo("last", content.rowCount)
+        break
+      case "return":
+      case "enter": {
+        const target = content.target(this.nav.current.selected)
+        if (target !== null) {
+          this.nav.push(target)
+          this.syncSubscriptions()
+          // Fetch what the new screen needs straight away rather than waiting for the
+          // next tick, so opening a council is not followed by a blank pause.
+          void this.tick()
+        }
+        break
       }
-      return
+      case "escape":
+      case "backspace":
+        if (this.nav.pop()) this.syncSubscriptions()
+        break
+      case "t": {
+        const types = availableCouncilTypes(this.deps.db)
+        if (types.length > 1) {
+          const index = types.indexOf(this.councilType)
+          this.councilType = types[(index + 1) % types.length] ?? "OBEC"
+        }
+        break
+      }
+      case "r": {
+        for (const source of sourcesForScreen(this.nav.screen)) {
+          this.deps.scheduler.requestRefresh(source.key as SourceKey)
+        }
+        this.deps.scheduler.requestRefresh("national")
+        await this.tick()
+        break
+      }
+      default:
+        return
     }
-    if (key.name === "r") {
-      // Subject to the same 60-second floor as automatic polling (FR-019).
-      const allowed = this.deps.scheduler.requestRefresh("national")
-      this.deps.log.debug("Ruční obnovení", { allowed })
-      await this.tick()
-    }
+
+    this.draw()
+  }
+
+  private currentContent() {
+    const renderer = this.renderer
+    return composeScreen(this.deps.db, this.nav.screen, {
+      width: renderer?.width ?? 100,
+      councilType: this.councilType,
+    })
   }
 
   /**
@@ -136,8 +238,8 @@ export class App {
 
     for (const sub of scheduler.due(new Date(), 3)) {
       if (this.stopped) return
-      const url = urlForKey(this.location, sub.sourceKey)
-      const outcome = await fetchDocument(url, {
+
+      const outcome = await fetchDocument(urlForKey(this.location, sub.sourceKey), {
         validators: { etag: sub.etag, lastModified: sub.lastModified },
         signal: this.abort.signal,
       })
@@ -149,9 +251,8 @@ export class App {
             etag: outcome.etag,
             lastModified: outcome.lastModified,
           })
-          log.debug("Načteno", { source: sub.sourceKey, publishedAt: result.publishedAt })
         } else {
-          // A document that fails validation is a failure of the source, not of the
+          // A document failing validation is a failure of the source, not of the
           // application: the previous snapshot stays on screen (FR-025, FR-027).
           scheduler.recordFailure(sub.sourceKey, result.reason)
           log.warn("Dokument odmítnut", { source: sub.sourceKey, reason: result.reason })
@@ -180,22 +281,41 @@ export class App {
     const height = renderer.height
 
     if (isTooSmall(width, height)) {
-      this.warning && (this.warning.content = "")
+      if (this.warning !== null) this.warning.content = ""
       this.body.content = tooSmallMessage(width, height).join("\n")
-      this.footer && (this.footer.content = "")
+      if (this.footer !== null) this.footer.content = ""
       return
     }
 
     const warning = staleWarning(this.deps.scheduler.all())
     if (this.warning !== null) this.warning.content = warning ?? ""
 
-    const lines = renderNationalView(this.deps.db, { oznacTypu: this.councilType, width })
-    // Leave room for the warning line and the footer.
-    const available = Math.max(1, height - (warning === null ? 1 : 2) - 1)
-    this.body.content = lines.slice(0, available).join("\n")
+    const content = composeScreen(this.deps.db, this.nav.screen, {
+      width,
+      councilType: this.councilType,
+    })
 
-    if (this.footer !== null) this.footer.content = keyHintLine(NATIONAL_HINTS, width)
+    const available = Math.max(1, height - (warning === null ? 1 : 2) - 1)
+    this.nav.ensureVisible(Math.max(1, available - content.firstRow))
+
+    this.body.content = withSelection(content.lines, content.firstRow, this.nav.current.selected)
+      .slice(0, available)
+      .join("\n")
+
+    if (this.footer !== null) this.footer.content = keyHintLine(HINTS, width)
   }
+}
+
+/**
+ * Marks the selected row.
+ *
+ * A leading marker rather than colour, so the selection is visible on a monochrome
+ * terminal (FR-040).
+ */
+function withSelection(lines: string[], firstRow: number, selected: number): string[] {
+  const index = firstRow + selected
+  if (firstRow >= lines.length) return lines
+  return lines.map((line, i) => (i === index ? `▶ ${line}` : `  ${line}`))
 }
 
 /** Routes a fetched body to the right ingest function. */
