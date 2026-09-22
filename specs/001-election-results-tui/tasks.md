@@ -132,9 +132,9 @@ party, with its publication timestamp and a provisional marker.
 **Independent Test**: Run against the replay harness and confirm the overview populates, updates without
 user action as the harness advances, and that the completion percentage and timestamp advance with it.
 
-- [ ] T042 [US1] [TDD] Implement the polling scheduler in `src/sources/scheduler.ts`. **Hard invariant: `next_due_at - last_attempt_at >= 60s` per source, always** (FR-016). Sources are spread across the polling window rather than fired together (research R8). A manual refresh (FR-019) is subject to the same floor. Test asserts no source is requested twice within 60 s across a simulated 5-minute run
-- [ ] T043 [US1] [TDD] Implement the national source subscription in `src/sources/national.ts`: fetch, parse, validate, store snapshot, update subscription record
-- [ ] T044 [P] [US1] [TDD] Implement national overview queries in `src/storage/queries/national.ts`: current snapshot with party results joined to electoral party names, ordered by seats then votes
+- [X] T042 [US1] [TDD] Implement the polling scheduler in `src/sources/scheduler.ts`. **Hard invariant: `next_due_at - last_attempt_at >= 60s` per source, always** (FR-016). Sources are spread across the polling window rather than fired together (research R8). A manual refresh (FR-019) is subject to the same floor. Test asserts no source is requested twice within 60 s across a simulated 5-minute run
+- [X] T043 [US1] [TDD] Implement the national source subscription in `src/sources/national.ts`: fetch, parse, validate, store snapshot, update subscription record
+- [X] T044 [P] [US1] [TDD] Implement national overview queries in `src/storage/queries/national.ts`: current snapshot with party results joined to electoral party names, ordered by seats then votes
 - [X] T045 [US1] Create the OpenTUI application shell in `src/ui/app.ts`: renderer setup, root layout, footer with key hints, `q` to quit restoring the terminal (FR-006), `SIGINT`/`SIGTERM` handling
 - [X] T046 [US1] [TDD] Implement the national overview view in `src/ui/views/national.ts` showing turnout, districts counted of total, and the seats table. Test with `createTestRenderer()` from `@opentui/core/testing` and assert on `captureCharFrame()` output
 - [X] T047 [US1] [TDD] Implement the header status bar in `src/ui/components/status.ts` showing the **publisher's** generation timestamp as "last updated" (never local time) and a provisional-versus-final marker (FR-021, FR-022, data-model clock-skew edge case)
