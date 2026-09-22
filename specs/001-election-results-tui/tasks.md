@@ -202,12 +202,12 @@ warning, retries slow down, and refreshing resumes by itself when the harness re
 **Independent Test**: Search a municipality by partial name with and without diacritics, open it, and
 confirm no raw numeric codes appear where a name exists.
 
-- [ ] T076 [P] [US4] [TDD] Implement search queries in `src/storage/queries/search.ts` over `council.name_folded`, `municipality.name_folded`, and `candidate.name_folded`, with results ranked by prefix match then substring
-- [ ] T077 [US4] [TDD] Implement the search view in `src/ui/views/search.ts` opened by `/`, showing live results as the user types and opening the selection on `Enter`. Assert `Ricany`, `Říčany` and `RICANY` all match the same municipality (FR-038)
-- [ ] T078 [P] [US4] [TDD] Implement electoral party search in `src/storage/queries/search.ts`: searching a party name lists the councils where it stood (US4 acceptance scenario 2)
-- [ ] T079 [US4] [TDD] Audit every view for code leakage via `tests/ui/no-codes.test.ts`: assert that rendered frames contain no bare numeric code where a name is available (FR-011, US4 acceptance scenario 3)
-- [ ] T080 [US4] Run quickstart scenario **V8** and record the result
-- [ ] T081 **REVIEW** User Story 4: verify folding is applied identically to stored names and queries, and that search never triggers a bulk fetch of councils
+- [X] T076 [P] [US4] [TDD] Implement search queries in `src/storage/queries/search.ts` over `council.name_folded`, `municipality.name_folded`, and `candidate.name_folded`, with results ranked by prefix match then substring
+- [X] T077 [US4] [TDD] Implement the search view in `src/ui/views/search.ts` opened by `/`, showing live results as the user types and opening the selection on `Enter`. Assert `Ricany`, `Říčany` and `RICANY` all match the same municipality (FR-038)
+- [X] T078 [P] [US4] [TDD] Implement electoral party search in `src/storage/queries/search.ts`: searching a party name lists the councils where it stood (US4 acceptance scenario 2)
+- [X] T079 [US4] [TDD] Audit every view for code leakage via `tests/ui/no-codes.test.ts`: assert that rendered frames contain no bare numeric code where a name is available (FR-011, US4 acceptance scenario 3)
+- [X] T080 [US4] Run quickstart scenario **V8** and record the result
+- [X] T081 **REVIEW** User Story 4: verify folding is applied identically to stored names and queries, and that search never triggers a bulk fetch of councils
 
 **Checkpoint**: The application is navigable without knowing the administrative hierarchy.
 

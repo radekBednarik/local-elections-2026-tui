@@ -24,6 +24,7 @@ import { availableCouncilTypes } from "../storage/queries/national.ts"
 import { isTooSmall, type KeyHint, keyHintLine, staleWarning, tooSmallMessage } from "./components/status.ts"
 import { Navigation } from "./navigation.ts"
 import { composeScreen, sourcesForScreen } from "./screen.ts"
+import { applySearchKey, type KeyEvent } from "./search-input.ts"
 
 export interface AppDependencies {
   db: Database
@@ -37,6 +38,7 @@ const HINTS: KeyHint[] = [
   { key: "⏎", label: "otevřít" },
   { key: "esc", label: "zpět" },
   { key: "t", label: "typ" },
+  { key: "/", label: "hledat" },
   { key: "r", label: "obnovit" },
   { key: "q", label: "konec" },
 ]
@@ -49,6 +51,7 @@ export class App {
   private loop: ReturnType<typeof setInterval> | null = null
   private readonly abort = new AbortController()
   private readonly nav = new Navigation()
+  private query = ""
   private councilType = "OBEC"
   private stopped = false
 
@@ -75,7 +78,7 @@ export class App {
     panel.add(this.footer)
     renderer.root.add(panel)
 
-    renderer.keyInput.on("keypress", (key: { name?: string; ctrl?: boolean }) => {
+    renderer.keyInput.on("keypress", (key: KeyEvent) => {
       void this.onKey(key)
     })
     renderer.on("resize", () => {
@@ -150,10 +153,22 @@ export class App {
     }
   }
 
-  private async onKey(key: { name?: string; ctrl?: boolean }): Promise<void> {
+  private async onKey(key: KeyEvent): Promise<void> {
     const name = key.name ?? ""
 
-    if (name === "q" || (key.ctrl === true && name === "c")) {
+    // Ctrl+C always quits. A bare "q" must NOT, while the search box has focus, or the
+    // user could never type a name containing the letter.
+    if (key.ctrl === true && name === "c") {
+      this.stop()
+      return
+    }
+
+    if (this.nav.screen.kind === "search" && this.handleSearchKey(key)) {
+      this.draw()
+      return
+    }
+
+    if (name === "q") {
       this.stop()
       return
     }
@@ -195,6 +210,11 @@ export class App {
       case "backspace":
         if (this.nav.pop()) this.syncSubscriptions()
         break
+      case "/":
+      case "slash":
+        this.query = ""
+        this.nav.push({ kind: "search" })
+        break
       case "t": {
         const types = availableCouncilTypes(this.deps.db)
         if (types.length > 1) {
@@ -218,11 +238,20 @@ export class App {
     this.draw()
   }
 
+  /** Delegates to the pure rules in search-input.ts. */
+  private handleSearchKey(key: KeyEvent): boolean {
+    const result = applySearchKey(this.query, key)
+    if (!result.handled) return false
+    this.query = result.query
+    return true
+  }
+
   private currentContent() {
     const renderer = this.renderer
     return composeScreen(this.deps.db, this.nav.screen, {
       width: renderer?.width ?? 100,
       councilType: this.councilType,
+      query: this.query,
     })
   }
 
@@ -293,6 +322,7 @@ export class App {
     const content = composeScreen(this.deps.db, this.nav.screen, {
       width,
       councilType: this.councilType,
+      query: this.query,
     })
 
     const available = Math.max(1, height - (warning === null ? 1 : 2) - 1)

@@ -12,6 +12,7 @@ import { availableCouncilTypes } from "../storage/queries/national.ts"
 import type { Screen } from "./navigation.ts"
 import { renderCandidates, renderCouncil, renderDistrict, renderDistrictList } from "./views/areas.ts"
 import { renderNationalView } from "./views/national.ts"
+import { renderSearch } from "./views/search.ts"
 
 /** What pressing Enter on the selected row opens, if anything. */
 export type SelectableTarget = Screen | null
@@ -30,6 +31,8 @@ export interface ScreenOptions {
   width: number
   councilType: string
   now?: Date
+  /** Current text in the search box, when the search screen is open. */
+  query?: string
 }
 
 /** Builds everything needed to draw one screen. */
@@ -105,6 +108,24 @@ export function composeScreen(db: Database, screen: Screen, options: ScreenOptio
       const lines = renderCandidates(db, screen.kodzastup, screen.vstrana, screen.ballotOrder, options.width)
       // The candidate list is the leaf of the drill-down; nothing opens from it.
       return { lines, firstRow: lines.length, rowCount: 0, target: () => null }
+    }
+
+    case "search": {
+      const view = renderSearch(db, options.query ?? "", options.width)
+      return {
+        lines: view.lines,
+        firstRow: view.firstRow,
+        rowCount: view.hits.length,
+        target: (index) => {
+          const hit = view.hits[index]
+          if (hit === undefined) return null
+          // A party hit opens its candidate list directly; anything else opens the
+          // council, which is the most useful landing place for a name.
+          return hit.kind === "party" && hit.vstrana !== null
+            ? { kind: "candidates", kodzastup: hit.kodzastup, vstrana: hit.vstrana, ballotOrder: null }
+            : { kind: "council", kodzastup: hit.kodzastup }
+        },
+      }
     }
 
     default: {
