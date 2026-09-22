@@ -26,10 +26,10 @@ export const decimalFromString = z
 
 /** An optional integer: absent stays absent, present must still be a number. */
 export const optionalInt = intFromString.optional().nullable()
-export const optionalDecimal = decimalFromString.optional().nullable()
+const optionalDecimal = decimalFromString.optional().nullable()
 
 /** `JE_SPOCTENO="true"` - the source writes booleans as text. */
-export const booleanFromString = z.enum(["true", "false"]).transform((value) => value === "true")
+const booleanFromString = z.enum(["true", "false"]).transform((value) => value === "true")
 
 /** The publisher's generation timestamp, authoritative for "last updated" (FR-021). */
 export const generatedAt = z
@@ -58,7 +58,7 @@ export type Ucast = z.infer<typeof ucastSchema>
  * Note this is only the ELECTED ones, not the full candidate list. Full lists come from
  * the KVRK registry, which is why FR-034 needs reference data.
  */
-export const zastupitelSchema = z.object({
+const zastupitelSchema = z.object({
   PORADOVE_CISLO: intFromString,
   JMENO: z.string(),
   PRIJMENI: z.string(),
@@ -84,7 +84,7 @@ export const volebniStranaSchema = z.object({
 export type VolebniStrana = z.infer<typeof volebniStranaSchema>
 
 /** The result body of one council. */
-export const vysledekSchema = z.object({
+const vysledekSchema = z.object({
   UCAST: ucastSchema,
   VOLEBNI_STRANA: z.array(volebniStranaSchema).optional().default([]),
 })

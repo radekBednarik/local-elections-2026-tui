@@ -17,9 +17,9 @@ import { parseArgs } from "node:util"
  */
 export const MIN_INTERVAL_SECONDS = 60
 
-export const DEFAULT_BASE_URL = "https://volby.gov.cz"
-export const DEFAULT_ELECTION = "kv2026"
-export const DEFAULT_DATE = "20261009"
+const DEFAULT_BASE_URL = "https://volby.gov.cz"
+const DEFAULT_ELECTION = "kv2026"
+const DEFAULT_DATE = "20261009"
 
 export type LogLevel = "error" | "warn" | "info" | "debug"
 const LOG_LEVELS: readonly LogLevel[] = ["error", "warn", "info", "debug"]
@@ -47,7 +47,7 @@ function fail(message: string): ParseResult {
 }
 
 /** True for a real calendar date written as YYYYMMDD. */
-export function isValidDateString(value: string): boolean {
+function isValidDateString(value: string): boolean {
   if (!/^\d{8}$/.test(value)) return false
   const year = Number(value.slice(0, 4))
   const month = Number(value.slice(4, 6))

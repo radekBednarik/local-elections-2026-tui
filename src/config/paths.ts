@@ -77,8 +77,3 @@ export function resolvePaths(inputs: PathInputs): AppPaths {
     log: join(dataDir, "volby.log"),
   }
 }
-
-/** The real paths for this process. */
-export function currentPaths(override: string | null = null): AppPaths {
-  return resolvePaths({ platform: process.platform, env: process.env, override })
-}

@@ -67,14 +67,6 @@ export function isReferenceLoaded(db: Database): boolean {
   return row !== null
 }
 
-/** When the reference data was loaded, or null. */
-export function referenceLoadedAt(db: Database): string | null {
-  const row = db.query("SELECT value FROM app_config WHERE key = $k").get({ k: LOADED_KEY }) as {
-    value: string
-  } | null
-  return row?.value ?? null
-}
-
 /**
  * Loads every registry and code list into the database in one transaction.
  *

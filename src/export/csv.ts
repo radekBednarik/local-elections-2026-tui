@@ -18,7 +18,7 @@
 /** U+FEFF, written first so spreadsheet software detects UTF-8. */
 export const BOM = "﻿"
 export const DELIMITER = ";"
-export const LINE_ENDING = "\r\n"
+const LINE_ENDING = "\r\n"
 
 export interface ExportMeta {
   /** Area name, e.g. "Brno-Bohunice". */
@@ -53,7 +53,7 @@ export function numberCell(value: number | null | undefined, decimals = 0): stri
 }
 
 /** One row of already-stringified cells. */
-export function csvRow(cells: string[]): string {
+function csvRow(cells: string[]): string {
   return cells.map(quoteField).join(DELIMITER)
 }
 
@@ -64,7 +64,7 @@ export function csvRow(cells: string[]): string {
  * "#", which spreadsheet software imports as ordinary text rows - acceptable, and it
  * keeps the provenance attached to the data rather than in a separate file.
  */
-export function provenanceHeader(meta: ExportMeta): string[] {
+function provenanceHeader(meta: ExportMeta): string[] {
   return [
     "# Volby do zastupitelstev obcí 2026",
     `# Oblast: ${meta.area} (${meta.areaCode})`,

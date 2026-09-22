@@ -20,7 +20,7 @@ export interface SourceLocation {
 export type SourceKey = `national` | `district:${string}` | `council:${string}`
 
 /** `{base}/appdata/{election}/{date}/odata` */
-export function odataRoot(loc: SourceLocation): string {
+function odataRoot(loc: SourceLocation): string {
   return `${loc.baseUrl}/appdata/${loc.election}/${loc.date}/odata`
 }
 
@@ -57,14 +57,6 @@ export function urlForKey(loc: SourceLocation, key: SourceKey): string {
   if (kind === "district" && id !== undefined) return districtUrl(loc, id)
   if (kind === "council" && id !== undefined) return councilUrl(loc, id)
   throw new TypeError(`Neznámý zdroj: ${JSON.stringify(key)}`)
-}
-
-export function districtKey(nuts: string): SourceKey {
-  return `district:${nuts}`
-}
-
-export function councilKey(kodzastup: string): SourceKey {
-  return `council:${kodzastup}`
 }
 
 /**
