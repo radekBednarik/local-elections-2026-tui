@@ -251,16 +251,16 @@ and diacritics are intact with the provenance header present.
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T095 [P] Implement the help view in `src/ui/views/help.ts` opened by `?`, listing every key from [contracts/cli.md](./contracts/cli.md) (FR-005)
-- [ ] T096 [P] Verify Czech throughout: audit every user-facing string in `src/` for English leakage, including error and status text (FR-004a). **Source terminology must match the published data**
-- [ ] T097 [P] Run quickstart scenario **V11**: resize below and above the minimum, and run with `NO_COLOR=1` (FR-040, FR-041)
-- [ ] T098 Run quickstart scenario **V7**: five minutes at `--interval 1`, confirming the clamp and that the request log shows no source polled faster than 60 s (SC-005)
-- [ ] T099 Run quickstart scenario **V6**: two runs against a fresh data directory, confirming the second retrieves no reference data (SC-014)
+- [X] T095 [P] Implement the help view in `src/ui/views/help.ts` opened by `?`, listing every key from [contracts/cli.md](./contracts/cli.md) (FR-005)
+- [X] T096 [P] Verify Czech throughout: audit every user-facing string in `src/` for English leakage, including error and status text (FR-004a). **Source terminology must match the published data**
+- [X] T097 [P] Run quickstart scenario **V11**: resize below and above the minimum, and run with `NO_COLOR=1` (FR-040, FR-041)
+- [X] T098 Run quickstart scenario **V7**: five minutes at `--interval 1`, confirming the clamp and that the request log shows no source polled faster than 60 s (SC-005)
+- [X] T099 Run quickstart scenario **V6**: two runs against a fresh data directory, confirming the second retrieves no reference data (SC-014)
 - [ ] T100 Run quickstart scenario **V12**: a 12-hour run against the harness, watching for memory growth and confirming keystroke response stays within 100 ms during refreshes (SC-008, SC-010)
 - [ ] T101 Verify cross-platform behaviour: scenarios **V1, V2, V10, V11** must pass on Linux via the CI runner, since no Linux machine is available locally (FR-002, SC-013)
-- [ ] T102 [P] Write `README.md` at repository root: what the application is, where the data comes from, how to install, run, and build, and an explicit statement that per-polling-district detail is out of scope (FR-013)
-- [ ] T103 [P] Add release packaging to `.github/workflows/build.yml`: attach both binaries to a GitHub release on a tag
-- [ ] T104 Confirm accuracy against the published source for a full sample of districts, comparing displayed figures field by field (SC-006). **No rounding or derivation** – figures must match exactly
+- [X] T102 [P] Write `README.md` at repository root: what the application is, where the data comes from, how to install, run, and build, and an explicit statement that per-polling-district detail is out of scope (FR-013)
+- [X] T103 [P] Add release packaging to `.github/workflows/build.yml`: attach both binaries to a GitHub release on a tag
+- [X] T104 Confirm accuracy against the published source for a full sample of districts, comparing displayed figures field by field (SC-006). **No rounding or derivation** – figures must match exactly
 - [ ] T105 **ELECTION-DAY READINESS** – close to 9 October 2026, re-check the published schemas against the Zod schemas, confirm the real date and base path, and run V6 against the real reference archives. The format may have changed since planning (research, residual risks)
 - [ ] T106 **REVIEW** Final: confirm every functional requirement has a covering test, that no dead code or commented-out code remains, and that every deviation from a constitution principle is documented with its justification
 

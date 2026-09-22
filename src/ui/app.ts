@@ -47,6 +47,7 @@ const HINTS: KeyHint[] = [
   { key: "w", label: "sledovat" },
   { key: "e", label: "export" },
   { key: "r", label: "obnovit" },
+  { key: "?", label: "nápověda" },
   { key: "q", label: "konec" },
 ]
 
@@ -260,6 +261,10 @@ export class App {
         }
         break
       }
+      case "?":
+      case "questionmark":
+        if (this.nav.screen.kind !== "help") this.nav.push({ kind: "help" })
+        break
       case "e": {
         // "e" exports the displayed table, "E" produces the summary report.
         await this.exportCurrent(key.shift === true || key.sequence === "E")

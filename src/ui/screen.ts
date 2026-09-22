@@ -11,6 +11,7 @@ import { listCouncilParties, listCouncilsInDistrict, listDistricts } from "../st
 import { availableCouncilTypes } from "../storage/queries/national.ts"
 import type { Screen } from "./navigation.ts"
 import { renderCandidates, renderCouncil, renderDistrict, renderDistrictList } from "./views/areas.ts"
+import { renderHelp } from "./views/help.ts"
 import { renderNationalView } from "./views/national.ts"
 import { renderSearch } from "./views/search.ts"
 import { renderWatchlist } from "./views/watchlist.ts"
@@ -111,6 +112,10 @@ export function composeScreen(db: Database, screen: Screen, options: ScreenOptio
       return { lines, firstRow: lines.length, rowCount: 0, target: () => null }
     }
 
+    case "help": {
+      return { lines: renderHelp(options.width), firstRow: 0, rowCount: 0, target: () => null }
+    }
+
     case "watchlist": {
       const view = renderWatchlist(db, options.width)
       return {
@@ -143,8 +148,12 @@ export function composeScreen(db: Database, screen: Screen, options: ScreenOptio
     }
 
     default: {
+      // Every screen kind is handled above, so TypeScript narrows this to `never`.
+      // Assigning it proves exhaustiveness at compile time: adding a screen without
+      // composing it becomes a type error rather than a blank display at runtime.
+      const unreachable: never = screen
       return {
-        lines: [`Obrazovka ${screen.kind} zatím není k dispozici.`],
+        lines: [`Neznámá obrazovka: ${JSON.stringify(unreachable)}`],
         firstRow: 1,
         rowCount: 0,
         target: () => null,

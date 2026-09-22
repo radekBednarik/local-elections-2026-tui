@@ -8,6 +8,7 @@
  */
 
 import type { Database } from "bun:sqlite"
+import { fold } from "../domain/folding.ts"
 import { determineStatus } from "../domain/status.ts"
 import { parseAndValidate } from "../parsing/pipeline.ts"
 import type { Obec, VolebniStrana } from "../parsing/schemas/common.ts"
@@ -164,14 +165,45 @@ export function ingestDistrict(
   const publishedAt = doc.DATUM_CAS_GENEROVANI
   const stamp = fetchedAt.toISOString()
 
-  const setDistrict = db.query("UPDATE council SET district_nuts = $n WHERE kodzastup = $k")
   const outcomes: WriteOutcome[] = []
   for (const obec of doc.OBEC) {
-    setDistrict.run({ n: nuts, k: obec.KODZASTUP })
+    upsertCouncil(db, obec, nuts)
     outcomes.push(writeSnapshot(db, obecToSnapshot(obec, publishedAt, stamp)))
   }
 
   return { ok: true, outcomes, publishedAt }
+}
+
+/**
+ * Records the council itself from the result document.
+ *
+ * The result carries `KODZASTUP`, `NAZEVZAST`, `OZNAC_TYPU` and `VOLENO_ZASTUP`, which
+ * is everything needed for a usable council row. Creating it here is what makes FR-011's
+ * degraded mode actually work: with no registry at all, results are still browsable and
+ * still show real names, rather than the application reporting that a council it holds
+ * results for cannot be found.
+ *
+ * Registry-only fields are left alone, so a later reference load enriches the row
+ * instead of the two fighting over it.
+ */
+function upsertCouncil(db: Database, obec: Obec, districtNuts: string | null): void {
+  db.query(
+    `INSERT INTO council (kodzastup, name, name_folded, oznac_typu, district_nuts, mandaty)
+     VALUES ($k, $n, $f, $typ, $d, $m)
+     ON CONFLICT(kodzastup) DO UPDATE SET
+       name = excluded.name,
+       name_folded = excluded.name_folded,
+       oznac_typu = excluded.oznac_typu,
+       mandaty = COALESCE(council.mandaty, excluded.mandaty),
+       district_nuts = COALESCE(excluded.district_nuts, council.district_nuts)`,
+  ).run({
+    k: obec.KODZASTUP,
+    n: obec.NAZEVZAST,
+    f: fold(obec.NAZEVZAST),
+    typ: obec.OZNAC_TYPU,
+    d: districtNuts,
+    m: obec.VOLENO_ZASTUP,
+  })
 }
 
 /** Ingests a single council document (FR-009). */
@@ -188,6 +220,9 @@ export function ingestCouncil(
   const publishedAt = doc.DATUM_CAS_GENEROVANI
   const stamp = fetchedAt.toISOString()
 
-  const outcomes = doc.OBEC.map((obec) => writeSnapshot(db, obecToSnapshot(obec, publishedAt, stamp)))
+  const outcomes = doc.OBEC.map((obec) => {
+    upsertCouncil(db, obec, null)
+    return writeSnapshot(db, obecToSnapshot(obec, publishedAt, stamp))
+  })
   return { ok: true, outcomes, publishedAt }
 }

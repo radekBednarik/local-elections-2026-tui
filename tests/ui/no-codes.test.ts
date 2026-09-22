@@ -147,3 +147,45 @@ describe("no placeholder artefacts in any view", () => {
     expect(body).not.toContain("[object Object]")
   })
 })
+
+describe("results are browsable with NO reference data at all (FR-011)", () => {
+  // The requirement is that a missing registry degrades the display, not that it
+  // prevents results being seen. This failed until ingest began recording the council
+  // from the result document itself, which carries its name and code.
+  let bare: Database
+
+  beforeEach(() => {
+    bare = openMemoryDatabase()
+    ingestDistrict(bare, "CZ0642", read("vysledky_obce_okres_CZ0642.xml"))
+  })
+
+  test("a council with results can be opened, and shows its real name", () => {
+    const body = composeScreen(bare, { kind: "council", kodzastup: "551082" }, opts).lines.join("\n")
+    expect(body).toContain("Brno-Bohunice")
+    expect(body).not.toContain("nebylo nalezeno")
+  })
+
+  test("its parties and figures are displayed", () => {
+    const body = composeScreen(bare, { kind: "council", kodzastup: "551082" }, opts).lines.join("\n")
+    expect(body).toContain("ANO 2011")
+    expect(body).toContain("Účast")
+  })
+
+  test("the district still lists its councils", () => {
+    const content = composeScreen(bare, { kind: "district", nuts: "CZ0642" }, opts)
+    expect(content.rowCount).toBeGreaterThan(0)
+    expect(content.lines.join("\n")).toContain("Brno")
+  })
+
+  test("a later reference load enriches rather than overwrites", () => {
+    // The council kind comes only from the registry, so it is absent beforehand and
+    // present afterwards, while the name from the result document survives.
+    const before = composeScreen(bare, { kind: "council", kodzastup: "551082" }, opts).lines.join("\n")
+    loadReference(bare, archives)
+    const after = composeScreen(bare, { kind: "council", kodzastup: "551082" }, opts).lines.join("\n")
+
+    expect(before).toContain("Brno-Bohunice")
+    expect(after).toContain("Brno-Bohunice")
+    expect(after).toContain("Zastupitelstvo městské části")
+  })
+})
