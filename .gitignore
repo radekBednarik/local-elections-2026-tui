@@ -16,3 +16,6 @@ dist/
 # from them by tools/fixtures/derive-reference.ts. Re-fetch with the URLs in
 # fixtures/README.md.
 fixtures/source-2026-reg/
+
+# Local mirrors of previous elections, built by tools/mirror/build.ts.
+mirror/

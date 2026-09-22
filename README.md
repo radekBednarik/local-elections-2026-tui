@@ -110,6 +110,35 @@ bun run replay                                    # serve fixtures on a compress
 bun run dev -- --base-url http://localhost:8787   # point the app at it
 ```
 
+### Testing the real binary against a previous election
+
+The fixtures cover six councils. To exercise the application at full scale — every
+district, thousands of councils, real party and candidate names — mirror a previous
+election locally:
+
+```bash
+bun run mirror                    # national + all 78 districts + Brno's councils
+bun run mirror -- --districts 5 --councils CZ0100    # a quicker subset
+```
+
+Then point the built binary at it:
+
+```bash
+dist\volby-kv2026.exe --base-url file://C:/path/to/mirror --election kv2022 --date 20220923
+```
+
+The mirror downloads the 2022 results, which the publisher serves through
+query-parameter endpoints, and writes them in the static-file layout the application
+expects. Payloads are copied verbatim; only the layout changes. It pauses between
+requests, skips anything already downloaded, and pairs the results with the **real 2026
+registries** — council codes are stable between elections, so names and candidate lists
+resolve correctly.
+
+What this does and does not prove: it exercises fetching, parsing, storage, navigation,
+search, the watchlist and export against genuine data at genuine volume. It does not
+exercise a live count, since 2022 is complete and every figure is final — use the replay
+harness for that.
+
 ### Building
 
 ```bash

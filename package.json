@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "format": "biome check --write .",
     "replay": "bun run tools/replay/server.ts",
+    "mirror": "bun run tools/mirror/build.ts",
     "build:win": "bun build --compile --target=bun-windows-x64 --minify src/main.ts --outfile dist/volby-kv2026.exe",
     "build:linux": "bun build --compile --target=bun-linux-x64 --define process.env.OPENTUI_LIBC='\"glibc\"' --minify src/main.ts --outfile dist/volby-kv2026"
   },
