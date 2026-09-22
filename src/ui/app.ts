@@ -21,6 +21,7 @@ import { ingestCouncil, ingestDistrict, ingestNational } from "../sources/ingest
 import type { Scheduler } from "../sources/scheduler.ts"
 import { type SourceKey, type SourceLocation, urlForKey } from "../sources/urls.ts"
 import { availableCouncilTypes } from "../storage/queries/national.ts"
+import { toggleWatchlist, watchedCodes } from "../storage/queries/watchlist.ts"
 import { isTooSmall, type KeyHint, keyHintLine, staleWarning, tooSmallMessage } from "./components/status.ts"
 import { Navigation } from "./navigation.ts"
 import { composeScreen, sourcesForScreen } from "./screen.ts"
@@ -39,6 +40,7 @@ const HINTS: KeyHint[] = [
   { key: "esc", label: "zpět" },
   { key: "t", label: "typ" },
   { key: "/", label: "hledat" },
+  { key: "w", label: "sledovat" },
   { key: "r", label: "obnovit" },
   { key: "q", label: "konec" },
 ]
@@ -52,6 +54,8 @@ export class App {
   private readonly abort = new AbortController()
   private readonly nav = new Navigation()
   private query = ""
+  /** One-off confirmation line, cleared on the next key press. */
+  private notice: string | null = null
   private councilType = "OBEC"
   private stopped = false
 
@@ -92,6 +96,7 @@ export class App {
     process.once("SIGTERM", shutdown)
 
     this.subscribeDistricts()
+    this.syncSubscriptions()
     this.draw()
     void this.tick()
     this.loop = setInterval(() => {
@@ -138,13 +143,22 @@ export class App {
    * is what keeps the polling set bounded (FR-018a).
    */
   private syncSubscriptions(): void {
-    const { scheduler } = this.deps
+    const { scheduler, db } = this.deps
     const needed = new Set(sourcesForScreen(this.nav.screen).map((s) => s.key))
 
     for (const source of sourcesForScreen(this.nav.screen)) {
       scheduler.subscribeAll([
         { key: source.key as SourceKey, areaKind: source.areaKind, areaId: source.areaId },
       ])
+    }
+
+    // A watched council keeps polling even when it is nowhere on screen, which is the
+    // whole point of the watchlist (FR-039 with FR-018a).
+    for (const code of watchedCodes(db)) {
+      const key = `council:${code}` as SourceKey
+      needed.add(key)
+      scheduler.subscribeAll([{ key, areaKind: "council", areaId: code }])
+      scheduler.setPinned(key, true)
     }
 
     for (const sub of scheduler.all()) {
@@ -155,6 +169,8 @@ export class App {
 
   private async onKey(key: KeyEvent): Promise<void> {
     const name = key.name ?? ""
+    // A confirmation only survives until the next keystroke.
+    this.notice = null
 
     // Ctrl+C always quits. A bare "q" must NOT, while the search box has focus, or the
     // user could never type a name containing the letter.
@@ -215,6 +231,30 @@ export class App {
         this.query = ""
         this.nav.push({ kind: "search" })
         break
+      case "w": {
+        // Shift distinguishes the two: "w" toggles, "W" opens the list. The key name
+        // arrives lower-cased either way, so the sequence is what tells them apart.
+        if (key.shift === true || key.sequence === "W") {
+          this.nav.push({ kind: "watchlist" })
+          this.syncSubscriptions()
+          break
+        }
+        // Only a council can be watched, and it is the screen the user is on.
+        const screen = this.nav.screen
+        if (screen.kind === "council") {
+          const watched = toggleWatchlist(this.deps.db, screen.kodzastup)
+          // Pinning is what keeps a watched council polling once the user navigates
+          // away from it (FR-018a).
+          this.deps.scheduler.setPinned(`council:${screen.kodzastup}` as SourceKey, watched)
+          if (!watched) this.syncSubscriptions()
+          this.notice = watched
+            ? "Přidáno mezi sledovaná zastupitelstva."
+            : "Odebráno ze sledovaných zastupitelstev."
+        } else {
+          this.notice = "Sledovat lze pouze otevřené zastupitelstvo."
+        }
+        break
+      }
       case "t": {
         const types = availableCouncilTypes(this.deps.db)
         if (types.length > 1) {
@@ -316,8 +356,10 @@ export class App {
       return
     }
 
+    // A one-off confirmation takes the warning line when there is no warning; a real
+    // staleness warning always wins, because it is the more important message.
     const warning = staleWarning(this.deps.scheduler.all())
-    if (this.warning !== null) this.warning.content = warning ?? ""
+    if (this.warning !== null) this.warning.content = warning ?? this.notice ?? ""
 
     const content = composeScreen(this.deps.db, this.nav.screen, {
       width,

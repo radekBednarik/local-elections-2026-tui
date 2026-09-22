@@ -219,12 +219,12 @@ confirm no raw numeric codes appear where a name exists.
 
 **Independent Test**: Watch two councils, restart, and confirm both are still watched and refreshing.
 
-- [ ] T082 [P] [US5] [TDD] Implement watchlist persistence in `src/storage/queries/watchlist.ts`: add, remove, and list by insertion order (FR-039)
-- [ ] T083 [US5] [TDD] Implement watchlist toggling via `w` in `src/ui/views/council.ts` with an on-screen confirmation
-- [ ] T084 [US5] [TDD] Implement the watchlist view in `src/ui/views/watchlist.ts` opened by `W`, refreshing each entry in place as new data lands
-- [ ] T085 [US5] [TDD] Extend the scheduler in `src/sources/scheduler.ts` so watched councils stay subscribed even when not on screen, and are unsubscribed on removal (FR-018a)
-- [ ] T086 [US5] Run quickstart scenario **V9** and record the result
-- [ ] T087 **REVIEW** User Story 5: verify removing a watched council actually stops its polling and does not leak a subscription
+- [X] T082 [P] [US5] [TDD] Implement watchlist persistence in `src/storage/queries/watchlist.ts`: add, remove, and list by insertion order (FR-039)
+- [X] T083 [US5] [TDD] Implement watchlist toggling via `w` in `src/ui/views/council.ts` with an on-screen confirmation
+- [X] T084 [US5] [TDD] Implement the watchlist view in `src/ui/views/watchlist.ts` opened by `W`, refreshing each entry in place as new data lands
+- [X] T085 [US5] [TDD] Extend the scheduler in `src/sources/scheduler.ts` so watched councils stay subscribed even when not on screen, and are unsubscribed on removal (FR-018a)
+- [X] T086 [US5] Run quickstart scenario **V9** and record the result
+- [X] T087 **REVIEW** User Story 5: verify removing a watched council actually stops its polling and does not leak a subscription
 
 **Checkpoint**: Several areas can be monitored at once.
 

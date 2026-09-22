@@ -13,6 +13,7 @@ import type { Screen } from "./navigation.ts"
 import { renderCandidates, renderCouncil, renderDistrict, renderDistrictList } from "./views/areas.ts"
 import { renderNationalView } from "./views/national.ts"
 import { renderSearch } from "./views/search.ts"
+import { renderWatchlist } from "./views/watchlist.ts"
 
 /** What pressing Enter on the selected row opens, if anything. */
 export type SelectableTarget = Screen | null
@@ -108,6 +109,19 @@ export function composeScreen(db: Database, screen: Screen, options: ScreenOptio
       const lines = renderCandidates(db, screen.kodzastup, screen.vstrana, screen.ballotOrder, options.width)
       // The candidate list is the leaf of the drill-down; nothing opens from it.
       return { lines, firstRow: lines.length, rowCount: 0, target: () => null }
+    }
+
+    case "watchlist": {
+      const view = renderWatchlist(db, options.width)
+      return {
+        lines: view.lines,
+        firstRow: view.firstRow,
+        rowCount: view.codes.length,
+        target: (index) => {
+          const code = view.codes[index]
+          return code === undefined ? null : { kind: "council", kodzastup: code }
+        },
+      }
     }
 
     case "search": {

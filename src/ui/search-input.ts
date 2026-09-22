@@ -16,6 +16,7 @@ export interface KeyEvent {
   name?: string
   ctrl?: boolean
   meta?: boolean
+  shift?: boolean
   sequence?: string
 }
 
