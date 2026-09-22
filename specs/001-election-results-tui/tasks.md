@@ -93,13 +93,13 @@ exist until 9 October 2026 (research R9).
 
 ### Parsing and validation
 
-- [ ] T026 [TDD] Wrap `fast-xml-parser` in `src/parsing/xml.ts` configured with `ignoreAttributes: false` – the source carries most data in attributes such as `CIS_OBEC`, `OZNAC_TYPU`, `PORADI_ZPRAC`. Test against `fixtures/2026/vysledky.xml`
-- [ ] T027 [TDD] Write the Zod schema for the national result in `src/parsing/schemas/national.ts`. Numeric fields are **explicitly coerced in the schema**, so a malformed number fails validation instead of silently becoming a string (research R4). Unknown fields are ignored; missing required fields are fatal to the document
-- [ ] T028 [P] [TDD] Write the Zod schema for the district result in `src/parsing/schemas/district.ts`, including `OZNAC_TYPU` distinguishing `OBEC` from `MCMO`
-- [ ] T029 [P] [TDD] Write the Zod schema for the council result in `src/parsing/schemas/council.ts`, including per-party votes and per-candidate `POCHLASU` / `MANDAT`
+- [X] T026 [TDD] Wrap `fast-xml-parser` in `src/parsing/xml.ts` configured with `ignoreAttributes: false` – the source carries most data in attributes such as `CIS_OBEC`, `OZNAC_TYPU`, `PORADI_ZPRAC`. Test against `fixtures/2026/vysledky.xml`
+- [X] T027 [TDD] Write the Zod schema for the national result in `src/parsing/schemas/national.ts`. Numeric fields are **explicitly coerced in the schema**, so a malformed number fails validation instead of silently becoming a string (research R4). Unknown fields are ignored; missing required fields are fatal to the document
+- [X] T028 [P] [TDD] Write the Zod schema for the district result in `src/parsing/schemas/district.ts`, including `OZNAC_TYPU` distinguishing `OBEC` from `MCMO`
+- [X] T029 [P] [TDD] Write the Zod schema for the council result in `src/parsing/schemas/council.ts`, including per-party votes and per-candidate `POCHLASU` / `MANDAT`
 - [ ] T030 [P] [TDD] Write Zod schemas for the registry documents in `src/parsing/schemas/registry.ts`: `KVRZCOCO`, `KVROS`, `KVROS_SLOZENI`, `KVRK`
 - [ ] T031 [P] [TDD] Write Zod schemas for the code lists in `src/parsing/schemas/codelists.ts`: `CNUMNUTS`, `CNS`, `CPP`, `CVS`, `CVS_SLOZENI`, `KVDRUHZ`, `KVTYPZAS`, `KV_COCO`
-- [ ] T032 [TDD] Implement the parse-and-validate pipeline in `src/parsing/pipeline.ts` returning a discriminated result (valid document or rejection reason). Test with `fixtures/edge-cases/malformed.xml` and `truncated.xml` that **the document is rejected whole** and no partial figures escape (FR-025)
+- [X] T032 [TDD] Implement the parse-and-validate pipeline in `src/parsing/pipeline.ts` returning a discriminated result (valid document or rejection reason). Test with `fixtures/edge-cases/malformed.xml` and `truncated.xml` that **the document is rejected whole** and no partial figures escape (FR-025)
 
 ### Reference data loading
 

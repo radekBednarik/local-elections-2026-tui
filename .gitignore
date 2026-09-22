@@ -11,3 +11,8 @@ dist/
 *.sqlite-shm
 *.sqlite-wal
 *.log
+
+# Raw 2026 reference archives (7 MB). Not committed; fixtures/2026/*.zip are derived
+# from them by tools/fixtures/derive-reference.ts. Re-fetch with the URLs in
+# fixtures/README.md.
+fixtures/source-2026-reg/

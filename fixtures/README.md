@@ -87,3 +87,37 @@ Two things follow from this and are relied on in `src/parsing/`:
    per the DRY principle.
 2. **`ZASTUPITEL` lists only elected representatives**, not the full candidate list. Full candidate lists
    come from the `KVRK` registry, which is why reference data is needed for FR-034.
+
+## Reference data
+
+`2026/reg.zip` and `2026/ciselniky.zip` are derived by
+`bun run tools/fixtures/derive-reference.ts` from the **real, already published** 2026
+archives:
+
+| Archive | Source URL | Size |
+|---|---|---|
+| `KV2026reg20260915_xml.zip` | `https://volby.gov.cz/opendata/kv2026/KV2026reg20260915_xml.zip` | 7.0 MB |
+| `KV2026ciselniky20260915_xml.zip` | `https://volby.gov.cz/opendata/kv2026/KV2026ciselniky20260915_xml.zip` | 215 KB |
+
+Retrieved 2026-09-22. These are gitignored because of their size; the derivation keeps
+only the rows belonging to the six fixture councils, taking 126 MB uncompressed down to
+220 KB of committed fixtures.
+
+### What the real archives showed
+
+Three things differ from the published description and from what the data model assumed.
+All three are handled in `src/parsing/schemas/` and `src/storage/schema.ts`.
+
+1. **`kvros_slozeni.xml` does not exist.** The registry archive contains only
+   `kvrzcoco.xml`, `kvros.xml` and `kvrk.xml`. Coalition composition comes from
+   `cvs_slozeni.xml` in the code lists instead, plus the `SLOZENI` field on `KV_ROS`.
+2. **Code lists use child elements, not attributes**, unlike the result documents which
+   put almost everything in attributes. Both shapes have to be parsed.
+3. **Candidates are keyed by `OSTRANA`, results by `VSTRANA`.** `OSTRANA` is a party's
+   number within one council; `VSTRANA` is its nationwide code. `KV_ROS` carries both
+   and is the only bridge between them, so FR-034 cannot join a result to its candidate
+   list without loading that registry.
+
+`kvrk.xml` is 110 MB uncompressed - every candidate in the country. Loading it on first
+run is the single most expensive thing the application does, which is what SC-015 and
+FR-020 are really about.
