@@ -11,3 +11,15 @@ dist/
 *.sqlite-shm
 *.sqlite-wal
 *.log
+
+# Raw 2026 reference archives (7 MB). Not committed; fixtures/2026/*.zip are derived
+# from them by tools/fixtures/derive-reference.ts. Re-fetch with the URLs in
+# fixtures/README.md.
+fixtures/source-2026-reg/
+
+# Local mirrors of previous elections, built by tools/mirror/build.ts.
+mirror/
+
+# Exports the application writes, which default to the working directory (FR-049).
+volby-kv2026-*.csv
+volby-kv2026-*.txt

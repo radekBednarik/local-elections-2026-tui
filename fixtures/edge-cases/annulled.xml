@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VYSLEDKY_OBEC xmlns="http://www.volby.cz/kv/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:schemaLocation="http://www.volby.cz/kv/ kv_vysledky_obec.xsd"
+               DATUM_CAS_GENEROVANI="2026-10-09T21:15:00">
+<OBEC KODZASTUP="599999" NAZEVZAST="Obec bez voleb" OZNAC_TYPU="OBEC" VOLENO_ZASTUP="7" POCET_OBVODU="1" JE_SPOCTENO="false">
+<VYSLEDEK>
+<UCAST OKRSKY_CELKEM="1" OKRSKY_ZPRAC="0" OKRSKY_ZPRAC_PROC="0.00" ZAPSANI_VOLICI="0" VYDANE_OBALKY="0" UCAST_PROC="0.00" ODEVZDANE_OBALKY="0" PLATNE_HLASY="0"/>
+</VYSLEDEK>
+</OBEC>
+</VYSLEDKY_OBEC>

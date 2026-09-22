@@ -171,3 +171,227 @@ Close to 9 October 2026, before relying on the application:
 2. Confirm the date and base path for the real event.
 3. Run V6 against the real reference archives.
 4. Expect `404` until publication begins; V-scenario FR-045 covers that this is handled gracefully.
+
+---
+
+## Amendment scenarios: UX redesign (FR-054 to FR-079)
+
+Added 2026-09-22. Run these in addition to V1-V12, which all still apply.
+
+### V13 - Framed regions and breadcrumb (FR-054, FR-055, FR-058)
+
+Open the application and drill from the national overview down to a council.
+
+**Expect**: a title bar, a bordered content area and a status bar, distinguishable without reading
+them. The breadcrumb grows as you descend (`ČR › Okres Brno-město › Brno-Bohunice`) and shortens as
+you go back. **While a refresh arrives, nothing moves**: not the regions, not the scroll position, not
+the selected row.
+
+### V14 - Side panel (FR-056, FR-057)
+
+Watch two councils, toggle the panel, restart, then narrow the terminal below 100 columns.
+
+**Expect**: the panel shows both councils with live figures; its open or closed state survives the
+restart; it hides itself as the terminal narrows and returns when widened. The content area is never
+squeezed to keep it open.
+
+### V15 - Themes (FR-059 to FR-063)
+
+Cycle through dark, light and high-contrast. Restart. Then run with `NO_COLOR=1`.
+
+**Expect**: the theme persists across the restart. Under `NO_COLOR` every state is still
+distinguishable, because colour was only ever decoration on text and symbols. In high contrast,
+brightness alone separates the roles.
+
+**Also check**: no electoral party is coloured differently from any other (FR-060).
+
+### V16 - Command palette (FR-065 to FR-069)
+
+Open the palette from a council screen. Type part of an action name, with and without diacritics.
+Choose one.
+
+**Expect**: every action appears, each with its keyboard shortcut beside it. Search narrows
+insensitively to case and diacritics. Choosing performs the action. An action that does not apply here
+is shown marked unavailable with a reason, **not hidden**. Esc returns exactly where you were.
+
+### V17 - Bars (FR-070 to FR-074)
+
+Open a council with several parties, then narrow the terminal.
+
+**Expect**: a proportional bar beside each party's percentage, with the exact published figure still
+shown. Parties on 7.62% and 7.76% have visibly different bars. As the terminal narrows the **bars
+disappear before any figure does**. No trend line appears anywhere.
+
+### V18 - Mouse (FR-075 to FR-079)
+
+**This is the scenario that cannot be trusted to the test suite.** `createTestRenderer` uses a mock
+input, so these will pass in tests while being wrong in a real terminal. Check by hand, on
+**Windows Terminal and a Linux terminal**.
+
+Click a row, double-click a row, scroll with the wheel. Then **hold Shift and drag across some
+figures, and copy them**.
+
+**Expect**: click selects, double-click opens, the wheel scrolls (FR-076). Shift-drag still selects text and
+the copy still works. If copy-paste is broken, FR-077 has failed however green the suite is.
+
+Then unplug the mouse, or use a terminal without mouse support: everything must remain reachable by
+keyboard (FR-078).
+
+### V19 - Everything degraded at once (SC-023)
+
+Run at exactly 80 × 24, with `NO_COLOR=1`, and without touching the mouse.
+
+**Expect**: the application is complete and usable. The side panel is hidden, bars are gone, colour is
+absent, and every figure, every action and every navigation path still works.
+
+---
+
+## Validation log
+
+Results of the amendment scenarios, recorded as they are run. A scenario that can be driven
+headlessly has a script under `tools/verify/`; one that cannot says so and names what was done
+instead.
+
+| Scenario | Run | Result | How |
+|---|---|---|---|
+| V13 – framed regions and breadcrumb | 2026-09-22 | **Pass** | `bun run tools/verify/v13.ts`, exit 0 |
+| V14 – side panel | 2026-09-22 | **Pass** | `bun run tools/verify/amendment.ts`, exit 0 |
+| V15 – themes | 2026-09-22 | **Pass** | `bun run tools/verify/amendment.ts`, exit 0 |
+| V16 – command palette | 2026-09-22 | **Pass** | `bun run tools/verify/amendment.ts`, exit 0 |
+| V17 – bars | 2026-09-22 | **Pass** | `bun run tools/verify/amendment.ts`, exit 0 |
+| V18 – mouse | — | **NOT RUN** | Cannot be automated. Needs a person; see below |
+| V19 – everything degraded at once | 2026-09-22 | **Pass** | `bun run tools/verify/amendment.ts`, exit 0 |
+| Soak (SC-008, SC-010, SC-026) | 2026-09-22 | **Pass** | `bun run tools/verify/soak.ts`, exit 0 |
+| Binary self-test (FR-001) | 2026-09-22 | **Pass (Windows)** | `bun run build:win` then `--self-test`, exit 0. Linux build is CI's |
+
+### V13 – 2026-09-22
+
+Drilled ČR → Okresy → Okres Brno-město → Brno and back, at 100 × 28, against the committed
+fixtures. All three regions present and distinguishable at every level; the breadcrumb grew
+(`ČR › Okresy › Okres Brno-město › Brno`) and shortened on the way back. A district document
+re-ingested with the view open moved nothing: regions `1,26,27` before and after, selection and
+scroll offset unchanged.
+
+Three defects were found by running it and fixed before the scenario was recorded as passing:
+
+1. The scroll bar drew itself down the **left** of the content, over the first character of every
+   row, after the content had shrunk below the viewport and grown past it again — which is exactly
+   what happens going from the district list into one district and then into a council. Pinned
+   visible so it never re-lays-out, and its column is now reserved.
+2. The district heading read `Okres CZ0642` while the breadcrumb above it read
+   `Okres Brno-město`. A raw code where the name is known is what FR-011 forbids.
+3. The status bar dropped `Ctrl+P příkazy` on narrower terminals. The palette is how everything
+   the bar dropped stays reachable, so it was moved up the registry.
+
+### V14 to V17 and V19 – 2026-09-22
+
+Run headlessly through `tools/verify/amendment.ts` against the committed fixtures, exit 0. The
+script prints each captured frame and each claim it checks, so a failure names what broke rather
+than only that something did.
+
+- **V14**: the panel shows both watched councils with live turnout and a bar, hides itself at
+  80 columns, and leaves the content area at least 64 columns wide either way. Its state round-trips
+  through `app_config`.
+- **V15**: all three themes persist. The monochrome frame is **character for character identical**
+  to the dark one, and no text in it carries a colour of its own. No electoral party is painted
+  differently from any other. High contrast separates heading from muted by luminance.
+- **V16**: all 16 actions listed, each with its key. Actions that do not apply are shown with the
+  reason rather than hidden. `napoveda` and `nápověda` find the same entry; `ctrl+b` finds the
+  side panel.
+- **V17**: bars drawn at 120 columns beside the published share, gone entirely at 80 while every
+  figure stays. No sparkline characters anywhere.
+- **V19**: at 80 × 24 with no colour, the panel is hidden, the bars are gone, the colour is gone,
+  and the breadcrumb, the table, the figures, the selection marker and the status bar are all still
+  there.
+
+Writing this script found three defects in itself and one in the application:
+
+- **In the application**: the frame's borders ignored the theme entirely and were drawn in the
+  layout engine's own grey. They now take the `muted` role. A theme that asks for no colour still
+  leaves them to the default, because pinning a value would mean guessing whether the terminal is
+  light or dark, and a border guessed wrong is invisible.
+- **In the script**: the bar checks were matching the SCROLL BAR, which is drawn from the same block
+  characters down the last column; the monochrome colour check counted bold as a colour, though bold
+  surviving without colour is the point of FR-063; and a percentage check used a literal space where
+  Czech formatting uses U+00A0.
+
+### Soak – 2026-09-22
+
+720 refresh cycles, the equivalent of a twelve-hour count. Extended for the amendment to measure the
+WHOLE redraw through a real renderer, not only `composeScreen`: the redesign added a renderable per
+row, a frame, a scroll bar and a panel, and the old measurement no longer accounted for most of the
+work.
+
+| Measure | Result | Budget |
+|---|---|---|
+| Longest screen composition | 1.5 ms | 100 ms |
+| **Longest full redraw, frame included** | **8.9 ms** | 100 ms |
+| Snapshots retained | 9, bounded | ≤ 2 per area |
+| Heap | 7 MB → 16 MB, plateaus | no unbounded growth |
+
+### V18 (mouse) – NOT RUN
+
+**This is the one scenario that cannot be signed off from here.** `createTestRenderer` uses a mock
+input, so the automated mouse tests pass whether or not mouse reporting has taken the terminal's own
+Shift-drag text selection away. FR-077 is exactly that question.
+
+It needs a person to run `dist/volby-kv2026.exe` in **Windows Terminal** and the Linux binary in a
+**Linux terminal**, and in each: click a row, double-click a row, wheel-scroll, then hold Shift, drag
+across some figures and copy them. If the copy does not work, FR-077 has failed however green the
+suite is.
+
+Tasks T161 and T162 stay open until that is done and recorded here.
+
+---
+
+## Amendment review (T135, T142, T149, T155, T169)
+
+Each review criterion, and how it was checked rather than asserted.
+
+### The action registry is genuinely shared (T135)
+
+`ACTIONS` is imported by exactly three places: the status bar, the palette and the help screen.
+No module carries a second list, and no key label is written anywhere but the registry — checked by
+grepping for the key strings outside `actions.ts`, which returns nothing.
+
+Diacritic folding in the palette imports `fold` from `src/domain/folding.ts`, the same function
+`storage/queries/search.ts` uses. Not a copy: the same import.
+
+### No colour literal escaped the theme module (T142, T169)
+
+`grep` for hex colours, `RGBA.`, `fromIndex`, `fromHex` and raw SGR escapes across `src/`,
+excluding `src/ui/theme/`, returns nothing.
+
+Removing colour removes nothing but decoration: the monochrome frame is character for character
+identical to the dark one (`tests/ui/colour.test.ts` and V15). Bold survives, deliberately — it is
+emphasis that works on a terminal with no colour at all.
+
+### A bar can never be read as a value (T149)
+
+`bar()` is called in four places, all of which pass a published percentage IN and put text OUT.
+Nothing anywhere converts a bar back into a figure; `grep` for anything reading a length or parsing
+a bar returns nothing. Under width pressure the bar COLUMN is dropped before any figure column, and
+`tests/ui/bar.test.ts` asserts the same party shows the same share with and without its bar.
+
+### The panel's threshold is derived, not guessed (T155)
+
+`panelFits(width)` is `width - PANEL_COST >= MIN_CONTENT_COLUMNS`, where `PANEL_COST` is the
+panel's own width plus its border and `MIN_CONTENT_COLUMNS` is the narrowest content area in which
+a party name column still says which party a row belongs to. There is no literal "hide below 100"
+anywhere. The panel never wins: `App.draw` computes the fit from the width the content would have
+WITHOUT the panel, so opening the panel can never take columns the table needed.
+
+### Every new requirement has a covering test (T169)
+
+FR-054 to FR-079 were each grepped for across `tests/` and `tools/verify/`. All 26 are covered.
+FR-068 was **not**, and a test was added for it before this review was recorded: the palette holds no
+navigation state, and `App.perform` is defined once and called from exactly two places, so a key and
+a palette entry reach one implementation.
+
+FR-077 is covered only by a test that states it cannot be covered. That is the honest position, and
+T161 remains open.
+
+### The five rejected items are absent (T169)
+
+Grepped for: sparklines, trend lines, context menus, resizable panes, draggable dividers, per-party
+colours. None present. The only match was the substring "trend" inside "TextRenderable".

@@ -64,6 +64,19 @@ branch and halves the native packages the build needs.
 **Scope note**: glibc only. A musl build is a separate target and is not committed to, consistent with the
 spec's distribution assumption.
 
+### R2a: `--bytecode` is unusable here (found during T006)
+
+`bun build --compile --bytecode` **fails** on this project:
+
+```text
+11882 | var backend2 = await loadBackend2();
+error: Expected "=>" but found ";"  (@opentui/core/chunk-bun-*.js)
+```
+
+Bytecode compilation cannot handle top-level `await`, and OpenTUI's own bundle uses it to load the native
+backend. The flag is therefore dropped from both build scripts; `--minify` is kept and saves about 11 MB
+before compilation. The startup gain `--bytecode` would have offered is not available on this stack.
+
 ---
 
 ## R3: Storage
@@ -84,11 +97,14 @@ concurrent access).
 - Reference data and result data live in the same file but are separated by table, since reference data is
   written once (FR-020) and results are overwritten continuously (FR-036a).
 
-**Caveat (documented, not verified)**: Bun's docs do not state whether `bun:sqlite` works inside a
-`--compile` binary. It is a built-in module rather than a native addon, so it should; **this must be
-smoke-tested in the first build task** rather than assumed. Note that the `type: "sqlite", embed: true`
-import form is explicitly read-only and in-memory, so it is *not* suitable here – the database is opened
-from a real path at runtime.
+**RESOLVED (T006, 2026-09-22)**: Bun's docs do not state whether `bun:sqlite` works inside a `--compile`
+binary. It was therefore smoke-tested rather than assumed, and it **works**: the compiled Windows binary
+opens an on-disk database, enables WAL, writes and reads back a row containing Czech diacritics. The binary
+was also run with `node_modules` removed entirely and still passed, confirming it is genuinely
+self-contained (FR-001). This closes the highest-severity risk in the plan.
+
+Note that the `type: "sqlite", embed: true` import form is explicitly read-only and in-memory, so it is
+*not* suitable here – the database is opened from a real path at runtime.
 
 ---
 
@@ -234,3 +250,123 @@ GitHub. This blocks release automation only – all development and local verifi
 | ~93 MB per binary | Low | Inherent to embedding the Bun runtime. `--minify --bytecode` will reduce it; no requirement sets a size limit |
 | Publisher changes the 2026 format before election day | Medium | Zod validation fails loudly rather than silently mis-parsing (FR-025). Re-check the schemas close to 9 October |
 | Real election-day load or rate limiting differs from assumptions | Medium | FR-016 and FR-043 already constrain request rate; the replay harness cannot reproduce the publisher's real behaviour under load |
+
+---
+
+# Phase 0 Research: UX amendment (FR-054 to FR-079)
+
+Added 2026-09-22, after the first build was run against real 2022 data. The findings below come from
+the OpenTUI documentation installed as an agent skill, read against the working application rather
+than in the abstract.
+
+## R11: Almost all of the chrome already exists as components
+
+**Decision**: Build the redesign on OpenTUI's built-in renderables rather than drawing frames by hand.
+
+**Rationale**: The current interface is one `TextRenderable` holding a block of text, which is why it
+reads as basic. OpenTUI ships exactly the pieces the amendment calls for:
+
+| Requirement | Component | What it provides |
+|---|---|---|
+| FR-054, FR-055 framed regions, breadcrumb | `BoxRenderable` | `border`, `borderStyle` (single/double/rounded/heavy), `borderColor`, `title`, `bottomTitle` |
+| FR-056 side panel | `BoxRenderable` in a flex row | Flexbox layout is already how the renderer positions children |
+| long lists (78 districts, 6,000 councils) | `ScrollBoxRenderable` | Bounded viewport with culling and a scrollbar; `stickyScroll` for live updates |
+| FR-065 command palette list | `SelectRenderable` | Options list with `ITEM_SELECTED` and `SELECTION_CHANGED` events |
+| FR-067 palette search, existing search box | `InputRenderable` | Single-line editing, placeholder, `CHANGE` event |
+
+`ScrollBoxRenderable` matters more than it first appears: the district list is 78 rows and a large
+district runs to hundreds of councils, which the current hand-rolled offset arithmetic scrolls by
+slicing an array. Culling in a real viewport is both faster and less code.
+
+**Alternatives considered**: hand-drawing borders with box-drawing characters, as the `rule()` helper
+does today. Rejected: it duplicates what the layout engine already does, and it cannot participate in
+flexbox sizing, so every region would need manual width arithmetic that FR-057's auto-hiding panel
+would then have to redo.
+
+## R12: `TextTableRenderable` is deliberately NOT adopted yet
+
+**Decision**: Keep rendering result tables as text rows. Revisit after the rest of the amendment lands.
+
+**Rationale**: `TextTableRenderable` is real and would give bordered, wrapping, selectable cells. But
+the current table code carries decisions that took real data to get right: non-breaking-space
+grouping, the decimal comma, ellipsis truncation measured in code points, and the central width clamp
+added after a council line overflowed an 80-column terminal. Replacing it wholesale would put all of
+that back in play at the same time as five other changes.
+
+The bars in FR-070 and the colour roles in FR-059 can be delivered without it. Swapping the table is a
+separable follow-up with its own risk, and bundling it here would make a failure hard to attribute.
+
+## R13: Colour must not be hardcoded hex
+
+**Decision**: Express the palette as **roles**, resolved per theme to either an ANSI indexed slot or an
+explicit colour. Default to indexed.
+
+**Rationale**: `RGBA.fromIndex(0..255)` targets the terminal's own ANSI palette slot, and
+`RGBA.defaultForeground()` / `defaultBackground()` target its defaults. Colours expressed that way
+inherit whatever scheme the user has already configured, so the application looks at home in their
+terminal instead of fighting it. Hardcoded hex would clash with every solarized or gruvbox setup.
+
+The high-contrast theme (FR-062) is the exception: it needs guaranteed brightness separation, which an
+unknown user palette cannot promise, so it pins explicit values.
+
+**Capability detection**: `renderer.capabilities` exposes `ansi256`, and `color_scheme_updates` reports
+the terminal's own light/dark preference (mode 2031). That gives an honest default theme rather than
+guessing, and a terminal that reports neither falls back to the monochrome path FR-063 already
+requires.
+
+## R14: Views must carry meaning, not pre-formatted strings
+
+**Decision**: Change the view builders from returning `string[]` to returning **semantic rows** - cells
+with a role - and render those to either plain text or styled chunks.
+
+**Rationale**: This is the one structural change the amendment forces. A `string` cannot carry colour,
+so FR-059's roles and FR-070's bars cannot be expressed in the current return type. Two bad options
+and one good one:
+
+- Style inside the builders, returning chunks. Loses the plain-text form that the export module and
+  roughly 120 tests depend on.
+- Add a second styling pass that re-parses the strings. Fragile, and creates two sources of truth.
+- **Return semantic rows.** One source of truth, rendered two ways: to plain text for tests and
+  exports, to styled chunks for the terminal. Colour becomes a property of the renderer, not of the
+  data, which is also what keeps FR-063 honest.
+
+This preserves the existing tests in shape: they assert on the plain-text rendering, which remains
+available and is what the export module already consumes.
+
+## R15: Mouse is routed by cell bounds, and Shift-drag already works
+
+**Decision**: Attach mouse handlers to row renderables; do not implement hit-testing.
+
+**Rationale**: OpenTUI routes mouse input through rendered cell bounds and tracks one global text
+selection per renderer. Events carry `modifiers` including `shift`, and `isDragging` marks events
+belonging to a selection drag. FR-077's requirement that Shift-drag still selects text for copying is
+therefore the framework's own behaviour rather than something to build.
+
+**Caveat**: enabling mouse reporting takes the terminal's native selection away by default, which is
+exactly why FR-077 exists. This must be verified by hand in a real terminal, not only in tests -
+`createTestRenderer` uses a mock input and will happily pass while the real behaviour is wrong.
+
+## R16: Bars are drawn with block characters
+
+**Decision**: Use the Unicode eighth-block characters for sub-cell resolution.
+
+**Rationale**: FR-070 needs a bar beside a percentage in a narrow column. Full blocks alone give one
+cell of resolution per column, so a 10-column bar can only show 10 steps - visibly coarse when
+comparing 7.62% against 7.76%. The eighth-blocks give eight sub-steps per cell, so the same 10 columns
+resolve 80 steps.
+
+FR-072 requires the bar to survive a monochrome terminal, which block characters do: they are shape,
+not colour. FR-074's rule that bars are omitted rather than truncated on a narrow terminal is a
+layout decision, made where the column widths are computed.
+
+**Alternatives considered**: ASCII `#` bars (coarser and noisier), and braille patterns (finer, but
+they render inconsistently across fonts and would fail FR-004's plain-terminal requirement).
+
+## Residual risks, amendment
+
+| Risk | Severity | Handling |
+|---|---|---|
+| Mouse reporting breaks native copy-paste in a real terminal | High - FR-077 | Must be checked by hand in Windows Terminal and a Linux terminal; the mock input cannot detect it |
+| Semantic-row migration touches every view | Medium | Plain-text rendering keeps the existing assertions valid; migrate one view at a time with the suite green between each |
+| Indexed colours look wrong in an unusual terminal palette | Low | The high-contrast theme pins explicit values, and monochrome remains supported |
+| Theming and palette add surface the constitution's KISS principle argues against | Accepted | Recorded in the spec's Assumptions, justified by a concrete use case rather than speculation |

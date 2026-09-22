@@ -1,0 +1,11 @@
+# Normalise line endings to LF everywhere, in the repository AND in the working tree.
+#
+# Without this, a Windows checkout gets CRLF (the runner default is core.autocrlf=true)
+# while Biome is configured for LF, so `biome check` fails on the Windows CI runner and
+# passes on Linux. Forcing eol=lf makes the check mean the same thing on every machine.
+* text=auto eol=lf
+
+# Binary fixtures must never be touched.
+*.zip binary
+*.sqlite binary
+*.exe binary

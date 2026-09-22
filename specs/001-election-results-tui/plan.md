@@ -170,3 +170,100 @@ is testable without a renderer, which Principle II requires. `fixtures/` and `to
 | Linux binary never executed on Linux locally | High – FR-002 | CI runs it on `ubuntu-latest`. Treat any local cross-build as unverified |
 | Publisher may change the format before 9 October 2026 | Medium | Zod validation fails loudly rather than mis-parsing. Re-check schemas close to the date (quickstart, election-day readiness) |
 | ~93 MB per binary | Low | Inherent to embedding the Bun runtime. No requirement sets a size limit |
+
+---
+
+# Amendment: UX redesign (FR-054 to FR-079)
+
+**Added**: 2026-09-22, after the first build was run against real 2022 data.
+
+## Summary
+
+The application works; the interface is basic. This amendment gives it framed regions with a
+breadcrumb, a role-based colour palette with three themes, a searchable command palette, proportional
+bars beside vote shares, and mouse support.
+
+It is **presentation only**. No data source, figure, or level of detail changes. Everything already
+decided about what the application shows, and what it refuses to show, still holds.
+
+## Technical Context (delta)
+
+**New dependencies**: none. Every component the redesign needs is already in `@opentui/core`:
+`BoxRenderable` (borders, titles), `ScrollBoxRenderable` (viewport and culling), `SelectRenderable`
+(palette list), `InputRenderable` (palette and search entry). See [research.md](./research.md) R11.
+
+**Storage delta**: two rows in the existing `app_config` table - the chosen theme and whether the side
+panel is open. No schema change.
+
+**The one structural change**: view builders currently return `string[]`. A string cannot carry
+colour, so they move to returning **semantic rows** that render to either plain text or styled chunks
+(research R14). This keeps one source of truth and leaves the export module and the existing test
+assertions working against the plain-text rendering.
+
+## Constitution Check (amendment)
+
+### Principle I - Simplicity and Non-Duplication
+
+| Check | Status |
+|---|---|
+| No abstraction before two concrete use cases | **Pass, with a recorded tension.** Theming, a palette and mouse handling are surface the principle argues against. They are adopted because the plain interface was judged inadequate *after being run against real data* - a concrete use case, which is the test the principle actually sets, not speculation |
+| No dependency added where the framework provides it | **Pass.** Zero new dependencies. The redesign replaces hand-rolled scrolling and border-drawing with the layout engine that was already there |
+| Single authoritative representation | **Pass, and improved.** Semantic rows give one source of truth rendered two ways. The alternative - a second styling pass over formatted strings - would have created two |
+| Scope bounded | **Pass.** Five things were explicitly rejected: per-party colours, sparklines, clickable chrome, context menus, resizable panes |
+
+### Principle II - Test-Driven Development
+
+| Check | Status |
+|---|---|
+| A failing test can precede each change | **Pass.** `createTestRenderer` and `captureCharFrame()` already back 31 UI tests; borders, breadcrumbs and bars are all assertable in a captured frame |
+| Existing coverage survives the migration | **Pass by design.** Assertions run against the plain-text rendering, which semantic rows still produce |
+| **Gap: mouse cannot be fully tested** | **Accepted, with a named mitigation.** `createTestRenderer` uses a mock input, so FR-077 (Shift-drag preserving native text selection) will pass in tests while being wrong in a real terminal. It must be checked by hand on both platforms; the task list has to say so explicitly |
+
+### Principle III - Mandatory Code Review
+
+Unchanged: every code-writing task carries review. Deferred to `/speckit-tasks` as before.
+
+**Gate result: PASS.** One deliberate tension recorded in the spec's Assumptions and above; one
+testing gap named with its mitigation rather than papered over.
+
+## Structure (delta)
+
+```text
+src/ui/
+├── theme/              # NEW - palette roles, three themes, capability detection
+│   ├── roles.ts        #   heading, selection, warning, increase, decrease, muted
+│   └── themes.ts       #   light, dark, high-contrast; indexed colours by default
+├── chrome/             # NEW - the framed regions
+│   ├── frame.ts        #   title bar, content area, status bar
+│   ├── breadcrumb.ts   #   "ČR › Okres Brno-město › Brno-Bohunice"
+│   └── panel.ts        #   collapsible watchlist side panel, auto-hiding
+├── palette/            # NEW - command palette
+│   ├── actions.ts      #   every action, its shortcut, and whether it applies here
+│   └── view.ts         #   Input + Select, searchable with diacritic folding
+├── row.ts              # NEW - semantic rows: cells with roles
+├── bar.ts              # NEW - eighth-block proportional bars
+├── format.ts           # CHANGED - emits semantic rows as well as plain text
+└── views/              # CHANGED - return semantic rows instead of string[]
+```
+
+## Sequencing
+
+The migration is ordered so the suite stays green between steps, because a redesign that breaks 442
+tests at once cannot be debugged.
+
+1. **Semantic rows** alongside the existing strings, with plain-text rendering proving equivalence.
+2. **Theme and palette roles**, unused at first, tested in isolation.
+3. **Frames** - title bar, content area, status bar - wrapping the existing content unchanged.
+4. **Breadcrumb and side panel**, including the auto-hide width rule.
+5. **Colour applied** through roles, with the monochrome path asserted throughout.
+6. **Bars**, then **command palette**, then **mouse** last, since mouse is the only part that cannot
+   be fully verified by test.
+
+## Carried risks (amendment)
+
+| Item | Impact | Action |
+|---|---|---|
+| Mouse reporting may break native copy-paste | High - FR-077 | Manual check in Windows Terminal and a Linux terminal. Cannot be caught by the mock input |
+| Semantic-row migration touches every view | Medium | One view at a time, suite green between each |
+| Indexed colours may clash in an unusual terminal palette | Low | High-contrast theme pins explicit values; monochrome always available |
+| 80x24 remains the floor while gaining chrome | Medium | Frames cost rows; the side panel auto-hides (FR-057) and bars are omitted before data (FR-074) |

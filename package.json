@@ -1,0 +1,31 @@
+{
+  "name": "volby-kv2026",
+  "version": "0.1.0",
+  "description": "Terminal dashboard for the Czech 2026 municipal election results",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "bun": ">=1.4.0"
+  },
+  "scripts": {
+    "dev": "bun run src/main.ts",
+    "test": "bun test",
+    "check": "biome check .",
+    "typecheck": "tsc --noEmit",
+    "format": "biome check --write .",
+    "replay": "bun run tools/replay/server.ts",
+    "mirror": "bun run tools/mirror/build.ts",
+    "build:win": "bun build --compile --target=bun-windows-x64 --minify src/main.ts --outfile dist/volby-kv2026.exe",
+    "build:linux": "bun build --compile --target=bun-linux-x64 --define process.env.OPENTUI_LIBC='\"glibc\"' --minify src/main.ts --outfile dist/volby-kv2026"
+  },
+  "dependencies": {
+    "@opentui/core": "0.5.11",
+    "fast-xml-parser": "5.11.1",
+    "fflate": "0.8.3",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@types/bun": "latest"
+  }
+}
