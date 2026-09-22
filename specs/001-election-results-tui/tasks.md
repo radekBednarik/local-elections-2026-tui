@@ -349,3 +349,209 @@ freedom rather than staffing. Working sequentially in task order is correct and 
 The live sources do not exist until **9 October 2026**. Every task before T105 runs against fixtures and the
 replay harness. T105 is the only task that cannot be completed early, and it must not be skipped – the
 published format may change between now and then.
+
+---
+
+# Amendment: UX redesign (FR-054 to FR-079)
+
+**Added**: 2026-09-22, after the first build was run against real 2022 data.
+
+**Scope**: presentation only. No data source, figure or level of detail changes. Tasks T001-T106
+above are complete and are not reopened.
+
+**Grouping**: the amendment's five requirement groups are treated as user stories US7-US12, because
+each is independently deliverable, independently testable, and delivers value on its own. They are
+ordered by what the user actually asked for: knowing where you are and what you can do comes first.
+
+**Constitution obligations are unchanged**: every `[TDD]` task writes a failing test first
+(Principle II), and no task is complete until its code is reviewed (Principle III).
+
+**The one thing tests cannot cover**: `createTestRenderer` uses a mock input, so the mouse tasks in
+US12 will pass in the suite while being wrong in a real terminal. T161 is a manual check and must not
+be marked complete on the strength of a green suite.
+
+---
+
+## Phase 10: Foundational for the redesign (Blocking)
+
+**Purpose**: the type change and the theme module that every later phase needs.
+
+**⚠️ CRITICAL**: the suite must be green after every task here. A redesign that breaks 442 tests at
+once cannot be debugged, which is why the migration is one view at a time rather than one sweep.
+
+- [ ] T107 [TDD] Define the semantic row type in `src/ui/row.ts`: `SemanticRow` holds `cells`, each `Cell` holds `text`, an optional `role` and an optional `bar` value, and `Role` is one of heading, selection, warning, increase, decrease, muted. A string cannot carry a colour role or a bar value, which is why FR-059 and FR-070 force this change (research R14)
+- [ ] T108 [TDD] Implement plain-text rendering of semantic rows in `src/ui/row.ts`, reusing the existing column, padding and clamping rules from `src/ui/format.ts`. Tests must prove a row renders identically to what `dataRow` produces today, because roughly 120 existing assertions depend on that output
+- [ ] T109 [TDD] Implement styled-chunk rendering of semantic rows in `src/ui/row.ts`, mapping each role to a colour resolved from the active theme. Colour lives here and nowhere else, which is what keeps FR-063's monochrome guarantee honest rather than aspirational
+- [ ] T110 [P] [TDD] Define the six colour roles in `src/ui/theme/roles.ts`: heading, selection, warning, increase, decrease, muted. A role MUST resolve to the same colour on every screen (FR-059)
+- [ ] T111 [TDD] Implement the three themes in `src/ui/theme/themes.ts`. Dark and light resolve roles to ANSI indexed slots via `RGBA.fromIndex`, so the user's own terminal scheme shows through; high-contrast pins explicit values, because an unknown palette cannot guarantee brightness separation (FR-061, FR-062, research R13)
+- [ ] T112 [TDD] Implement terminal capability handling in `src/ui/theme/detect.ts`, reading `renderer.capabilities.ansi256` and the mode-2031 colour-scheme report to pick an honest default theme. A terminal reporting neither MUST fall back to the monochrome path (FR-063)
+- [ ] T113 [TDD] Persist the theme choice as `app_config.theme`, constrained to the values dark, light or high-contrast, in `src/storage/queries/preferences.ts`, with tests proving it survives a restart (FR-061). No schema change: `app_config` already exists
+- [ ] T114 Migrate `src/ui/views/national.ts` to return semantic rows. Run the full suite; it MUST stay green, because the plain-text rendering is unchanged
+- [ ] T115 [P] Migrate `src/ui/views/areas.ts` to return semantic rows. Suite green
+- [ ] T116 [P] Migrate `src/ui/views/search.ts` and `src/ui/views/watchlist.ts` to return semantic rows. Suite green
+- [ ] T117 Update `src/ui/screen.ts` and `src/export/tables.ts` to consume semantic rows, taking the plain-text rendering for exports so exported figures cannot drift from displayed ones
+- [ ] T118 **REVIEW** Phase 10 in `src/ui/`: verify the plain-text rendering is genuinely identical to the old output rather than merely similar, that colour appears in exactly one module, and that no view still returns a plain string array
+
+**Checkpoint**: views carry meaning rather than pre-formatted text, themes exist and are tested, and
+the application looks exactly as before. Nothing user-visible has changed yet, by design.
+
+---
+
+## Phase 11: User Story 7 - Always know where you are (Priority: P1)
+
+**Goal**: framed regions, a breadcrumb, and a status bar that offers only what applies here.
+
+**Independent Test**: open the application and drill to a council. The regions are distinguishable
+without reading them, the breadcrumb grows and shrinks with the path, and the status bar changes
+between screens. A refresh moves nothing.
+
+- [ ] T119 [US7] [TDD] Build the frame in `src/ui/chrome/frame.ts` from `BoxRenderable`, giving a title bar, a bordered content area and a status bar. Assert on the captured frame that the three regions are visually distinguishable (FR-054)
+- [ ] T120 [US7] [TDD] Implement the breadcrumb in `src/ui/chrome/breadcrumb.ts` with a chevron separator, for example "ČR › Okres Brno-město › Brno-Bohunice". It MUST truncate from the LEFT when too long, keeping the current location visible, because "where am I" is the question it exists to answer (FR-055)
+- [ ] T121 [US7] [TDD] Replace the hand-rolled scroll arithmetic in `src/ui/app.ts` with `ScrollBoxRenderable`. The district list is 78 rows and a large district runs to hundreds of councils; a real viewport culls rather than slicing arrays (research R11)
+- [ ] T122 [US7] [TDD] Make the status bar context-sensitive in `src/ui/components/status.ts`: it MUST list only actions available on the current screen, and MUST NOT offer an action that would do nothing here (FR-064)
+- [ ] T123 [US7] [TDD] Assert region stability in `tests/ui/stability.test.ts`: ingest new data while a view is open and prove the regions, the scroll offset and the selected row are all unmoved (FR-058, and User Story 2 scenario 5 which must not regress)
+- [ ] T124 [US7] [TDD] Verify the frame still fits 80 by 24 in `tests/ui/stability.test.ts`: chrome costs rows, and the minimum terminal size is not negotiable (FR-041)
+- [ ] T125 [US7] Run quickstart scenario **V13** and record the result in `specs/001-election-results-tui/quickstart.md`
+- [ ] T126 **REVIEW** User Story 7 in `src/ui/chrome/`: verify a refresh cannot move the user, that the breadcrumb truncates from the correct end, and that no action is offered where it does nothing
+
+**Checkpoint**: the user always knows where they are and what applies here. This is the single largest
+orientation gain and is worth shipping alone.
+
+---
+
+## Phase 12: User Story 8 - Find any action without knowing its key (Priority: P2)
+
+**Goal**: a searchable command palette that lists every action and teaches its shortcut.
+
+**Independent Test**: open the palette from a council, type part of an action name without diacritics,
+and perform it. Every action is present; each shows its key.
+
+- [ ] T127 [US8] [TDD] Build the action registry in `src/ui/palette/actions.ts`: every action with its label, shortcut, and a predicate for whether it applies to the current screen. This registry MUST be the single source of truth shared with the status bar, so the two cannot disagree (Principle I)
+- [ ] T128 [US8] [TDD] Build the palette view in `src/ui/palette/view.ts` from `InputRenderable` and `SelectRenderable`, opened by Ctrl+P from any screen (FR-065)
+- [ ] T129 [US8] [TDD] Show each action's shortcut beside its entry in `src/ui/palette/view.ts`, so a user reaching an action through the palette learns the key for next time (FR-066)
+- [ ] T130 [US8] [TDD] Filter palette entries as the user types in `src/ui/palette/view.ts`, reusing `fold()` from `src/domain/folding.ts` so matching is insensitive to case and Czech diacritics exactly as search is (FR-067). Reusing the function rather than reimplementing it is what keeps the two behaviours identical
+- [ ] T131 [US8] [TDD] Perform the chosen action directly on selection in `src/ui/palette/view.ts` (FR-068), and return to exactly the previous screen and selection on Esc
+- [ ] T132 [US8] [TDD] Show inapplicable actions marked unavailable WITH THE REASON rather than hiding them, in `src/ui/palette/view.ts` (FR-069). Hiding them would teach the user the application is smaller than it is
+- [ ] T133 [US8] [TDD] Assert in `tests/ui/palette.test.ts` that the palette lists every action in the registry, so an action added later cannot be unreachable (SC-020)
+- [ ] T134 [US8] Run quickstart scenario **V16** and record the result in `specs/001-election-results-tui/quickstart.md`
+- [ ] T135 **REVIEW** User Story 8 in `src/ui/palette/`: verify the registry is genuinely shared with the status bar, that diacritic folding is the same function search uses, and that no action exists outside the registry
+
+---
+
+## Phase 13: User Story 9 - See the shape of a result at a glance (Priority: P2)
+
+**Goal**: colour applied through roles, with three themes and the monochrome guarantee intact.
+
+**Independent Test**: cycle themes and restart; the choice persists. Run with NO_COLOR set; every
+state is still distinguishable.
+
+- [ ] T136 [US9] [TDD] Apply roles across every view in `src/ui/views/` via the styled rendering from T109. No view may name a colour directly; a view names a role (FR-059)
+- [ ] T137 [US9] [TDD] Implement theme cycling on Ctrl+T in `src/ui/app.ts`, persisting through T113 (FR-061)
+- [ ] T138 [US9] [TDD] Assert in `tests/ui/colour.test.ts` that NO electoral party is coloured differently from any other (FR-060). With thousands of local candidate lists there is no authoritative party colour, and assigning one would imply a political affiliation the source never published
+- [ ] T139 [US9] [TDD] Assert the monochrome guarantee in `tests/ui/colour.test.ts`: with colour disabled, every status remains distinguishable by text, symbol or position (FR-063, SC-023)
+- [ ] T140 [US9] [TDD] Assert in `tests/ui/colour.test.ts` that the high-contrast theme separates roles by brightness rather than hue, so it works for a user who cannot distinguish the palette's colours (FR-062, SC-024)
+- [ ] T141 [US9] Run quickstart scenario **V15** and record the result in `specs/001-election-results-tui/quickstart.md`
+- [ ] T142 **REVIEW** User Story 9 in `src/ui/`: verify no colour literal appears outside `src/ui/theme/`, and that removing colour removes nothing but decoration
+
+---
+
+## Phase 14: User Story 10 - Compare parties without reading percentages (Priority: P3)
+
+**Goal**: a proportional bar beside each party's published share.
+
+**Independent Test**: open a council with several parties; bars appear beside the figures and parties
+on 7.62 and 7.76 percent are visibly different. Narrow the terminal; bars vanish before any figure
+does.
+
+- [ ] T143 [US10] [TDD] Implement bars in `src/ui/bar.ts` using the Unicode eighth-block characters, giving eight sub-steps per column. Full blocks alone would resolve only ten steps in a ten-column bar, too coarse to separate 7.62 from 7.76 percent (research R16)
+- [ ] T144 [US10] [TDD] Draw the bar in `src/ui/bar.ts` from the PUBLISHED percentage and always beside the exact figure. The bar is an aid; the published figure is the result, and no figure may ever be derived from a bar length (FR-070, FR-071, FR-029)
+- [ ] T145 [US10] [TDD] Assert in `tests/ui/bar.test.ts` that bars render as shape not colour, surviving NO_COLOR and a monochrome terminal (FR-072)
+- [ ] T146 [US10] [TDD] Omit bars entirely rather than truncating them when the terminal is too narrow, in `src/ui/views/areas.ts`, so a narrow terminal loses the aid and never the data (FR-074)
+- [ ] T147 [US10] [TDD] Assert in `tests/ui/bar.test.ts` that no trend line or time series is drawn anywhere (FR-073). No history is kept to draw one from, so any such chart would be invented
+- [ ] T148 [US10] Run quickstart scenario **V17** and record the result in `specs/001-election-results-tui/quickstart.md`
+- [ ] T149 **REVIEW** User Story 10 in `src/ui/bar.ts`: verify a bar can never be read as a value and that bars are dropped before figures under width pressure
+
+---
+
+## Phase 15: User Story 11 - Watch several places at once (Priority: P3)
+
+**Goal**: the watchlist as a side panel beside the content, not a screen you navigate to.
+
+**Independent Test**: watch two councils, toggle the panel, restart. The state persists. Narrow the
+terminal; the panel hides itself and returns when there is room.
+
+- [ ] T150 [US11] [TDD] Build the side panel in `src/ui/chrome/panel.ts` as a flex sibling of the content area, showing each watched council with its live figures (FR-056)
+- [ ] T151 [US11] [TDD] Toggle the panel on Ctrl+B and persist its state as `app_config.side_panel_open`, constrained to 0 or 1, in `src/storage/queries/preferences.ts`, proving it survives a restart (FR-056)
+- [ ] T152 [US11] [TDD] Auto-hide the panel in `src/ui/chrome/panel.ts` when the terminal cannot show it beside a readable content area, and restore it when there is room. The content area MUST NEVER be squeezed below readable width to keep the panel open (FR-057)
+- [ ] T153 [US11] [TDD] Show how to add a council when the watchlist is empty, in `src/ui/chrome/panel.ts`, rather than an empty box
+- [ ] T154 [US11] Run quickstart scenario **V14** and record the result in `specs/001-election-results-tui/quickstart.md`
+- [ ] T155 **REVIEW** User Story 11 in `src/ui/chrome/panel.ts`: verify the auto-hide threshold is driven by readable content width rather than an arbitrary number, and that the panel never wins a fight with the content
+
+---
+
+## Phase 16: User Story 12 - Use the mouse if you have one (Priority: P3)
+
+**Goal**: click, double-click and wheel, without taking away the terminal's own text selection.
+
+**Independent Test**: **manual, in a real terminal.** Click, double-click, scroll, then Shift-drag
+across some figures and copy them.
+
+- [ ] T156 [US12] [TDD] Handle click-to-select on row renderables in `src/ui/app.ts`. OpenTUI routes mouse input through rendered cell bounds, so no hit-testing is needed (research R15) (FR-075)
+- [ ] T157 [US12] [TDD] Handle double-click to open in `src/ui/app.ts`, matching exactly what Enter does for the selected row (FR-075)
+- [ ] T158 [US12] [TDD] Handle wheel scrolling of the content area in `src/ui/app.ts` (FR-076)
+- [ ] T159 [US12] [TDD] Assert in `tests/ui/mouse.test.ts` that every mouse-reachable action is also keyboard-reachable, and that the application is fully usable with no mouse at all (FR-078)
+- [ ] T160 [US12] [TDD] Assert in `tests/ui/mouse.test.ts` that the chrome is NOT clickable: no status-bar buttons, no clickable breadcrumb, no context menus, no draggable dividers (FR-079)
+- [ ] T161 [US12] **MANUAL VERIFICATION, NOT AUTOMATABLE** - in Windows Terminal AND a Linux terminal, run `dist/volby-kv2026`, hold Shift, drag across figures, and copy them. Enabling mouse reporting takes the terminal's native selection away by default, which is exactly what FR-077 forbids. `createTestRenderer` uses a mock input and will pass while this is broken, so **this task MUST NOT be marked complete on the strength of a green suite** (quickstart V18)
+- [ ] T162 **REVIEW** User Story 12 in `src/ui/app.ts`: confirm T161 was performed by hand on both platforms and its result recorded, not inferred
+
+---
+
+## Phase 17: Polish (amendment)
+
+- [ ] T163 [P] Update the help screen in `src/ui/views/help.ts` with the new keys Ctrl+P, Ctrl+B and Ctrl+T, and assert the help and the action registry cannot drift apart
+- [ ] T164 [P] Update `README.md` with the redesigned interface, the three themes and the mouse behaviour
+- [ ] T165 [P] Update `specs/001-election-results-tui/contracts/cli.md` so the documented key map matches the action registry
+- [ ] T166 Run quickstart scenario **V19** against `dist/volby-kv2026.exe`: 80 by 24, NO_COLOR set, no mouse, all at once. Everything must remain complete and usable (SC-023)
+- [ ] T167 Re-run the soak in `tools/verify/soak.ts` against the redesigned interface, confirming screen recomposition stays within the 100 ms budget now that there are more renderables (SC-026, SC-010)
+- [ ] T168 Rebuild both binaries via `bun run build:win` and `bun run build:linux`, then re-run `--self-test`, confirming the added components have not disturbed the single-binary guarantee (FR-001)
+- [ ] T169 **REVIEW** Amendment across `src/ui/`: verify every new requirement FR-054 to FR-079 has a covering test or a recorded manual check, that no colour literal escaped `src/ui/theme/`, and that the five rejected items (per-party colours, sparklines, clickable chrome, context menus, resizable panes) are absent
+
+---
+
+## Dependencies (amendment)
+
+- **Phase 10** blocks everything. The semantic-row type and the theme module are what US7 to US12 are built on
+- **US7 (P1)** needs only Phase 10. It is the largest single gain and is worth shipping alone
+- **US8 (P2)** needs US7's status bar, since both read the same action registry
+- **US9 (P2)** needs only Phase 10, but is most visible after US7's frames exist
+- **US10 (P3)** needs Phase 10's bar cell field
+- **US11 (P3)** needs US7's frame to sit beside
+- **US12 (P3)** is last deliberately: it is the only part that cannot be fully verified by test, so it should land when everything around it is known good
+
+### Parallel opportunities
+
+- Phase 10: T110 alongside T107 to T109; T115 and T116 together once T114 proves the pattern
+- Phase 17: T163, T164 and T165 together
+
+## Implementation Strategy (amendment)
+
+### Ship US7 alone if nothing else
+
+Phase 10 plus US7 gives framed regions, a breadcrumb and a context-sensitive status bar. That answers
+"where am I" and "what can I do here", which is what prompted the amendment. Everything after it is
+refinement.
+
+### Then, in order of value
+
+1. **+ US8** command palette: every action findable, and it teaches the shortcuts
+2. **+ US9** colour and themes: visual hierarchy, plus a high-contrast theme that is a genuine
+   accessibility gain
+3. **+ US10** bars: comparison at a glance
+4. **+ US11** side panel: several places watched at once
+5. **+ US12** mouse: the smallest gain and the only unverifiable one
+
+### Keep the suite green throughout
+
+442 tests pass today. Phase 10 is written so they keep passing at every step, because the plain-text
+rendering is preserved. If a task turns the suite red, the migration order has been broken rather than
+the test being wrong.
