@@ -18,6 +18,7 @@ function ctx(screen: Screen, overrides: Partial<ActionContext> = {}): ActionCont
     rowCount: 0,
     councilTypes: 1,
     searchActive: false,
+    sortableColumns: 0,
     ...overrides,
   }
 }
@@ -92,7 +93,7 @@ describe("the rendered bar", () => {
   test("shows the key beside the label, so the bar teaches the keys", () => {
     const line = statusBarLine(ctx({ kind: "council", kodzastup: "582786" }, { depth: 3 }), 120)
     expect(line).toContain("w sledovat")
-    expect(line).toContain("esc zpět")
+    expect(line).toContain("Esc zpět")
   })
 
   test("never exceeds the width, dropping the least important first", () => {

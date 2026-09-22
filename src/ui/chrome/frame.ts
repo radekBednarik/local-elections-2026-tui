@@ -19,6 +19,7 @@
 import {
   BoxRenderable,
   type CliRenderer,
+  type MouseEvent,
   type Renderable,
   ScrollBoxRenderable,
   type StyledText,
@@ -44,6 +45,7 @@ export class Frame {
   /** How many pooled rows currently carry content. */
   private visibleRows = 0
   private panelVisible = false
+  private rowHandler: ((index: number, event: MouseEvent) => void) | null = null
   private overlay: (Renderable & { visible: boolean }) | null = null
 
   constructor(private readonly renderer: CliRenderer) {
@@ -196,6 +198,25 @@ export class Frame {
     this.visibleRows = lines.length
   }
 
+  /**
+   * Routes clicks on any content row to one handler, by row index (T156).
+   *
+   * Set once and applied to every row the pool ever grows, so the handler is not
+   * reassigned to several hundred renderables on every refresh. OpenTUI routes a click
+   * through the rendered cell bounds, so there is no hit-testing to do here (research
+   * R15).
+   */
+  setRowHandler(handler: (index: number, event: MouseEvent) => void): void {
+    this.rowHandler = handler
+    this.rowNodes.forEach((node, index) => {
+      this.bindRow(node, index)
+    })
+  }
+
+  private bindRow(node: TextRenderable, index: number): void {
+    node.onMouseDown = (event: MouseEvent) => this.rowHandler?.(index, event)
+  }
+
   /** The row renderables currently showing content, in display order. */
   get rows(): TextRenderable[] {
     return this.rowNodes.slice(0, this.visibleRows)
@@ -226,6 +247,7 @@ export class Frame {
   private growRows(count: number): void {
     while (this.rowNodes.length < count) {
       const node = new TextRenderable(this.renderer, { content: "", height: 1, flexShrink: 0 })
+      this.bindRow(node, this.rowNodes.length)
       this.rowNodes.push(node)
       this.scroll.add(node)
     }

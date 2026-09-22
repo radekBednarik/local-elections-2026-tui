@@ -496,11 +496,11 @@ terminal; the panel hides itself and returns when there is room.
 **Independent Test**: **manual, in a real terminal.** Click, double-click, scroll, then Shift-drag
 across some figures and copy them.
 
-- [ ] T156 [US12] [TDD] Handle click-to-select on row renderables in `src/ui/app.ts`. OpenTUI routes mouse input through rendered cell bounds, so no hit-testing is needed (research R15) (FR-075)
-- [ ] T157 [US12] [TDD] Handle double-click to open in `src/ui/app.ts`, matching exactly what Enter does for the selected row (FR-075)
-- [ ] T158 [US12] [TDD] Handle wheel scrolling of the content area in `src/ui/app.ts` (FR-076)
-- [ ] T159 [US12] [TDD] Assert in `tests/ui/mouse.test.ts` that every mouse-reachable action is also keyboard-reachable, and that the application is fully usable with no mouse at all (FR-078)
-- [ ] T160 [US12] [TDD] Assert in `tests/ui/mouse.test.ts` that the chrome is NOT clickable: no status-bar buttons, no clickable breadcrumb, no context menus, no draggable dividers (FR-079)
+- [X] T156 [US12] [TDD] Handle click-to-select on row renderables in `src/ui/app.ts`. OpenTUI routes mouse input through rendered cell bounds, so no hit-testing is needed (research R15) (FR-075)
+- [X] T157 [US12] [TDD] Handle double-click to open in `src/ui/app.ts`, matching exactly what Enter does for the selected row (FR-075)
+- [X] T158 [US12] [TDD] Handle wheel scrolling of the content area in `src/ui/app.ts` (FR-076)
+- [X] T159 [US12] [TDD] Assert in `tests/ui/mouse.test.ts` that every mouse-reachable action is also keyboard-reachable, and that the application is fully usable with no mouse at all (FR-078)
+- [X] T160 [US12] [TDD] Assert in `tests/ui/mouse.test.ts` that the chrome is NOT clickable: no status-bar buttons, no clickable breadcrumb, no context menus, no draggable dividers (FR-079)
 - [ ] T161 [US12] **MANUAL VERIFICATION, NOT AUTOMATABLE** - in Windows Terminal AND a Linux terminal, run `dist/volby-kv2026`, hold Shift, drag across figures, and copy them. Enabling mouse reporting takes the terminal's native selection away by default, which is exactly what FR-077 forbids. `createTestRenderer` uses a mock input and will pass while this is broken, so **this task MUST NOT be marked complete on the strength of a green suite** (quickstart V18)
 - [ ] T162 **REVIEW** User Story 12 in `src/ui/app.ts`: confirm T161 was performed by hand on both platforms and its result recorded, not inferred
 
@@ -508,9 +508,9 @@ across some figures and copy them.
 
 ## Phase 17: Polish (amendment)
 
-- [ ] T163 [P] Update the help screen in `src/ui/views/help.ts` with the new keys Ctrl+P, Ctrl+B and Ctrl+T, and assert the help and the action registry cannot drift apart
-- [ ] T164 [P] Update `README.md` with the redesigned interface, the three themes and the mouse behaviour
-- [ ] T165 [P] Update `specs/001-election-results-tui/contracts/cli.md` so the documented key map matches the action registry
+- [X] T163 [P] Update the help screen in `src/ui/views/help.ts` with the new keys Ctrl+P, Ctrl+B and Ctrl+T, and assert the help and the action registry cannot drift apart
+- [X] T164 [P] Update `README.md` with the redesigned interface, the three themes and the mouse behaviour
+- [X] T165 [P] Update `specs/001-election-results-tui/contracts/cli.md` so the documented key map matches the action registry
 - [ ] T166 Run quickstart scenario **V19** against `dist/volby-kv2026.exe`: 80 by 24, NO_COLOR set, no mouse, all at once. Everything must remain complete and usable (SC-023)
 - [ ] T167 Re-run the soak in `tools/verify/soak.ts` against the redesigned interface, confirming screen recomposition stays within the 100 ms budget now that there are more renderables (SC-026, SC-010)
 - [ ] T168 Rebuild both binaries via `bun run build:win` and `bun run build:linux`, then re-run `--self-test`, confirming the added components have not disturbed the single-binary guarantee (FR-001)

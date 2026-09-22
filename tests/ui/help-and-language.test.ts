@@ -16,8 +16,9 @@ import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { tooSmallMessage } from "../../src/ui/components/status.ts"
 import type { Screen } from "../../src/ui/navigation.ts"
+import { ACTIONS } from "../../src/ui/palette/actions.ts"
 import { composeScreen } from "../../src/ui/screen.ts"
-import { documentedKeys, renderHelp } from "../../src/ui/views/help.ts"
+import { documentedKeys, helpRows, renderHelp } from "../../src/ui/views/help.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
 const read = (name: string) => readFileSync(join(FIXTURES, name), "utf8")
@@ -136,5 +137,45 @@ describe("Czech only (FR-004a)", () => {
       const body = composeScreen(db, screen, opts).lines.join("\n")
       expect(`${label}: ${/[ěščřžýáíéúůďťňó]/i.test(body)}`).toBe(`${label}: true`)
     }
+  })
+})
+
+describe("the help and the action registry cannot drift apart (T163)", () => {
+  // They did. The help kept its own list, so it said "Enter" where the status bar said
+  // "⏎", and an action added to the registry would never have appeared here at all. The
+  // help is now generated from the registry, and these assertions say so.
+  test("every action the application has is documented", () => {
+    const documented = documentedKeys()
+    for (const action of ACTIONS) {
+      expect(documented).toContain(action.key)
+    }
+  })
+
+  test("every documented key is either an action or a named exception", () => {
+    // The exceptions move within a screen or answer unconditionally; they are not
+    // things the application does, so they are not registry entries.
+    const EXCEPTIONS = ["PgUp PgDn", "Home End", "Ctrl+C"]
+    const fromRegistry = new Set(ACTIONS.map((a) => a.key))
+    for (const key of documentedKeys()) {
+      expect(fromRegistry.has(key) || EXCEPTIONS.includes(key)).toBe(true)
+    }
+  })
+
+  test("the new keys of the redesign are all there", () => {
+    const body = renderHelp(110).join("\n")
+    for (const key of ["Ctrl+P", "Ctrl+B", "Ctrl+T"]) {
+      expect(body).toContain(key)
+    }
+  })
+
+  test("each documented key carries a Czech action and a place it works", () => {
+    for (const row of helpRows()) {
+      expect(row.action.length).toBeGreaterThan(3)
+      expect(row.where.length).toBeGreaterThan(2)
+    }
+  })
+
+  test("the help still says the mouse is optional (FR-078)", () => {
+    expect(renderHelp(110).join("\n")).toContain("Myš je nepovinná")
   })
 })

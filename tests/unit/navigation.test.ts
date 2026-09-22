@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Navigation } from "../../src/ui/navigation.ts"
-import { applySort, cycleSort, sortMarker, UNSORTED } from "../../src/ui/sort.ts"
+import { applySort, markSorted, nextSort, sortMarker, UNSORTED } from "../../src/ui/sort.ts"
 
 describe("navigation stack", () => {
   test("starts at the national overview", () => {
@@ -108,14 +108,39 @@ describe("sorting (FR-037)", () => {
   ]
   const key = (row: (typeof rows)[number], column: number) => (column === 0 ? row.name : row.votes)
 
-  test("cycles descending, ascending, then back to the published order", () => {
+  test("one key walks every column and both directions, then back to the published order", () => {
     let state = UNSORTED
-    state = cycleSort(state, 1)
+    state = nextSort(state, 2)
+    expect(state).toEqual({ column: 0, direction: "desc" })
+    state = nextSort(state, 2)
+    expect(state).toEqual({ column: 0, direction: "asc" })
+    state = nextSort(state, 2)
     expect(state).toEqual({ column: 1, direction: "desc" })
-    state = cycleSort(state, 1)
+    state = nextSort(state, 2)
     expect(state).toEqual({ column: 1, direction: "asc" })
-    state = cycleSort(state, 1)
+    state = nextSort(state, 2)
     expect(state.column).toBeNull()
+  })
+
+  test("a table with no columns stays unsorted rather than pointing at nothing", () => {
+    expect(nextSort(UNSORTED, 0).column).toBeNull()
+  })
+
+  test("the sorted column header carries the marker, so it survives without colour", () => {
+    const columns = [
+      { header: "Název", width: 10 },
+      { header: "Hlasy", width: 8 },
+    ]
+    const marked = markSorted(columns, { column: 1, direction: "desc" })
+    expect(marked[1]?.header).toBe("Hlasy ▾")
+    expect(marked[0]?.header).toBe("Název")
+    // Widths are untouched, so marking cannot reflow the table.
+    expect(marked.map((c) => c.width)).toEqual(columns.map((c) => c.width))
+  })
+
+  test("an unsorted table is marked nowhere", () => {
+    const columns = [{ header: "Název", width: 10 }]
+    expect(markSorted(columns, UNSORTED)).toEqual(columns)
   })
 
   test("an unsorted state returns the rows exactly as published", () => {

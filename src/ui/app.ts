@@ -44,8 +44,15 @@ import type { ActionContext, ActionId } from "./palette/actions.ts"
 import { Palette } from "./palette/view.ts"
 import { composeScreen, type ScreenContent, sourcesForScreen } from "./screen.ts"
 import { applySearchKey, type KeyEvent } from "./search-input.ts"
+import { nextSort, type SortState, UNSORTED } from "./sort.ts"
 import { type ColorEnvironment, isMonochrome, readColorEnvironment, resolveTheme } from "./theme/detect.ts"
 import { nextTheme, type Theme, type ThemeName, themeLabel } from "./theme/themes.ts"
+
+/** How close two clicks on one row must be to count as a double click. */
+const DOUBLE_CLICK_MS = 400
+
+/** Rows the wheel moves per notch. */
+const WHEEL_ROWS = 3
 
 export interface AppDependencies {
   db: Database
@@ -60,6 +67,8 @@ export class App {
   private palette: Palette | null = null
   /** Whether the user WANTS the panel. Whether it fits is decided every draw (FR-057). */
   private sidePanelOpen = true
+  /** The last row clicked and when, so a second click on it counts as a double (T157). */
+  private lastClick: { row: number; at: number } | null = null
   private loop: ReturnType<typeof setInterval> | null = null
   private readonly abort = new AbortController()
   private readonly nav = new Navigation()
@@ -67,6 +76,13 @@ export class App {
   /** One-off confirmation line, cleared on the next key press. */
   private notice: string | null = null
   private councilType = "OBEC"
+  /**
+   * The sort the user has applied, reset when they move to another screen.
+   *
+   * Per screen rather than global: a column index means a different column on every
+   * table, so carrying one across a navigation would sort by something arbitrary.
+   */
+  private sort: SortState = UNSORTED
   private stopped = false
   /**
    * The chosen theme, or null when none was stored and detection should decide.
@@ -112,6 +128,15 @@ export class App {
     renderer.on("resize", () => {
       this.draw()
     })
+
+    // Mouse is optional throughout: everything below has a key, and the application is
+    // fully usable in a terminal with no mouse support at all (FR-078).
+    frame.setRowHandler((index) => {
+      this.onRowClick(index)
+    })
+    frame.scroll.onMouseScroll = (event) => {
+      this.onWheel(event)
+    }
 
     const shutdown = () => {
       this.stop()
@@ -297,16 +322,21 @@ export class App {
         this.open(content)
         break
       case "back":
-        if (this.nav.pop()) this.syncSubscriptions()
+        if (this.nav.pop()) {
+          this.sort = UNSORTED
+          this.syncSubscriptions()
+        }
         break
       case "search":
         this.query = ""
+        this.sort = UNSORTED
         this.nav.push({ kind: "search" })
         break
       case "watch":
         this.toggleWatch()
         break
       case "watchlist":
+        this.sort = UNSORTED
         this.nav.push({ kind: "watchlist" })
         this.syncSubscriptions()
         break
@@ -318,6 +348,9 @@ export class App {
         break
       case "council-type":
         this.cycleCouncilType()
+        break
+      case "sort":
+        this.sort = nextSort(this.sort, content.sortableColumns)
         break
       case "refresh":
         await this.refreshNow()
@@ -332,7 +365,10 @@ export class App {
         this.cycleTheme()
         break
       case "help":
-        if (this.nav.screen.kind !== "help") this.nav.push({ kind: "help" })
+        if (this.nav.screen.kind !== "help") {
+          this.sort = UNSORTED
+          this.nav.push({ kind: "help" })
+        }
         break
       case "quit":
         this.stop()
@@ -368,7 +404,66 @@ export class App {
       rowCount: content.rowCount,
       councilTypes: availableCouncilTypes(this.deps.db).length,
       searchActive: this.nav.screen.kind === "search",
+      sortableColumns: content.sortableColumns,
     }
+  }
+
+  /**
+   * A click on a content row (T156, T157, FR-075).
+   *
+   * The first click selects; a second on the same row within the double-click window
+   * opens it, which is exactly what Enter does. Nothing is reachable this way that a key
+   * cannot reach.
+   */
+  private onRowClick(index: number): void {
+    const content = this.currentContent()
+    const row = index - content.firstRow
+    if (row < 0 || row >= content.rowCount) return
+
+    const now = Date.now()
+    const isDouble =
+      this.lastClick !== null && this.lastClick.row === row && now - this.lastClick.at <= DOUBLE_CLICK_MS
+
+    this.notice = null
+    this.nav.current.selected = row
+    this.lastClick = isDouble ? null : { row, at: now }
+    if (isDouble) this.open(content)
+    this.draw()
+  }
+
+  /**
+   * The wheel scrolls the content area (T158, FR-076).
+   *
+   * Handled here rather than left to the scroll box, because the scroll position lives
+   * on the navigation entry - that is what makes it survive a refresh (FR-058) - and a
+   * position the viewport changed behind our back would be overwritten on the next draw.
+   */
+  private onWheel(event: { scroll?: { direction: string } }): void {
+    const frame = this.frame
+    if (frame === null) return
+    const direction = event.scroll?.direction
+    if (direction !== "up" && direction !== "down") return
+
+    const content = this.currentContent()
+    const entry = this.nav.current
+    const height = Math.max(1, frame.contentHeight)
+    const limit = Math.max(0, content.lines.length - height)
+    entry.offset = Math.min(
+      limit,
+      Math.max(0, entry.offset + (direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS)),
+    )
+
+    // The selection travels with the viewport rather than being left behind it. The
+    // alternative is worse in both directions: leave the selection where it was and the
+    // next draw drags the view back to it, or stop redrawing and the next refresh does
+    // the same. Carrying it keeps Enter meaning "open the row you can see".
+    if (content.rowCount > 0) {
+      const lowest = Math.max(0, entry.offset - content.firstRow)
+      const highest = Math.min(content.rowCount - 1, entry.offset + height - 1 - content.firstRow)
+      entry.selected = Math.min(Math.max(highest, 0), Math.max(lowest, entry.selected))
+    }
+
+    this.draw()
   }
 
   /** Opens whatever the selected row leads to. */
@@ -376,6 +471,7 @@ export class App {
     const target = content.target(this.nav.current.selected)
     if (target === null) return
     this.nav.push(target)
+    this.sort = UNSORTED
     this.syncSubscriptions()
     // Fetch what the new screen needs straight away rather than waiting for the next
     // tick, so opening a council is not followed by a blank pause.
@@ -480,6 +576,7 @@ export class App {
       width: this.contentWidth(),
       councilType: this.councilType,
       query: this.query,
+      sort: this.sort,
     })
   }
 
@@ -564,6 +661,7 @@ export class App {
         councilType: this.councilType,
         query: this.query,
         theme: this.theme,
+        sort: this.sort,
         width,
         contentWidth: this.contentWidth(),
         contentHeight: frame.contentHeight,

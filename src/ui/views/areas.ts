@@ -13,7 +13,9 @@
 import type { Database } from "bun:sqlite"
 import { statusLabel } from "../../domain/status.ts"
 import {
+  type CouncilPartyRow,
   type CouncilRow,
+  type DistrictRow,
   listBoroughs,
   listCouncilParties,
   listCouncilsInDistrict,
@@ -35,6 +37,7 @@ import {
   withChange,
 } from "../format.ts"
 import { blank, type Cell, cell, line, roleForChange, type SemanticRow, toTextLines } from "../row.ts"
+import { applySort, markSorted, type SortState, UNSORTED } from "../sort.ts"
 
 /**
  * A built view: its rows, and where the selectable ones begin.
@@ -42,9 +45,17 @@ import { blank, type Cell, cell, line, roleForChange, type SemanticRow, toTextLi
  * `firstRow` equals `rows.length` when nothing on the screen can be selected, which is
  * what the navigation layer already expects.
  */
-export interface BuiltView {
+export interface BuiltView<T = unknown> {
   rows: SemanticRow[]
   firstRow: number
+  /**
+   * The selectable rows, IN DISPLAY ORDER.
+   *
+   * Returned rather than re-queried by the caller. screen.ts used to fetch the same list
+   * a second time and trust that it came back in the same order; once sorting arrived
+   * that assumption would have silently opened the wrong council.
+   */
+  items: T[]
 }
 
 /**
@@ -73,6 +84,35 @@ function loadingNote(loaded: number, known: number): string | null {
   return null
 }
 
+/**
+ * How each table's columns map to a sortable value (FR-037).
+ *
+ * The index is the column the user sees, so pressing the sort key walks the table left
+ * to right exactly as it is drawn. A column with nothing meaningful to sort on returns
+ * null, which sorts last rather than to the top.
+ */
+function districtKey(row: DistrictRow, column: number): number | string | null {
+  if (column === 0) return row.name
+  if (column === 1) return row.nuts
+  return row.councilsWithResults
+}
+
+function councilKey(row: CouncilRow, column: number): number | string | null {
+  if (column === 0) return row.name
+  if (column === 1) return row.districtsCounted
+  if (column === 2) return row.turnoutPct
+  if (column === 3) return row.seatsTotal
+  return row.isFinal ? 1 : 0
+}
+
+function partyKey(row: CouncilPartyRow, column: number): number | string | null {
+  if (column === 0) return row.ballotOrder
+  if (column === 1) return row.name
+  if (column === 2) return row.votes
+  if (column === 3) return row.votesPct
+  return row.seatsWon
+}
+
 /** Renders a built view to plain text lines, clamped to the terminal width. */
 function toLines(view: BuiltView, width: number): string[] {
   return clampLines(toTextLines(view.rows), width)
@@ -83,13 +123,17 @@ export function renderDistrictList(db: Database, width = 100): string[] {
   return toLines(buildDistrictListRows(db, width), width)
 }
 
-export function buildDistrictListRows(db: Database, width: number): BuiltView {
-  const districts = listDistricts(db)
+export function buildDistrictListRows(
+  db: Database,
+  width: number,
+  sort: SortState = UNSORTED,
+): BuiltView<DistrictRow> {
+  const districts = applySort(listDistricts(db), sort, districtKey)
   const rows: SemanticRow[] = [line("Okresy", "heading"), line(rule(width), "muted")]
 
   if (districts.length === 0) {
     rows.push(line("Číselník okresů zatím není načten."))
-    return { rows, firstRow: rows.length }
+    return { rows, firstRow: rows.length, items: [] }
   }
 
   const columns: Column[] = [
@@ -97,7 +141,7 @@ export function buildDistrictListRows(db: Database, width: number): BuiltView {
     { header: "NUTS", width: 8 },
     { header: "Zastupitelstva", width: 20, align: "right" },
   ]
-  const [header, underline] = headerRow(columns)
+  const [header, underline] = headerRow(markSorted(columns, sort))
   rows.push(line(header, "heading"), line(underline, "muted"))
   const firstRow = rows.length
 
@@ -113,7 +157,7 @@ export function buildDistrictListRows(db: Database, width: number): BuiltView {
       ],
     })
   }
-  return { rows, firstRow }
+  return { rows, firstRow, items: districts }
 }
 
 /** Councils within one district, boroughs grouped under their municipality. */
@@ -121,8 +165,13 @@ export function renderDistrict(db: Database, nuts: string, width = 100): string[
   return toLines(buildDistrictRows(db, nuts, width), width)
 }
 
-export function buildDistrictRows(db: Database, nuts: string, width: number): BuiltView {
-  const councils = listCouncilsInDistrict(db, nuts)
+export function buildDistrictRows(
+  db: Database,
+  nuts: string,
+  width: number,
+  sort: SortState = UNSORTED,
+): BuiltView<CouncilRow> {
+  const councils = applySort(listCouncilsInDistrict(db, nuts), sort, councilKey)
   // The name where one is known, the code only when the codelist has not loaded: a raw
   // NUTS code where a name exists is what FR-011 forbids, and the breadcrumb above this
   // heading was already showing the name.
@@ -132,7 +181,7 @@ export function buildDistrictRows(db: Database, nuts: string, width: number): Bu
   if (councils.length === 0) {
     rows.push(line("Data tohoto okresu se zatím nenačetla."))
     rows.push(line("Aplikace je stahuje na pozadí; zobrazí se, jakmile dorazí.", "muted"))
-    return { rows, firstRow: rows.length }
+    return { rows, firstRow: rows.length, items: [] }
   }
 
   const note = loadingNote(councils.filter((c) => c.hasResult).length, councils.length)
@@ -145,7 +194,7 @@ export function buildDistrictRows(db: Database, nuts: string, width: number): Bu
     { header: "Mandáty", width: 9, align: "right" },
     { header: "Stav", width: 14 },
   ]
-  const [header, underline] = headerRow(columns)
+  const [header, underline] = headerRow(markSorted(columns, sort))
   rows.push(line(header, "heading"), line(underline, "muted"))
   const firstRow = rows.length
 
@@ -154,7 +203,7 @@ export function buildDistrictRows(db: Database, nuts: string, width: number): Bu
     const indent = council.parentKodzastup === null ? "" : "  └ "
     rows.push({ columns, cells: [cell(indent + council.name), ...councilCells(council)] })
   }
-  return { rows, firstRow }
+  return { rows, firstRow, items: councils }
 }
 
 /** The four right-hand cells shared by the district list and the watchlist. */
@@ -186,7 +235,12 @@ export function renderCouncil(db: Database, kodzastup: string, width = 100): str
   return toLines(buildCouncilRows(db, kodzastup, width), width)
 }
 
-export function buildCouncilRows(db: Database, kodzastup: string, width: number): BuiltView {
+export function buildCouncilRows(
+  db: Database,
+  kodzastup: string,
+  width: number,
+  sort: SortState = UNSORTED,
+): BuiltView<CouncilPartyRow> {
   const council = readCouncil(db, kodzastup)
   if (council === null) {
     const rows = [
@@ -194,7 +248,7 @@ export function buildCouncilRows(db: Database, kodzastup: string, width: number)
       blank(),
       line(`Kód: ${kodzastup}`, "muted"),
     ]
-    return { rows, firstRow: rows.length }
+    return { rows, firstRow: rows.length, items: [] }
   }
 
   const title = council.parentName === null ? council.name : `${council.name} (${council.parentName})`
@@ -214,7 +268,7 @@ export function buildCouncilRows(db: Database, kodzastup: string, width: number)
     )
     rows.push(blank())
     rows.push(line(OKRSKY_NOTE, "muted"))
-    return { rows, firstRow: rows.length }
+    return { rows, firstRow: rows.length, items: [] }
   }
 
   rows.push(
@@ -230,12 +284,12 @@ export function buildCouncilRows(db: Database, kodzastup: string, width: number)
   )
   rows.push(blank())
 
-  const parties = listCouncilParties(db, kodzastup)
+  const parties = applySort(listCouncilParties(db, kodzastup), sort, partyKey)
   if (parties.length === 0) {
     rows.push(line("Žádné volební strany nejsou evidovány."))
     rows.push(blank())
     rows.push(line(OKRSKY_NOTE, "muted"))
-    return { rows, firstRow: rows.length }
+    return { rows, firstRow: rows.length, items: [] }
   }
 
   // Bars are affordable only once the table itself has what it needs. Below that they
@@ -251,7 +305,7 @@ export function buildCouncilRows(db: Database, kodzastup: string, width: number)
     ...(bars ? [{ header: "", width: BAR_WIDTH } satisfies Column] : []),
     { header: "Mandáty", width: 10, align: "right" },
   ]
-  const [header, underline] = headerRow(columns)
+  const [header, underline] = headerRow(markSorted(columns, sort))
   rows.push(line(header, "heading"), line(underline, "muted"))
   const firstRow = rows.length
 
@@ -282,7 +336,7 @@ export function buildCouncilRows(db: Database, kodzastup: string, width: number)
 
   rows.push(blank())
   rows.push(line(OKRSKY_NOTE, "muted"))
-  return { rows, firstRow }
+  return { rows, firstRow, items: parties }
 }
 
 /**
@@ -308,7 +362,7 @@ export function buildCandidatesRows(
   vstrana: string,
   ballotOrder: number | null,
   width: number,
-): BuiltView {
+): BuiltView<never> {
   const council = readCouncil(db, kodzastup)
   const parties = listCouncilParties(db, kodzastup)
   const party = parties.find(
@@ -348,13 +402,13 @@ export function buildCandidatesRows(
     }
     // The candidate list is the leaf of the drill-down: nothing opens from a row here,
     // so no row is selectable.
-    return { rows, firstRow: rows.length }
+    return { rows, firstRow: rows.length, items: [] }
   }
 
   const elected = listElected(db, kodzastup, vstrana, ballotOrder)
   if (elected.length === 0) {
     rows.push(line("Pro tuto volební stranu nejsou k dispozici žádní kandidáti."))
-    return { rows, firstRow: rows.length }
+    return { rows, firstRow: rows.length, items: [] }
   }
 
   rows.push(line("Zvolení zastupitelé (úplná kandidátní listina není načtena)"))
@@ -370,5 +424,5 @@ export function buildCandidatesRows(
       ],
     })
   }
-  return { rows, firstRow: rows.length }
+  return { rows, firstRow: rows.length, items: [] }
 }

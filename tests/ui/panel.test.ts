@@ -20,6 +20,7 @@ import { buildPanelRows, MIN_CONTENT_COLUMNS, PANEL_COST, panelFits } from "../.
 import { applyFrameState, applyPanel, frameState } from "../../src/ui/chrome/state.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
 import { toTextLines } from "../../src/ui/row.ts"
+import { UNSORTED } from "../../src/ui/sort.ts"
 import { themeByName } from "../../src/ui/theme/themes.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
@@ -108,6 +109,7 @@ describe("the content area always wins (FR-057, T152)", () => {
           councilType: "OBEC",
           query: "",
           theme: themeByName("dark"),
+          sort: UNSORTED,
           width: 80,
           contentWidth: frame.contentWidth,
           contentHeight: frame.contentHeight,
@@ -145,6 +147,7 @@ describe("the content area always wins (FR-057, T152)", () => {
             councilType: "OBEC",
             query: "",
             theme: themeByName("dark"),
+            sort: UNSORTED,
             width: 130,
             contentWidth: frame.contentWidth > 0 ? frame.contentWidth : 120,
             contentHeight: frame.contentHeight > 0 ? frame.contentHeight : 26,

@@ -11,11 +11,11 @@
  */
 
 import type { Database } from "bun:sqlite"
-import { listCouncilParties, listCouncilsInDistrict, listDistricts } from "../storage/queries/areas.ts"
 import { availableCouncilTypes } from "../storage/queries/national.ts"
 import { clampLines } from "./format.ts"
 import type { Screen } from "./navigation.ts"
 import { type SemanticRow, toTextLines } from "./row.ts"
+import { type SortState, UNSORTED } from "./sort.ts"
 import {
   buildCandidatesRows,
   buildCouncilRows,
@@ -41,6 +41,8 @@ export interface ScreenContent {
   rowCount: number
   /** Resolves the selected row to the screen it opens. */
   target: (index: number) => SelectableTarget
+  /** How many columns this screen offers to sort by; zero when it has no table. */
+  sortableColumns: number
 }
 
 export interface ScreenOptions {
@@ -49,6 +51,8 @@ export interface ScreenOptions {
   now?: Date
   /** Current text in the search box, when the search screen is open. */
   query?: string
+  /** The column the user has sorted by, if any (FR-037). */
+  sort?: SortState
 }
 
 /** Completes a screen, deriving the plain-text rendering from the rows. */
@@ -58,13 +62,22 @@ function content(
   firstRow: number,
   rowCount: number,
   target: (index: number) => SelectableTarget,
+  sortableColumns = 0,
 ): ScreenContent {
-  return { rows, lines: clampLines(toTextLines(rows), width), firstRow, rowCount, target }
+  return {
+    rows,
+    lines: clampLines(toTextLines(rows), width),
+    firstRow,
+    rowCount,
+    target,
+    sortableColumns,
+  }
 }
 
 /** Builds everything needed to draw one screen. */
 export function composeScreen(db: Database, screen: Screen, options: ScreenOptions): ScreenContent {
   const width = options.width
+  const sort = options.sort ?? UNSORTED
 
   switch (screen.kind) {
     case "national": {
@@ -79,37 +92,57 @@ export function composeScreen(db: Database, screen: Screen, options: ScreenOptio
     }
 
     case "districts": {
-      const districts = listDistricts(db)
-      const view = buildDistrictListRows(db, width)
-      return content(view.rows, width, view.firstRow, districts.length, (index) => {
-        const district = districts[index]
-        return district === undefined ? null : { kind: "district", nuts: district.nuts }
-      })
+      // The builder hands back the rows it drew, in the order it drew them, so a sorted
+      // table opens the district the user is actually pointing at.
+      const view = buildDistrictListRows(db, width, sort)
+      return content(
+        view.rows,
+        width,
+        view.firstRow,
+        view.items.length,
+        (index) => {
+          const district = view.items[index]
+          return district === undefined ? null : { kind: "district", nuts: district.nuts }
+        },
+        3,
+      )
     }
 
     case "district": {
-      const councils = listCouncilsInDistrict(db, screen.nuts)
-      const view = buildDistrictRows(db, screen.nuts, width)
-      return content(view.rows, width, view.firstRow, councils.length, (index) => {
-        const council = councils[index]
-        return council === undefined ? null : { kind: "council", kodzastup: council.kodzastup }
-      })
+      const view = buildDistrictRows(db, screen.nuts, width, sort)
+      return content(
+        view.rows,
+        width,
+        view.firstRow,
+        view.items.length,
+        (index) => {
+          const council = view.items[index]
+          return council === undefined ? null : { kind: "council", kodzastup: council.kodzastup }
+        },
+        5,
+      )
     }
 
     case "council": {
-      const parties = listCouncilParties(db, screen.kodzastup)
-      const view = buildCouncilRows(db, screen.kodzastup, width)
-      return content(view.rows, width, view.firstRow, parties.length, (index) => {
-        const party = parties[index]
-        return party === undefined
-          ? null
-          : {
-              kind: "candidates",
-              kodzastup: screen.kodzastup,
-              vstrana: party.vstrana,
-              ballotOrder: party.ballotOrder,
-            }
-      })
+      const view = buildCouncilRows(db, screen.kodzastup, width, sort)
+      return content(
+        view.rows,
+        width,
+        view.firstRow,
+        view.items.length,
+        (index) => {
+          const party = view.items[index]
+          return party === undefined
+            ? null
+            : {
+                kind: "candidates",
+                kodzastup: screen.kodzastup,
+                vstrana: party.vstrana,
+                ballotOrder: party.ballotOrder,
+              }
+        },
+        5,
+      )
     }
 
     case "candidates": {
@@ -124,24 +157,38 @@ export function composeScreen(db: Database, screen: Screen, options: ScreenOptio
     }
 
     case "watchlist": {
-      const view = buildWatchlistRows(db, width)
-      return content(view.rows, width, view.firstRow, view.codes.length, (index) => {
-        const code = view.codes[index]
-        return code === undefined ? null : { kind: "council", kodzastup: code }
-      })
+      const view = buildWatchlistRows(db, width, sort)
+      return content(
+        view.rows,
+        width,
+        view.firstRow,
+        view.codes.length,
+        (index) => {
+          const code = view.codes[index]
+          return code === undefined ? null : { kind: "council", kodzastup: code }
+        },
+        1,
+      )
     }
 
     case "search": {
-      const view = buildSearchRows(db, options.query ?? "", width)
-      return content(view.rows, width, view.firstRow, view.hits.length, (index) => {
-        const hit = view.hits[index]
-        if (hit === undefined) return null
-        // A party hit opens its candidate list directly; anything else opens the
-        // council, which is the most useful landing place for a name.
-        return hit.kind === "party" && hit.vstrana !== null
-          ? { kind: "candidates", kodzastup: hit.kodzastup, vstrana: hit.vstrana, ballotOrder: null }
-          : { kind: "council", kodzastup: hit.kodzastup }
-      })
+      const view = buildSearchRows(db, options.query ?? "", width, sort)
+      return content(
+        view.rows,
+        width,
+        view.firstRow,
+        view.hits.length,
+        (index) => {
+          const hit = view.hits[index]
+          if (hit === undefined) return null
+          // A party hit opens its candidate list directly; anything else opens the
+          // council, which is the most useful landing place for a name.
+          return hit.kind === "party" && hit.vstrana !== null
+            ? { kind: "candidates", kodzastup: hit.kodzastup, vstrana: hit.vstrana, ballotOrder: null }
+            : { kind: "council", kodzastup: hit.kodzastup }
+        },
+        3,
+      )
     }
 
     default: {

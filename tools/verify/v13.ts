@@ -19,6 +19,7 @@ import { listCouncilsInDistrict } from "../../src/storage/queries/areas.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
 import { applyFrameState, frameState } from "../../src/ui/chrome/state.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
+import { UNSORTED } from "../../src/ui/sort.ts"
 import { themeByName } from "../../src/ui/theme/themes.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
@@ -48,6 +49,7 @@ async function draw(): Promise<string> {
       nav,
       councilType: "OBEC",
       theme: themeByName("dark"),
+      sort: UNSORTED,
       query: "",
       width: WIDTH,
       contentWidth: frame.contentWidth > 0 ? frame.contentWidth : WIDTH - 2,

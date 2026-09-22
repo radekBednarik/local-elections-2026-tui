@@ -27,6 +27,8 @@ export interface ActionContext {
   councilTypes: number
   /** True while the search box has focus and swallows letter keys. */
   searchActive: boolean
+  /** Columns this screen offers to sort by; zero when it has no table (FR-037). */
+  sortableColumns: number
 }
 
 export type ActionId =
@@ -39,6 +41,7 @@ export type ActionId =
   | "export-csv"
   | "export-report"
   | "council-type"
+  | "sort"
   | "refresh"
   | "palette"
   | "side-panel"
@@ -52,8 +55,22 @@ export interface Action {
   label: string
   /** Short label, for the status bar where every column counts. */
   hint: string
-  /** The key as the user must press it. */
+  /**
+   * The key as the user must press it, written out: "Enter", "Shift+W", "Ctrl+P".
+   *
+   * This is the form the help screen and the command palette show, because both are
+   * teaching the key and a glyph teaches nothing to someone who does not already know
+   * it.
+   */
   key: string
+  /**
+   * A compact form for the status bar, where columns are scarce.
+   *
+   * Absent when the written form is already short enough.
+   */
+  shortKey?: string
+  /** Where the key applies, in Czech, for the help screen. */
+  where: string
   /** Why this action does nothing here, or null when it applies (FR-069). */
   unavailable: (context: ActionContext) => string | null
 }
@@ -74,31 +91,43 @@ export const ACTIONS: Action[] = [
     label: "Posunout výběr",
     hint: "výběr",
     key: "↑↓",
+    where: "seznamy",
     unavailable: (c) => (c.rowCount > 0 ? null : "na této obrazovce není seznam"),
   },
   {
     id: "open",
     label: "Otevřít vybranou položku",
     hint: "otevřít",
-    key: "⏎",
+    key: "Enter",
+    shortKey: "⏎",
+    where: "seznamy",
     unavailable: (c) => (c.rowCount > 0 || c.screen.kind === "national" ? null : "není co otevřít"),
   },
   {
     id: "back",
     label: "Zpět o úroveň výš",
     hint: "zpět",
-    key: "esc",
+    key: "Esc",
+    where: "všude",
     unavailable: (c) => (c.depth > 1 ? null : "jste na úvodní obrazovce"),
   },
   // Placed high deliberately. The status bar drops hints from the end when the terminal
   // is narrow, and the palette is how everything that got dropped is still reachable, so
   // it is the last hint that should ever go (FR-065).
-  { id: "palette", label: "Otevřít paletu příkazů", hint: "příkazy", key: "Ctrl+P", unavailable: always },
+  {
+    id: "palette",
+    label: "Otevřít paletu příkazů",
+    hint: "příkazy",
+    key: "Ctrl+P",
+    where: "všude",
+    unavailable: always,
+  },
   {
     id: "search",
     label: "Hledat obec, stranu nebo kandidáta",
     hint: "hledat",
     key: "/",
+    where: "všude",
     unavailable: always,
   },
   {
@@ -106,13 +135,16 @@ export const ACTIONS: Action[] = [
     label: "Přidat nebo odebrat ze sledovaných",
     hint: "sledovat",
     key: "w",
+    where: "zastupitelstvo",
     unavailable: (c) => (c.screen.kind === "council" ? null : "sledovat lze jen otevřené zastupitelstvo"),
   },
   {
     id: "watchlist",
     label: "Zobrazit sledovaná zastupitelstva",
     hint: "sledovaná",
-    key: "W",
+    key: "Shift+W",
+    shortKey: "W",
+    where: "všude",
     unavailable: always,
   },
   {
@@ -120,13 +152,16 @@ export const ACTIONS: Action[] = [
     label: "Exportovat zobrazenou tabulku do CSV",
     hint: "export",
     key: "e",
+    where: "tabulky",
     unavailable: (c) => (TABLE_SCREENS.includes(c.screen.kind) ? null : "tato obrazovka nemá tabulku"),
   },
   {
     id: "export-report",
     label: "Uložit souhrnnou zprávu",
     hint: "souhrn",
-    key: "E",
+    key: "Shift+E",
+    shortKey: "E",
+    where: "okres, zastupitelstvo",
     unavailable: (c) =>
       REPORT_SCREENS.includes(c.screen.kind) ? null : "souhrn existuje jen pro okres a zastupitelstvo",
   },
@@ -135,25 +170,43 @@ export const ACTIONS: Action[] = [
     label: "Přepnout typ zastupitelstva",
     hint: "typ",
     key: "t",
+    where: "přehled ČR",
     unavailable: (c) => {
       if (c.screen.kind !== "national") return "typ se přepíná v přehledu ČR"
       return c.councilTypes > 1 ? null : "data obsahují jen jeden typ zastupitelstva"
     },
   },
-  { id: "refresh", label: "Vyžádat okamžité obnovení", hint: "obnovit", key: "r", unavailable: always },
+  {
+    id: "sort",
+    label: "Seřadit podle dalšího sloupce",
+    hint: "řadit",
+    key: "s",
+    where: "tabulky",
+    unavailable: (c) => (c.sortableColumns > 0 ? null : "tato obrazovka nemá řaditelnou tabulku"),
+  },
+  {
+    id: "refresh",
+    label: "Vyžádat okamžité obnovení",
+    hint: "obnovit",
+    key: "r",
+    where: "všude",
+    unavailable: always,
+  },
   {
     id: "side-panel",
     label: "Zobrazit nebo skrýt postranní panel",
     hint: "panel",
     key: "Ctrl+B",
+    where: "všude",
     unavailable: always,
   },
-  { id: "theme", label: "Přepnout motiv", hint: "motiv", key: "Ctrl+T", unavailable: always },
+  { id: "theme", label: "Přepnout motiv", hint: "motiv", key: "Ctrl+T", where: "všude", unavailable: always },
   {
     id: "help",
     label: "Nápověda",
     hint: "nápověda",
     key: "?",
+    where: "všude",
     unavailable: (c) => (c.screen.kind === "help" ? "nápověda je právě otevřená" : null),
   },
   {
@@ -161,6 +214,7 @@ export const ACTIONS: Action[] = [
     label: "Ukončit aplikaci",
     hint: "konec",
     key: "q",
+    where: "mimo hledání",
     unavailable: (c) => (c.searchActive ? "během hledání píše „q“ do dotazu" : null),
   },
 ]

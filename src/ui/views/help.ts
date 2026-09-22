@@ -1,13 +1,20 @@
 /**
- * Help view (task T095, FR-005; migrated to semantic rows in T117).
+ * Help view (task T095, FR-005; rebuilt from the action registry in T163).
  *
- * Every key the application responds to is listed here. The status bar shows the ones
- * that apply where the user is standing; this is the complete reference, so no function
- * is reachable only by someone who happened to read the source.
+ * The complete key reference. It is GENERATED from `ACTIONS` rather than kept as its own
+ * list, because the two lists drifted the moment there were two of them: the help said
+ * "Enter" where the status bar said "⏎", and an action added to the registry would not
+ * have appeared here at all. Now adding an action adds its help line, and there is no
+ * second place to forget.
+ *
+ * A short list of navigation keys is added on top. They are not registry actions - they
+ * move within a screen rather than doing anything to it - so they have nowhere else to
+ * live.
  */
 
 import { MIN_COLUMNS, MIN_ROWS } from "../components/status.ts"
 import { type Column, clampLines, headerRow, rule } from "../format.ts"
+import { ACTIONS } from "../palette/actions.ts"
 import { blank, cell, line, type SemanticRow, toTextLines } from "../row.ts"
 
 interface KeyRow {
@@ -16,26 +23,30 @@ interface KeyRow {
   where: string
 }
 
-const KEYS: KeyRow[] = [
-  { keys: "↑ ↓", action: "Posun výběru o řádek", where: "seznamy" },
+/**
+ * Keys that move within a screen rather than performing an action.
+ *
+ * Deliberately not registry entries: the registry answers "what can I do here", and a
+ * page-down is not one of the answers.
+ */
+const NAVIGATION: KeyRow[] = [
   { keys: "PgUp PgDn", action: "Posun o deset řádků", where: "seznamy" },
   { keys: "Home End", action: "Na začátek / na konec", where: "seznamy" },
-  { keys: "Enter", action: "Otevřít vybranou položku", where: "seznamy" },
-  { keys: "Esc", action: "Zpět o úroveň výš", where: "všude" },
-  { keys: "/", action: "Hledat obec, stranu nebo kandidáta", where: "všude" },
-  { keys: "t", action: "Přepnout typ zastupitelstva (obce / městské části)", where: "přehled ČR" },
-  { keys: "w", action: "Přidat nebo odebrat ze sledovaných", where: "zastupitelstvo" },
-  { keys: "Shift+W", action: "Zobrazit sledovaná zastupitelstva", where: "všude" },
-  { keys: "e", action: "Exportovat zobrazenou tabulku do CSV", where: "tabulky" },
-  { keys: "Shift+E", action: "Uložit souhrnnou zprávu do textového souboru", where: "okres, zastupitelstvo" },
-  { keys: "r", action: "Vyžádat okamžité obnovení (nejdříve po 60 s)", where: "všude" },
-  { keys: "Ctrl+P", action: "Otevřít paletu příkazů", where: "všude" },
-  { keys: "Ctrl+B", action: "Zobrazit nebo skrýt postranní panel", where: "všude" },
-  { keys: "Ctrl+T", action: "Přepnout motiv (tmavý, světlý, vysoký kontrast)", where: "všude" },
-  { keys: "?", action: "Tato nápověda", where: "všude" },
-  { keys: "q", action: "Ukončit aplikaci", where: "mimo hledání" },
-  { keys: "Ctrl+C", action: "Ukončit aplikaci vždy", where: "všude" },
 ]
+
+/** Keys the runtime answers unconditionally, outside the registry. */
+const ALWAYS: KeyRow[] = [{ keys: "Ctrl+C", action: "Ukončit aplikaci vždy", where: "všude" }]
+
+/** Every documented key, registry first. */
+export function helpRows(): KeyRow[] {
+  const fromRegistry = ACTIONS.map((action) => ({
+    keys: action.key,
+    action: action.label,
+    where: action.where,
+  }))
+  // Inserted after the two movement actions so the navigation keys read together.
+  return [...fromRegistry.slice(0, 2), ...NAVIGATION, ...fromRegistry.slice(2), ...ALWAYS]
+}
 
 export function buildHelpRows(width = 100): SemanticRow[] {
   const rows: SemanticRow[] = [line("Nápověda", "heading"), line(rule(width), "muted"), blank()]
@@ -48,7 +59,7 @@ export function buildHelpRows(width = 100): SemanticRow[] {
   const [header, underline] = headerRow(columns)
   rows.push(line(header, "heading"), line(underline, "muted"))
 
-  for (const key of KEYS) {
+  for (const key of helpRows()) {
     rows.push({ columns, cells: [cell(key.keys), cell(key.action), cell(key.where, "muted")] })
   }
 
@@ -65,6 +76,7 @@ export function buildHelpRows(width = 100): SemanticRow[] {
     line("Výsledky po jednotlivých okrscích se zveřejňují pouze dávkově a jsou mimo rozsah aplikace."),
   )
   rows.push(line("Zobrazené údaje pocházejí přímo ze zdroje; aplikace nic nedopočítává ani neodhaduje."))
+  rows.push(line("Myš je nepovinná: vše je dostupné z klávesnice."))
   rows.push(line(`Minimální velikost okna: ${MIN_COLUMNS} × ${MIN_ROWS}.`))
 
   return rows
@@ -76,5 +88,5 @@ export function renderHelp(width = 100): string[] {
 
 /** Key names the help screen documents, for a test that the two cannot drift apart. */
 export function documentedKeys(): string[] {
-  return KEYS.map((k) => k.keys)
+  return helpRows().map((k) => k.keys)
 }

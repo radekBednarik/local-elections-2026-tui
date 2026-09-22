@@ -11,6 +11,8 @@
  * correct, and it is the reason the comparator never falls back to a tiebreak.
  */
 
+import type { Column } from "./format.ts"
+
 export type SortDirection = "asc" | "desc"
 
 export interface SortState {
@@ -24,13 +26,18 @@ export const UNSORTED: SortState = { column: null, direction: "desc" }
 /**
  * Advances the sort as the user presses the sort key.
  *
- * Cycles descending, ascending, then back to the source's own order, so a user can
- * always get back to the published ordering without hunting for a reset.
+ * One key walks the whole table: descending on a column, then ascending, then on to the
+ * next column, and finally back to the source's own order. A user can always reach the
+ * published ordering again by pressing the same key, without hunting for a reset - which
+ * matters here more than in most tables, because the published order is itself
+ * meaningful (FR-029).
  */
-export function cycleSort(state: SortState, column: number): SortState {
-  if (state.column !== column) return { column, direction: "desc" }
-  if (state.direction === "desc") return { column, direction: "asc" }
-  return { ...UNSORTED }
+export function nextSort(state: SortState, columns: number): SortState {
+  if (columns <= 0) return { ...UNSORTED }
+  if (state.column === null) return { column: 0, direction: "desc" }
+  if (state.direction === "desc") return { column: state.column, direction: "asc" }
+  const next = state.column + 1
+  return next < columns ? { column: next, direction: "desc" } : { ...UNSORTED }
 }
 
 /** Extracts the comparable value for a row and column. */
@@ -68,4 +75,18 @@ export function applySort<T>(rows: T[], state: SortState, key: SortKey<T>): T[] 
 export function sortMarker(state: SortState, column: number): string {
   if (state.column !== column) return ""
   return state.direction === "asc" ? " ▴" : " ▾"
+}
+
+/**
+ * Puts the sort marker on the sorted column's header.
+ *
+ * The marker is written into the header text rather than drawn separately, so it travels
+ * through the same plain-text rendering as everything else and appears in an export of
+ * the view exactly as it does on screen.
+ */
+export function markSorted(columns: Column[], state: SortState): Column[] {
+  if (state.column === null) return columns
+  return columns.map((column, index) =>
+    index === state.column ? { ...column, header: column.header + sortMarker(state, index) } : column,
+  )
 }

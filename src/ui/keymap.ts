@@ -73,6 +73,8 @@ export function intentFor(key: KeyEvent): Intent | null {
       return { kind: "action", id: shift ? "export-report" : "export-csv" }
     case "t":
       return { kind: "action", id: "council-type" }
+    case "s":
+      return { kind: "action", id: "sort" }
     case "r":
       return { kind: "action", id: "refresh" }
     case "?":

@@ -20,6 +20,38 @@ The interface is in Czech throughout, because the data is.
 - **Survives a bad network** – keeps the last good figures on screen, says plainly that
   they are stale and why, backs off, and recovers on its own.
 
+## The interface
+
+Three regions that never move. A title bar carrying a breadcrumb of where you are
+(`ČR › Okres Brno-město › Brno-Bohunice`), a bordered content area, and a status bar
+listing **only** the actions that do something on the screen you are looking at. New data
+arriving changes the figures and nothing else: not the regions, not your scroll position,
+not the row you had selected.
+
+- **Command palette** (`Ctrl+P`) – every action the application has, searchable, with its
+  key shown beside it so using the palette teaches you the shortcut. An action that does
+  not apply here is listed with the reason rather than hidden.
+- **Side panel** (`Ctrl+B`) – your watchlist beside the table, with live turnout. It hides
+  itself when the terminal is too narrow to show it without squeezing the table, and comes
+  back when there is room. Its state survives a restart.
+- **Themes** (`Ctrl+T`) – dark, light and high contrast. Dark and light resolve to your
+  terminal's own palette rather than hard-coded colours, so the interface looks at home in
+  whatever scheme you already use. High contrast pins explicit values and separates roles
+  by brightness rather than hue.
+- **Bars** – a proportional bar beside each published share, drawn in eighth-blocks. On a
+  narrow terminal the bars go before any figure does.
+- **Mouse, optionally** – click a row to select it, double-click to open it, wheel to
+  scroll. Nothing needs a mouse: every action has a key, and the chrome is not clickable.
+  `Shift`+drag still gives you your terminal's own text selection.
+
+**Colour is never load-bearing.** Every state it marks is also carried by text, a symbol
+or a position, so `NO_COLOR` and a monochrome terminal lose decoration and nothing else.
+Sorting is marked with `▾`, the selected row with `▶`, a risen figure with `▲`.
+
+**No electoral party is coloured differently from any other.** With thousands of local
+candidate lists there is no authoritative party colour, and inventing one would imply an
+affiliation the source never published.
+
 ## What it deliberately does not do
 
 **No per-polling-district (okrsek) results.** Those are published only through the
@@ -61,7 +93,9 @@ volby-kv2026 [přepínače]
   --help                 Vypsat tuto nápovědu a skončit
 ```
 
-Press `?` inside the application for the full key map.
+Press `?` inside the application for the full key map, or `Ctrl+P` for the command palette.
+
+Minimum terminal size is 80 × 24.
 
 ### First run
 

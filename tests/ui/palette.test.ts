@@ -19,7 +19,15 @@ import {
 } from "../../src/ui/palette/view.ts"
 
 function ctx(screen: Screen, overrides: Partial<ActionContext> = {}): ActionContext {
-  return { screen, depth: 1, rowCount: 0, councilTypes: 1, searchActive: false, ...overrides }
+  return {
+    screen,
+    depth: 1,
+    rowCount: 0,
+    councilTypes: 1,
+    searchActive: false,
+    sortableColumns: 0,
+    ...overrides,
+  }
 }
 
 const COUNCIL = ctx({ kind: "council", kodzastup: "582786" }, { depth: 3, rowCount: 12 })

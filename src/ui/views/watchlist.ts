@@ -20,6 +20,19 @@ import {
   withChange,
 } from "../format.ts"
 import { blank, cell, line, roleForChange, type SemanticRow, toTextLines } from "../row.ts"
+import { applySort, markSorted, type SortState, UNSORTED } from "../sort.ts"
+
+/**
+ * Sortable value per displayed column.
+ *
+ * Only the name is known without a second query; the figures live on the council the
+ * panel reads separately, so the remaining columns fall back to the name. Sorting a
+ * watchlist by turnout would mean reading every watched council to compare them, which
+ * is work the user did not ask for on a list they curated by hand.
+ */
+function watchKey(entry: { name: string }, _column: number): string {
+  return entry.name
+}
 
 export interface WatchlistRows {
   rows: SemanticRow[]
@@ -32,8 +45,8 @@ export interface WatchlistView extends WatchlistRows {
   lines: string[]
 }
 
-export function buildWatchlistRows(db: Database, width = 100): WatchlistRows {
-  const watched = listWatchlist(db)
+export function buildWatchlistRows(db: Database, width = 100, sort: SortState = UNSORTED): WatchlistRows {
+  const watched = applySort(listWatchlist(db), sort, watchKey)
   const rows: SemanticRow[] = [line("Sledovaná zastupitelstva", "heading"), line(rule(width), "muted")]
 
   if (watched.length === 0) {
@@ -50,7 +63,7 @@ export function buildWatchlistRows(db: Database, width = 100): WatchlistRows {
     { header: "Mandáty", width: 9, align: "right" },
     { header: "Stav", width: 14 },
   ]
-  const [header, underline] = headerRow(columns)
+  const [header, underline] = headerRow(markSorted(columns, sort))
   const firstRow = rows.length + 2
   rows.push(line(header, "heading"), line(underline, "muted"))
 
@@ -89,7 +102,7 @@ export function buildWatchlistRows(db: Database, width = 100): WatchlistRows {
   return { rows, codes: watched.map((w) => w.kodzastup), firstRow }
 }
 
-export function renderWatchlist(db: Database, width = 100): WatchlistView {
-  const built = buildWatchlistRows(db, width)
+export function renderWatchlist(db: Database, width = 100, sort: SortState = UNSORTED): WatchlistView {
+  const built = buildWatchlistRows(db, width, sort)
   return { ...built, lines: clampLines(toTextLines(built.rows), width) }
 }

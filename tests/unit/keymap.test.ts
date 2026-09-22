@@ -32,6 +32,7 @@ describe("every action has a key (FR-078)", () => {
     "export-csv": press("e"),
     "export-report": press("e", { shift: true }),
     "council-type": press("t"),
+    sort: press("s"),
     refresh: press("r"),
     palette: press("p", { ctrl: true }),
     "side-panel": press("b", { ctrl: true }),

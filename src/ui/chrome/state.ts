@@ -20,6 +20,7 @@ import type { Navigation } from "../navigation.ts"
 import type { ActionContext } from "../palette/actions.ts"
 import type { SemanticRow } from "../row.ts"
 import { composeScreen, type ScreenContent } from "../screen.ts"
+import type { SortState } from "../sort.ts"
 import { styledBlock, styledRow } from "../theme/apply.ts"
 import type { Theme } from "../theme/themes.ts"
 import { breadcrumbFor } from "./breadcrumb.ts"
@@ -40,6 +41,8 @@ export interface FrameInputs {
   councilType: string
   query: string
   theme: Theme
+  /** The column the user has sorted by, if any (FR-037). */
+  sort: SortState
   /** Full terminal width, which the breadcrumb and status bar span. */
   width: number
   /** Columns inside the border, less the side panel. */
@@ -96,6 +99,7 @@ export function frameState(inputs: FrameInputs): FrameState {
     width: viewWidth,
     councilType: inputs.councilType,
     query: inputs.query,
+    sort: inputs.sort,
   })
 
   const context: ActionContext = {
@@ -104,6 +108,7 @@ export function frameState(inputs: FrameInputs): FrameState {
     rowCount: content.rowCount,
     councilTypes: availableCouncilTypes(db).length,
     searchActive: nav.screen.kind === "search",
+    sortableColumns: content.sortableColumns,
   }
 
   const selected = nav.current.selected

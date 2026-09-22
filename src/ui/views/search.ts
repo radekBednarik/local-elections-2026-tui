@@ -10,6 +10,7 @@ import type { Database } from "bun:sqlite"
 import { type SearchHit, search } from "../../storage/queries/search.ts"
 import { type Column, clampLines, headerRow, rule } from "../format.ts"
 import { blank, cell, line, type SemanticRow, toTextLines } from "../row.ts"
+import { applySort, markSorted, type SortState, UNSORTED } from "../sort.ts"
 
 const KIND_LABEL: Record<SearchHit["kind"], string> = {
   council: "zastupitelstvo",
@@ -27,8 +28,20 @@ export interface SearchViewResult extends SearchRows {
   lines: string[]
 }
 
+/** Sortable value per displayed column, so the sort key walks the table as drawn. */
+function hitKey(hit: SearchHit, column: number): string | null {
+  if (column === 0) return hit.label
+  if (column === 1) return KIND_LABEL[hit.kind]
+  return hit.detail
+}
+
 /** Builds the search screen as semantic rows. */
-export function buildSearchRows(db: Database, query: string, width = 100): SearchRows {
+export function buildSearchRows(
+  db: Database,
+  query: string,
+  width = 100,
+  sort: SortState = UNSORTED,
+): SearchRows {
   const rows: SemanticRow[] = [
     line(`Hledání: ${query}${query === "" ? "_" : ""}`, "heading"),
     line(rule(width), "muted"),
@@ -41,7 +54,7 @@ export function buildSearchRows(db: Database, query: string, width = 100): Searc
     return { rows, hits: [], firstRow: rows.length }
   }
 
-  const hits = search(db, query)
+  const hits = applySort(search(db, query), sort, hitKey)
   if (hits.length === 0) {
     rows.push(blank())
     rows.push(line("Nic nenalezeno."))
@@ -53,7 +66,7 @@ export function buildSearchRows(db: Database, query: string, width = 100): Searc
     { header: "Typ", width: 16 },
     { header: "Kde", width: 32 },
   ]
-  const [header, underline] = headerRow(columns)
+  const [header, underline] = headerRow(markSorted(columns, sort))
   const firstRow = rows.length + 2
   rows.push(line(header, "heading"), line(underline, "muted"))
 
@@ -68,7 +81,12 @@ export function buildSearchRows(db: Database, query: string, width = 100): Searc
 }
 
 /** Renders the search screen for the current query. */
-export function renderSearch(db: Database, query: string, width = 100): SearchViewResult {
-  const built = buildSearchRows(db, query, width)
+export function renderSearch(
+  db: Database,
+  query: string,
+  width = 100,
+  sort: SortState = UNSORTED,
+): SearchViewResult {
+  const built = buildSearchRows(db, query, width, sort)
   return { ...built, lines: clampLines(toTextLines(built.rows), width) }
 }

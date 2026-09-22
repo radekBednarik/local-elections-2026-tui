@@ -21,6 +21,7 @@ import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
 import { applyFrameState, frameState } from "../../src/ui/chrome/state.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
+import { UNSORTED } from "../../src/ui/sort.ts"
 import { themeByName } from "../../src/ui/theme/themes.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
@@ -85,6 +86,7 @@ async function harness(width = 100, height = 30): Promise<Harness> {
         councilType: "OBEC",
         query: "",
         theme: themeByName("dark"),
+        sort: UNSORTED,
         width,
         contentWidth: frame.contentWidth > 0 ? frame.contentWidth : width - 2,
         contentHeight: frame.contentHeight > 0 ? frame.contentHeight : height - 4,
@@ -197,6 +199,7 @@ describe("the minimum terminal, end to end (T124, FR-041)", () => {
         councilType: "OBEC",
         query: "",
         theme: themeByName("dark"),
+        sort: UNSORTED,
         width: 80,
         contentWidth: 78,
         contentHeight: 20,
