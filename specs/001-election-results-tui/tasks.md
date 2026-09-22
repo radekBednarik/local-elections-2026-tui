@@ -111,13 +111,13 @@ exist until 9 October 2026 (research R9).
 ### Domain utilities
 
 - [X] T037 [P] [TDD] Implement diacritic folding in `src/domain/folding.ts`: `normalize("NFD")`, strip combining marks, `toLocaleLowerCase("cs")`. Test that `Ricany`, `Říčany`, `ŘÍČANY` and `ricany` all fold identically (FR-038, research R6 – no dependency needed)
-- [ ] T038 [P] [TDD] Implement provisional/final determination and change detection in `src/domain/status.ts`: `is_final` is `districts_counted === districts_total`; changes are computed by comparing current to prior snapshot. **`turnout_pct` is stored as published and never recomputed** (FR-029)
+- [X] T038 [P] [TDD] Implement provisional/final determination and change detection in `src/domain/status.ts`: `is_final` is `districts_counted === districts_total`; changes are computed by comparing current to prior snapshot. **`turnout_pct` is stored as published and never recomputed** (FR-029)
 
 ### Fetching
 
-- [ ] T039 [TDD] Implement source URL construction in `src/sources/urls.ts` from `--base-url`, `--election`, `--date` per [contracts/data-sources.md](./contracts/data-sources.md). Must support `file://` so fixture-driven tests need no network. **Must not be able to construct a batch source URL** – FR-012 excludes `vysledky_okrsky_*`, `vysledky_obce_*` and their latest-batch aliases
-- [ ] T040 [TDD] Implement the fetch client in `src/sources/client.ts` using built-in `fetch`: sends a descriptive `User-Agent` (FR-024) and conditional `If-None-Match` / `If-Modified-Since` from stored validators, with a bounded per-request timeout. Handles `200`, `304`, `404`, `5xx`, timeout and DNS failure as distinct outcomes (FR-023)
-- [ ] T041 **REVIEW** Phase 2: verify every parser rejects rather than partially accepts, that the two-row snapshot constraint is enforced in storage rather than by convention, that no batch source can be reached, and that no test depends on network access
+- [X] T039 [TDD] Implement source URL construction in `src/sources/urls.ts` from `--base-url`, `--election`, `--date` per [contracts/data-sources.md](./contracts/data-sources.md). Must support `file://` so fixture-driven tests need no network. **Must not be able to construct a batch source URL** – FR-012 excludes `vysledky_okrsky_*`, `vysledky_obce_*` and their latest-batch aliases
+- [X] T040 [TDD] Implement the fetch client in `src/sources/client.ts` using built-in `fetch`: sends a descriptive `User-Agent` (FR-024) and conditional `If-None-Match` / `If-Modified-Since` from stored validators, with a bounded per-request timeout. Handles `200`, `304`, `404`, `5xx`, timeout and DNS failure as distinct outcomes (FR-023)
+- [X] T041 **REVIEW** Phase 2: verify every parser rejects rather than partially accepts, that the two-row snapshot constraint is enforced in storage rather than by convention, that no batch source can be reached, and that no test depends on network access
 
 **Checkpoint**: Fixtures, storage, parsing, validation, and fetching all work and are covered by tests.
 User stories can now begin.
