@@ -238,3 +238,41 @@ FR-029 forbids estimating, projecting, or extrapolating. The boundary:
 | `candidate` | `(kodzastup, ostrana)`, `name_folded` | Candidate list and search (FR-034, FR-038) |
 | `result_snapshot` | `(area_kind, area_id, is_current)` | The hottest read path – every render |
 | `source_subscription` | `next_due_at` | Scheduler picking what is due |
+
+---
+
+## Amendment: UX redesign (2026-09-22)
+
+No schema change. The redesign is presentation only; it adds no entity, no figure and no level of
+detail. Two preferences join the existing `app_config` key-value table.
+
+| Key | Values | Requirement |
+|---|---|---|
+| `theme` | `dark`, `light`, `high-contrast` | FR-061 - the choice persists between runs |
+| `side_panel_open` | `0`, `1` | FR-056 - the panel's state persists between runs |
+
+Both are per-user preferences, so `app_config` is the right home: it already holds the election
+selection and the reference-load marker, and it travels with the data directory.
+
+**Deliberately not stored**: the current theme is not remembered per screen, and the panel is not
+remembered per area. A preference that changed as the user navigated would be a setting the user
+cannot predict.
+
+### A presentation type, not a stored one
+
+`SemanticRow` is the one new structure the amendment introduces, and it is **not persisted**. It exists
+only between a query and the renderer:
+
+```text
+SemanticRow = { cells: Cell[] }
+Cell        = { text: string, role?: Role, bar?: number }
+Role        = heading | selection | warning | increase | decrease | muted
+```
+
+It replaces the pre-formatted `string` a view builder currently returns. A string cannot carry a
+colour role or a bar value, which is why FR-059 and FR-070 force the change (research R14).
+
+Rendering it two ways is what keeps one source of truth: to **plain text** for exports and the
+existing test assertions, and to **styled chunks** for the terminal. Colour therefore lives in the
+renderer, not in the data, which is also what keeps FR-063's monochrome guarantee honest rather than
+aspirational.
