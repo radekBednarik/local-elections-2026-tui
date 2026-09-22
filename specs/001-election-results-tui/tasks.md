@@ -183,13 +183,13 @@ votes, seats, and elected candidates match the fixture data.
 warning, retries slow down, and refreshing resumes by itself when the harness restarts.
 
 - [X] T068 [US3] [TDD] Implement progressive backoff in `src/sources/backoff.ts`: interval grows with consecutive failures up to a ceiling, one success resets it, and **it never drops below the 60-second floor** (FR-043). Test with a simulated failure sequence
-- [ ] T069 [US3] [TDD] Implement last-good-data retention in `src/sources/scheduler.ts`: a failed fetch or a rejected document leaves the previous snapshot untouched (FR-027)
-- [ ] T070 [P] [US3] [TDD] Implement the staleness indicator in `src/ui/components/status.ts`: persistent, stating the reason and the **age computed from the publisher timestamp**, clearing automatically on the next success (FR-044)
-- [ ] T071 [P] [US3] [TDD] Implement the pre-publication state in `src/ui/views/national.ts`: a `404` before publication begins shows "results are not yet being published" and retrying continues, rather than failing at launch (FR-045)
-- [ ] T072 [US3] [TDD] Implement offline start in `src/ui/app.ts`: with no network and a populated database, start successfully and present cached results marked stale (FR-042)
-- [ ] T073 [US3] [TDD] Add a top-level resilience guard verified by `tests/integration/resilience.test.ts`: **no network error, malformed document, or unexpected source value may terminate the process** (FR-046). Assert the only exit codes reachable are 0, 1, and 2 per [contracts/cli.md](./contracts/cli.md)
-- [ ] T074 [US3] Run quickstart scenarios **V4** and **V5** end to end, using the harness `--fail-after` flag, and record the results
-- [ ] T075 **REVIEW** User Story 3: verify no failure path can exit the process, that backoff respects the floor, and that a `304` response does not disturb change highlighting
+- [X] T069 [US3] [TDD] Implement last-good-data retention in `src/sources/scheduler.ts`: a failed fetch or a rejected document leaves the previous snapshot untouched (FR-027)
+- [X] T070 [P] [US3] [TDD] Implement the staleness indicator in `src/ui/components/status.ts`: persistent, stating the reason and the **age computed from the publisher timestamp**, clearing automatically on the next success (FR-044)
+- [X] T071 [P] [US3] [TDD] Implement the pre-publication state in `src/ui/views/national.ts`: a `404` before publication begins shows "results are not yet being published" and retrying continues, rather than failing at launch (FR-045)
+- [X] T072 [US3] [TDD] Implement offline start in `src/ui/app.ts`: with no network and a populated database, start successfully and present cached results marked stale (FR-042)
+- [X] T073 [US3] [TDD] Add a top-level resilience guard verified by `tests/integration/resilience.test.ts`: **no network error, malformed document, or unexpected source value may terminate the process** (FR-046). Assert the only exit codes reachable are 0, 1, and 2 per [contracts/cli.md](./contracts/cli.md)
+- [X] T074 [US3] Run quickstart scenarios **V4** and **V5** end to end, using the harness `--fail-after` flag, and record the results
+- [X] T075 **REVIEW** User Story 3: verify no failure path can exit the process, that backoff respects the floor, and that a `304` response does not disturb change highlighting
 
 **Checkpoint**: The application is fit to run unattended through an election night.
 

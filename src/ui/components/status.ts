@@ -13,6 +13,9 @@ import { pad } from "../format.ts"
 export const MIN_COLUMNS = 80
 export const MIN_ROWS = 24
 
+/** Longest failure reason shown inline; the full text goes to the log. */
+const MAX_REASON = 60
+
 /** The persistent staleness warning, or null when everything is current (FR-044). */
 export function staleWarning(subscriptions: Subscription[], now = new Date()): string | null {
   const failing = subscriptions.filter((s) => s.consecutiveFailures > 0)
@@ -22,13 +25,18 @@ export function staleWarning(subscriptions: Subscription[], now = new Date()): s
   // about, and listing every source would bury it.
   const worst = failing.reduce((a, b) => (a.consecutiveFailures >= b.consecutiveFailures ? a : b))
   const since = worst.lastSuccessAt
-  const age = since === null ? null : Math.floor((now.getTime() - Date.parse(since)) / 1000)
+  // Clamped at zero: a success timestamp ahead of the local clock is possible under
+  // clock skew, and "před -900 s" is worse than useless to a reader.
+  const age = since === null ? null : Math.max(0, Math.floor((now.getTime() - Date.parse(since)) / 1000))
 
   const scope = failing.length === 1 ? worst.sourceKey : `${failing.length} zdrojů`
-  const reason = worst.lastError ?? "neznámá chyba"
+  // A schema rejection can carry a paragraph of parser detail. The warning is one line
+  // on a shared screen, so it gets the gist; the log keeps the whole message.
+  const full = worst.lastError ?? "neznámá chyba"
+  const reason = full.length > MAX_REASON ? `${full.slice(0, MAX_REASON - 1)}…` : full
   const staleness = age === null ? "bez úspěšného načtení" : `data ${formatAge(age)}`
 
-  return `! ZASTARALÁ DATA (${scope}): ${reason}. Zobrazena poslední známá ${staleness}.`
+  return `! ZASTARALÁ DATA (${scope}): ${reason} Zobrazena poslední známá ${staleness}.`
 }
 
 /** One-line summary of the terminal being too small (FR-041). */

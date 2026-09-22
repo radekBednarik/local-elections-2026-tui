@@ -96,3 +96,32 @@ describe("key hints (FR-005)", () => {
     expect([...keyHintLine(NATIONAL_HINTS, 40)]).toHaveLength(40)
   })
 })
+
+describe("warning robustness", () => {
+  test("a success timestamp ahead of the local clock reports zero, not a negative age", () => {
+    // Possible under clock skew. "před -900 s" is worse than useless to a reader.
+    const warning = staleWarning(
+      [
+        sub({
+          consecutiveFailures: 1,
+          lastError: "503",
+          lastSuccessAt: "2026-10-09T22:00:00.000Z",
+        }),
+      ],
+      new Date("2026-10-09T21:45:00.000Z"),
+    )
+    expect(warning).not.toContain("-")
+    expect(warning).toContain("před 0 s")
+  })
+
+  test("a long parser message is truncated, so the warning stays one line", () => {
+    const long =
+      "vysledky.xml: XML není well-formed: Expected closing tag 'VOLEBNI_STRANA' " +
+      "(opened in line 6, col 1) instead of closing tag 'VYSLEDEK'. (řádek 7)"
+    const warning = staleWarning([sub({ consecutiveFailures: 1, lastError: long })]) ?? ""
+    expect(warning.length).toBeLessThan(140)
+    expect(warning).toContain("…")
+    // The gist must survive the truncation.
+    expect(warning).toContain("well-formed")
+  })
+})
