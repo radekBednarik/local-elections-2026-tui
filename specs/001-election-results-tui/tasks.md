@@ -78,18 +78,18 @@ exist until 9 October 2026 (research R9).
 
 ### Configuration and logging
 
-- [ ] T017 [TDD] Implement CLI argument parsing in `src/config/args.ts` using `util.parseArgs`, per [contracts/cli.md](./contracts/cli.md). Tests in `tests/unit/args.test.ts` must cover: `--interval 1` is **clamped to 60 and reported on stderr, not rejected**; `--date` must match `^\d{8}$` and be a real calendar date or exit 1; unknown options exit 1 and are never silently ignored
-- [ ] T018 [TDD] Implement per-user path resolution in `src/config/paths.ts` (`%APPDATA%` on Windows, XDG variables on Linux, overridable by `--data-dir` then `VOLBY_DATA_DIR` in that precedence), with tests in `tests/unit/paths.test.ts` (FR-047)
-- [ ] T019 [TDD] Implement a file logger in `src/logging/logger.ts` honouring `--log-level` (`error|warn|info|debug`), writing to the per-user log path. Must never write to stdout or stderr while the TUI owns the terminal (FR-030)
+- [X] T017 [TDD] Implement CLI argument parsing in `src/config/args.ts` using `util.parseArgs`, per [contracts/cli.md](./contracts/cli.md). Tests in `tests/unit/args.test.ts` must cover: `--interval 1` is **clamped to 60 and reported on stderr, not rejected**; `--date` must match `^\d{8}$` and be a real calendar date or exit 1; unknown options exit 1 and are never silently ignored
+- [X] T018 [TDD] Implement per-user path resolution in `src/config/paths.ts` (`%APPDATA%` on Windows, XDG variables on Linux, overridable by `--data-dir` then `VOLBY_DATA_DIR` in that precedence), with tests in `tests/unit/paths.test.ts` (FR-047)
+- [X] T019 [TDD] Implement a file logger in `src/logging/logger.ts` honouring `--log-level` (`error|warn|info|debug`), writing to the per-user log path. Must never write to stdout or stderr while the TUI owns the terminal (FR-030)
 
 ### Storage
 
-- [ ] T020 [TDD] Create the database schema in `src/storage/schema.ts` for the **reference** tables per [data-model.md](./data-model.md): `region`, `district`, `municipality`, `council`, `council_type`, `council_class`, `political_party`, `political_affiliation`, `electoral_party`, `electoral_party_composition`, `candidate`. Every name column has a paired `name_folded` column. `electoral_party.name` holds up to 2000 characters. Tests in `tests/integration/schema.test.ts`
-- [ ] T021 [TDD] Create the **result** tables in `src/storage/schema.ts`: `result_snapshot`, `party_result`, `candidate_result`. Enforce in storage that **at most two rows exist per `(area_kind, area_id)`** – one `is_current = 1` and one prior – so the no-history decision (FR-036a) cannot be violated by application code
-- [ ] T022 [TDD] Create the **local state** tables in `src/storage/schema.ts`: `source_subscription`, `watchlist_entry`, `app_config`. `source_subscription` holds `last_success_at`, `last_attempt_at`, `last_error`, `consecutive_failures`, `next_due_at`, `etag`, `last_modified`
-- [ ] T023 [P] Add the indexes listed in data-model.md to `src/storage/schema.ts`: `council(obec)`, `council(parent_kodzastup)`, `council(name_folded)`, `municipality(name_folded)`, `candidate(kodzastup, ostrana)`, `candidate(name_folded)`, `result_snapshot(area_kind, area_id, is_current)`, `source_subscription(next_due_at)`
-- [ ] T024 [TDD] Implement database opening in `src/storage/db.ts` with `strict: true` and `PRAGMA journal_mode = WAL`, plus a test in `tests/integration/concurrent.test.ts` proving two connections against one file do not corrupt data (FR-048)
-- [ ] T025 [TDD] Implement snapshot write in `src/storage/snapshots.ts`: one transaction per document, demoting the current row to prior and deleting any older row. **An identical re-fetch must not consume the prior row**, otherwise a no-op refresh would wipe the change highlight required by FR-036. Test that case explicitly
+- [X] T020 [TDD] Create the database schema in `src/storage/schema.ts` for the **reference** tables per [data-model.md](./data-model.md): `region`, `district`, `municipality`, `council`, `council_type`, `council_class`, `political_party`, `political_affiliation`, `electoral_party`, `electoral_party_composition`, `candidate`. Every name column has a paired `name_folded` column. `electoral_party.name` holds up to 2000 characters. Tests in `tests/integration/schema.test.ts`
+- [X] T021 [TDD] Create the **result** tables in `src/storage/schema.ts`: `result_snapshot`, `party_result`, `candidate_result`. Enforce in storage that **at most two rows exist per `(area_kind, area_id)`** – one `is_current = 1` and one prior – so the no-history decision (FR-036a) cannot be violated by application code
+- [X] T022 [TDD] Create the **local state** tables in `src/storage/schema.ts`: `source_subscription`, `watchlist_entry`, `app_config`. `source_subscription` holds `last_success_at`, `last_attempt_at`, `last_error`, `consecutive_failures`, `next_due_at`, `etag`, `last_modified`
+- [X] T023 [P] Add the indexes listed in data-model.md to `src/storage/schema.ts`: `council(obec)`, `council(parent_kodzastup)`, `council(name_folded)`, `municipality(name_folded)`, `candidate(kodzastup, ostrana)`, `candidate(name_folded)`, `result_snapshot(area_kind, area_id, is_current)`, `source_subscription(next_due_at)`
+- [X] T024 [TDD] Implement database opening in `src/storage/db.ts` with `strict: true` and `PRAGMA journal_mode = WAL`, plus a test in `tests/integration/concurrent.test.ts` proving two connections against one file do not corrupt data (FR-048)
+- [X] T025 [TDD] Implement snapshot write in `src/storage/snapshots.ts`: one transaction per document, demoting the current row to prior and deleting any older row. **An identical re-fetch must not consume the prior row**, otherwise a no-op refresh would wipe the change highlight required by FR-036. Test that case explicitly
 
 ### Parsing and validation
 
@@ -110,7 +110,7 @@ exist until 9 October 2026 (research R9).
 
 ### Domain utilities
 
-- [ ] T037 [P] [TDD] Implement diacritic folding in `src/domain/folding.ts`: `normalize("NFD")`, strip combining marks, `toLocaleLowerCase("cs")`. Test that `Ricany`, `Říčany`, `ŘÍČANY` and `ricany` all fold identically (FR-038, research R6 – no dependency needed)
+- [X] T037 [P] [TDD] Implement diacritic folding in `src/domain/folding.ts`: `normalize("NFD")`, strip combining marks, `toLocaleLowerCase("cs")`. Test that `Ricany`, `Říčany`, `ŘÍČANY` and `ricany` all fold identically (FR-038, research R6 – no dependency needed)
 - [ ] T038 [P] [TDD] Implement provisional/final determination and change detection in `src/domain/status.ts`: `is_final` is `districts_counted === districts_total`; changes are computed by comparing current to prior snapshot. **`turnout_pct` is stored as published and never recomputed** (FR-029)
 
 ### Fetching
