@@ -68,13 +68,13 @@ exist until 9 October 2026 (research R9).
 
 ### Fixtures and the replay harness
 
-- [ ] T010 [P] Download the 2022 municipal election data and save raw samples under `fixtures/source-2022/` for reference: one national result, two district results, and five council results including Prague and Brno. Record the retrieval date and source URLs in `fixtures/README.md`
-- [ ] T011 Derive `fixtures/2026/vysledky.xml` (national) from the 2022 sample, reshaped to the 2026 static-file structure. **The 2026 schema is authoritative wherever the two differ** (research R9) – 2022 used query-parameter endpoints, not the same delivery
-- [ ] T012 [P] Derive `fixtures/2026/vysledky_obce_okres_CZ0100.xml` and `..._CZ0642.xml` (Prague and a Moravian district) covering a district with boroughs and one without
-- [ ] T013 [P] Derive `fixtures/2026/vysledky_obec_*.xml` for five councils: a village, a statutory city, a Prague borough, one with a coalition, and one with an independents' association
-- [ ] T014 [P] Assemble `fixtures/2026/reg.zip` and `fixtures/2026/ciselniky.zip` containing `KVRZCOCO`, `KVROS`, `KVROS_SLOZENI`, `KVRK` and `CNUMNUTS`, `CNS`, `CPP`, `CVS`, `CVS_SLOZENI`, `KVDRUHZ`, `KVTYPZAS`, `KV_COCO`, scoped to the municipalities in T011–T013
-- [ ] T015 [P] Hand-write `fixtures/edge-cases/` for conditions real 2022 data will not contain: `malformed.xml` (broken markup), `truncated.xml` (cut mid-document), `annulled.xml` (`STAV_OBCE` marking no election held), `unfilled-seats.xml` (seats unallocated), `republished-changed.xml` (same area, newer timestamp, different figures), `provisional.xml` and `final.xml` (partial vs complete count)
-- [ ] T016 Build the replay harness in `tools/replay/server.ts`: serves `fixtures/2026/` over HTTP on a configurable port, advancing through a timed sequence of snapshots so a count can be rehearsed in minutes. Supports a `--fail-after` flag to simulate the source going away (needed by US3)
+- [X] T010 [P] Download the 2022 municipal election data and save raw samples under `fixtures/source-2022/` for reference: one national result, two district results, and five council results including Prague and Brno. Record the retrieval date and source URLs in `fixtures/README.md`
+- [X] T011 Derive `fixtures/2026/vysledky.xml` (national) from the 2022 sample, reshaped to the 2026 static-file structure. **The 2026 schema is authoritative wherever the two differ** (research R9) – 2022 used query-parameter endpoints, not the same delivery
+- [X] T012 [P] Derive `fixtures/2026/vysledky_obce_okres_CZ0100.xml` and `..._CZ0642.xml` (Prague and a Moravian district) covering a district with boroughs and one without
+- [X] T013 [P] Derive `fixtures/2026/vysledky_obec_*.xml` for five councils: a village, a statutory city, a Prague borough, one with a coalition, and one with an independents' association
+- [X] T014 [P] Assemble `fixtures/2026/reg.zip` and `fixtures/2026/ciselniky.zip` containing `KVRZCOCO`, `KVROS`, `KVROS_SLOZENI`, `KVRK` and `CNUMNUTS`, `CNS`, `CPP`, `CVS`, `CVS_SLOZENI`, `KVDRUHZ`, `KVTYPZAS`, `KV_COCO`, scoped to the municipalities in T011–T013
+- [X] T015 [P] Hand-write `fixtures/edge-cases/` for conditions real 2022 data will not contain: `malformed.xml` (broken markup), `truncated.xml` (cut mid-document), `annulled.xml` (`STAV_OBCE` marking no election held), `unfilled-seats.xml` (seats unallocated), `republished-changed.xml` (same area, newer timestamp, different figures), `provisional.xml` and `final.xml` (partial vs complete count)
+- [X] T016 Build the replay harness in `tools/replay/server.ts`: serves `fixtures/2026/` over HTTP on a configurable port, advancing through a timed sequence of snapshots so a count can be rehearsed in minutes. Supports a `--fail-after` flag to simulate the source going away (needed by US3)
 
 ### Configuration and logging
 
