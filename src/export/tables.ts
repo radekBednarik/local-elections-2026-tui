@@ -3,6 +3,16 @@
  *
  * Exports carry the same figures shown on screen, taken from the same queries, so the
  * two can never disagree. Nothing is recomputed on the way out (FR-029).
+ *
+ * T117 asked for this module to consume the semantic rows the views now produce. It
+ * consumes their SOURCE rather than their text, deliberately. The displayed text is
+ * Czech prose - a non-breaking space grouping thousands, a trailing `%`, a change marker
+ * such as `▲` - and contracts/exports.md requires the CSV to carry figures a
+ * spreadsheet can sum. Taking the rendered strings would corrupt every numeric column.
+ *
+ * What genuinely could drift is the row SET and its ORDER, and that is pinned instead:
+ * both sides walk the same query results, and tests/integration/export-parity.test.ts
+ * asserts row for row that they still agree.
  */
 
 import type { Database } from "bun:sqlite"

@@ -1,9 +1,13 @@
 /**
- * Drill-down views: districts, one district, one council, one party's candidates
- * (tasks T058-T060, T063-T065).
+ * Drill-down views: districts, one district, one council, the candidates of one party
+ * (tasks T058-T060, T063-T065; migrated to semantic rows in T115, first-row index added
+ * in T117).
  *
- * As with the national view, each returns text lines so the whole layer is testable as
- * data rather than only through a renderer.
+ * Each builder returns rows plus the index of the first SELECTABLE row. That index used
+ * to be rediscovered in screen.ts by searching the rendered text for a box-drawing
+ * character, which found the rule under the title rather than the column underline and
+ * was two rows short whenever a loading note sat between them. The builder knows where
+ * its table starts, so it says so.
  */
 
 import type { Database } from "bun:sqlite"
@@ -28,7 +32,18 @@ import {
   rule,
   withChange,
 } from "../format.ts"
-import { blank, cell, line, type SemanticRow, toTextLines } from "../row.ts"
+import { blank, type Cell, cell, line, roleForChange, type SemanticRow, toTextLines } from "../row.ts"
+
+/**
+ * A built view: its rows, and where the selectable ones begin.
+ *
+ * `firstRow` equals `rows.length` when nothing on the screen can be selected, which is
+ * what the navigation layer already expects.
+ */
+export interface BuiltView {
+  rows: SemanticRow[]
+  firstRow: number
+}
 
 /**
  * Stated wherever a user would reasonably expect per-polling-district figures.
@@ -47,18 +62,23 @@ function loadingNote(loaded: number, known: number): string | null {
   return null
 }
 
-/** The list of districts, with how much of each has arrived. */
-export function renderDistrictList(db: Database, width = 100): string[] {
-  return clampLines(toTextLines(buildDistrictListRows(db, width)), width)
+/** Renders a built view to plain text lines, clamped to the terminal width. */
+function toLines(view: BuiltView, width: number): string[] {
+  return clampLines(toTextLines(view.rows), width)
 }
 
-export function buildDistrictListRows(db: Database, width: number): SemanticRow[] {
+/** The list of districts, with how much of each has arrived. */
+export function renderDistrictList(db: Database, width = 100): string[] {
+  return toLines(buildDistrictListRows(db, width), width)
+}
+
+export function buildDistrictListRows(db: Database, width: number): BuiltView {
   const districts = listDistricts(db)
-  const lines: SemanticRow[] = [line("Okresy", "heading"), line(rule(width), "muted")]
+  const rows: SemanticRow[] = [line("Okresy", "heading"), line(rule(width), "muted")]
 
   if (districts.length === 0) {
-    lines.push(line("Číselník okresů zatím není načten."))
-    return lines
+    rows.push(line("Číselník okresů zatím není načten."))
+    return { rows, firstRow: rows.length }
   }
 
   const columns: Column[] = [
@@ -67,38 +87,41 @@ export function buildDistrictListRows(db: Database, width: number): SemanticRow[
     { header: "Zastupitelstva", width: 20, align: "right" },
   ]
   const [header, underline] = headerRow(columns)
-  lines.push(line(header, "heading"), line(underline, "muted"))
+  rows.push(line(header, "heading"), line(underline, "muted"))
+  const firstRow = rows.length
 
   for (const district of districts) {
-    lines.push({
+    rows.push({
       columns,
       cells: [
-        district.name,
-        district.nuts,
-        district.loaded ? formatProgress(district.councilsWithResults, district.councilsKnown) : "načítá se…",
-      ].map((c) => cell(c)),
+        cell(district.name),
+        cell(district.nuts, "muted"),
+        district.loaded
+          ? cell(formatProgress(district.councilsWithResults, district.councilsKnown))
+          : cell("načítá se…", "muted"),
+      ],
     })
   }
-  return lines
+  return { rows, firstRow }
 }
 
 /** Councils within one district, boroughs grouped under their municipality. */
 export function renderDistrict(db: Database, nuts: string, width = 100): string[] {
-  return clampLines(toTextLines(buildDistrictRows(db, nuts, width)), width)
+  return toLines(buildDistrictRows(db, nuts, width), width)
 }
 
-export function buildDistrictRows(db: Database, nuts: string, width: number): SemanticRow[] {
+export function buildDistrictRows(db: Database, nuts: string, width: number): BuiltView {
   const councils = listCouncilsInDistrict(db, nuts)
-  const lines: SemanticRow[] = [line(`Okres ${nuts}`, "heading"), line(rule(width), "muted")]
+  const rows: SemanticRow[] = [line(`Okres ${nuts}`, "heading"), line(rule(width), "muted")]
 
   if (councils.length === 0) {
-    lines.push(line("Data tohoto okresu se zatím nenačetla."))
-    lines.push(line("Aplikace je stahuje na pozadí; zobrazí se, jakmile dorazí."))
-    return lines
+    rows.push(line("Data tohoto okresu se zatím nenačetla."))
+    rows.push(line("Aplikace je stahuje na pozadí; zobrazí se, jakmile dorazí.", "muted"))
+    return { rows, firstRow: rows.length }
   }
 
   const note = loadingNote(councils.filter((c) => c.hasResult).length, councils.length)
-  if (note !== null) lines.push(line(note, "muted"), blank())
+  if (note !== null) rows.push(line(note, "muted"), blank())
 
   const columns: Column[] = [
     { header: "Zastupitelstvo", width: Math.max(24, width - 52) },
@@ -108,48 +131,65 @@ export function buildDistrictRows(db: Database, nuts: string, width: number): Se
     { header: "Stav", width: 14 },
   ]
   const [header, underline] = headerRow(columns)
-  lines.push(line(header, "heading"), line(underline, "muted"))
+  rows.push(line(header, "heading"), line(underline, "muted"))
+  const firstRow = rows.length
 
   for (const council of councils) {
     // A borough is indented under its parent so the grouping is visible (FR-035).
     const indent = council.parentKodzastup === null ? "" : "  └ "
-    lines.push({ columns, cells: [indent + council.name, ...councilCells(council)].map((c) => cell(c)) })
+    rows.push({ columns, cells: [cell(indent + council.name), ...councilCells(council)] })
   }
-  return lines
+  return { rows, firstRow }
 }
 
-/** The four right-hand cells shared by the district list and the council header. */
-function councilCells(council: CouncilRow): string[] {
+/** The four right-hand cells shared by the district list and the watchlist. */
+function councilCells(council: CouncilRow): Cell[] {
   if (!council.hasResult) {
-    return ["–", "–", formatInteger(council.seatsTotal), council.statusNote ?? "čeká se"]
+    return [
+      cell("–"),
+      cell("–"),
+      cell(formatInteger(council.seatsTotal)),
+      cell(council.statusNote ?? "čeká se", "muted"),
+    ]
   }
   return [
-    withChange(formatProgress(council.districtsCounted, council.districtsTotal), council.countedChange),
-    withChange(formatPercent(council.turnoutPct), council.turnoutChange),
-    formatInteger(council.seatsTotal),
-    council.isFinal ? "konečné" : "průběžné",
+    cell(
+      withChange(formatProgress(council.districtsCounted, council.districtsTotal), council.countedChange),
+      roleForChange(council.countedChange),
+    ),
+    cell(withChange(formatPercent(council.turnoutPct), council.turnoutChange), {
+      bar: council.turnoutPct === null ? undefined : council.turnoutPct / 100,
+      role: roleForChange(council.turnoutChange),
+    }),
+    cell(formatInteger(council.seatsTotal)),
+    cell(council.isFinal ? "konečné" : "průběžné"),
   ]
 }
 
 /** One council: its parties, seats and status. */
 export function renderCouncil(db: Database, kodzastup: string, width = 100): string[] {
-  return clampLines(toTextLines(buildCouncilRows(db, kodzastup, width)), width)
+  return toLines(buildCouncilRows(db, kodzastup, width), width)
 }
 
-export function buildCouncilRows(db: Database, kodzastup: string, width: number): SemanticRow[] {
+export function buildCouncilRows(db: Database, kodzastup: string, width: number): BuiltView {
   const council = readCouncil(db, kodzastup)
   if (council === null) {
-    return [line("Zastupitelstvo nebylo nalezeno.", "warning"), blank(), line(`Kód: ${kodzastup}`, "muted")]
+    const rows = [
+      line("Zastupitelstvo nebylo nalezeno.", "warning"),
+      blank(),
+      line(`Kód: ${kodzastup}`, "muted"),
+    ]
+    return { rows, firstRow: rows.length }
   }
 
   const title = council.parentName === null ? council.name : `${council.name} (${council.parentName})`
-  const lines: SemanticRow[] = [line(title, "heading"), line(rule(width), "muted")]
-  if (council.kindLabel !== "") lines.push(line(council.kindLabel, "muted"))
+  const rows: SemanticRow[] = [line(title, "heading"), line(rule(width), "muted")]
+  if (council.kindLabel !== "") rows.push(line(council.kindLabel, "muted"))
 
   if (!council.hasResult) {
     // An election that did not take place must show its status, never zero votes.
-    lines.push(blank())
-    lines.push(
+    rows.push(blank())
+    rows.push(
       line(
         council.statusNote === null
           ? "Výsledky tohoto zastupitelstva zatím nejsou k dispozici."
@@ -157,12 +197,12 @@ export function buildCouncilRows(db: Database, kodzastup: string, width: number)
         "warning",
       ),
     )
-    lines.push(blank())
-    lines.push(line(OKRSKY_NOTE, "muted"))
-    return lines
+    rows.push(blank())
+    rows.push(line(OKRSKY_NOTE, "muted"))
+    return { rows, firstRow: rows.length }
   }
 
-  lines.push(
+  rows.push(
     line(
       `Stav: ${statusLabel({
         districtsTotal: council.districtsTotal,
@@ -173,14 +213,14 @@ export function buildCouncilRows(db: Database, kodzastup: string, width: number)
         `Účast: ${formatPercent(council.turnoutPct)}   Mandáty: ${formatInteger(council.seatsTotal)}`,
     ),
   )
-  lines.push(blank())
+  rows.push(blank())
 
   const parties = listCouncilParties(db, kodzastup)
   if (parties.length === 0) {
-    lines.push(line("Žádné volební strany nejsou evidovány."))
-    lines.push(blank())
-    lines.push(line(OKRSKY_NOTE, "muted"))
-    return lines
+    rows.push(line("Žádné volební strany nejsou evidovány."))
+    rows.push(blank())
+    rows.push(line(OKRSKY_NOTE, "muted"))
+    return { rows, firstRow: rows.length }
   }
 
   const columns: Column[] = [
@@ -191,33 +231,38 @@ export function buildCouncilRows(db: Database, kodzastup: string, width: number)
     { header: "Mandáty", width: 10, align: "right" },
   ]
   const [header, underline] = headerRow(columns)
-  lines.push(line(header, "heading"), line(underline, "muted"))
+  rows.push(line(header, "heading"), line(underline, "muted"))
+  const firstRow = rows.length
 
   for (const party of parties) {
-    lines.push({
+    rows.push({
       columns,
       cells: [
-        party.ballotOrder === null ? "–" : String(party.ballotOrder),
-        party.name,
-        withChange(formatInteger(party.votes), party.votesChange),
-        formatPercent(party.votesPct),
-        withChange(formatInteger(party.seatsWon), party.seatsChange),
-      ].map((c) => cell(c)),
+        cell(party.ballotOrder === null ? "–" : String(party.ballotOrder), "muted"),
+        cell(party.name),
+        cell(withChange(formatInteger(party.votes), party.votesChange), roleForChange(party.votesChange)),
+        // The bar rides with the published share and is drawn beside it, never instead
+        // of it (FR-070, FR-071).
+        cell(formatPercent(party.votesPct), {
+          bar: party.votesPct === null ? undefined : party.votesPct / 100,
+        }),
+        cell(withChange(formatInteger(party.seatsWon), party.seatsChange), roleForChange(party.seatsChange)),
+      ],
     })
   }
 
   const boroughs = listBoroughs(db, kodzastup)
   if (boroughs.length > 0) {
-    lines.push(blank())
-    lines.push(line(`Městské části a obvody (${boroughs.length})`))
+    rows.push(blank())
+    rows.push(line(`Městské části a obvody (${boroughs.length})`))
     for (const borough of boroughs) {
-      lines.push(line(`  ${borough.name}   ${formatPercent(borough.turnoutPct)}`))
+      rows.push(line(`  ${borough.name}   ${formatPercent(borough.turnoutPct)}`))
     }
   }
 
-  lines.push(blank())
-  lines.push(line(OKRSKY_NOTE, "muted"))
-  return lines
+  rows.push(blank())
+  rows.push(line(OKRSKY_NOTE, "muted"))
+  return { rows, firstRow }
 }
 
 /**
@@ -234,7 +279,7 @@ export function renderCandidates(
   ballotOrder: number | null,
   width = 100,
 ): string[] {
-  return clampLines(toTextLines(buildCandidatesRows(db, kodzastup, vstrana, ballotOrder, width)), width)
+  return toLines(buildCandidatesRows(db, kodzastup, vstrana, ballotOrder, width), width)
 }
 
 export function buildCandidatesRows(
@@ -243,14 +288,14 @@ export function buildCandidatesRows(
   vstrana: string,
   ballotOrder: number | null,
   width: number,
-): SemanticRow[] {
+): BuiltView {
   const council = readCouncil(db, kodzastup)
   const parties = listCouncilParties(db, kodzastup)
   const party = parties.find(
     (p) => p.vstrana === vstrana && (ballotOrder === null || p.ballotOrder === ballotOrder),
   )
 
-  const lines: SemanticRow[] = [
+  const rows: SemanticRow[] = [
     line(`${party?.name ?? `Volební strana ${vstrana}`} — ${council?.name ?? kodzastup}`, "heading"),
     line(rule(width), "muted"),
   ]
@@ -265,40 +310,45 @@ export function buildCandidatesRows(
   const [header, underline] = headerRow(columns)
 
   if (registered.length > 0) {
-    lines.push(line(`Kandidátní listina (${registered.length})`))
+    rows.push(line(`Kandidátní listina (${registered.length})`))
     // The published result lists only elected members, so a dash here means the figure
     // was never published, not that the candidate received nothing.
-    lines.push(line("Přednostní hlasy se zveřejňují pouze u zvolených; „–“ znamená neuvedeno."))
-    lines.push(line(header, "heading"), line(underline, "muted"))
+    rows.push(line("Přednostní hlasy se zveřejňují pouze u zvolených; „–“ znamená neuvedeno.", "muted"))
+    rows.push(line(header, "heading"), line(underline, "muted"))
     for (const candidate of registered) {
-      lines.push({
+      rows.push({
         columns,
         cells: [
-          String(candidate.ballotNumber),
-          candidate.name,
-          formatInteger(candidate.votes),
-          candidate.elected ? "ano" : "",
-        ].map((c) => cell(c)),
+          cell(String(candidate.ballotNumber), "muted"),
+          cell(candidate.name),
+          cell(formatInteger(candidate.votes)),
+          cell(candidate.elected ? "ano" : ""),
+        ],
       })
     }
-    return lines
+    // The candidate list is the leaf of the drill-down: nothing opens from a row here,
+    // so no row is selectable.
+    return { rows, firstRow: rows.length }
   }
 
   const elected = listElected(db, kodzastup, vstrana, ballotOrder)
   if (elected.length === 0) {
-    lines.push(line("Pro tuto volební stranu nejsou k dispozici žádní kandidáti."))
-    return lines
+    rows.push(line("Pro tuto volební stranu nejsou k dispozici žádní kandidáti."))
+    return { rows, firstRow: rows.length }
   }
 
-  lines.push(line("Zvolení zastupitelé (úplná kandidátní listina není načtena)"))
-  lines.push(line(header, "heading"), line(underline, "muted"))
+  rows.push(line("Zvolení zastupitelé (úplná kandidátní listina není načtena)"))
+  rows.push(line(header, "heading"), line(underline, "muted"))
   for (const person of elected) {
-    lines.push({
+    rows.push({
       columns,
-      cells: [String(person.ballotNumber), person.name, formatInteger(person.votes), "ano"].map((c) =>
-        cell(c),
-      ),
+      cells: [
+        cell(String(person.ballotNumber), "muted"),
+        cell(person.name),
+        cell(formatInteger(person.votes)),
+        cell("ano"),
+      ],
     })
   }
-  return lines
+  return { rows, firstRow: rows.length }
 }

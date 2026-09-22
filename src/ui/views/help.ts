@@ -1,13 +1,14 @@
 /**
- * Help view (task T095, FR-005).
+ * Help view (task T095, FR-005; migrated to semantic rows in T117).
  *
- * Every key the application responds to is listed here. The footer shows the common
- * ones; this is the complete reference, so no function is reachable only by someone who
- * happened to read the source.
+ * Every key the application responds to is listed here. The status bar shows the ones
+ * that apply where the user is standing; this is the complete reference, so no function
+ * is reachable only by someone who happened to read the source.
  */
 
 import { MIN_COLUMNS, MIN_ROWS } from "../components/status.ts"
-import { type Column, clampLines, dataRow, headerRow, rule } from "../format.ts"
+import { type Column, clampLines, headerRow, rule } from "../format.ts"
+import { blank, cell, line, type SemanticRow, toTextLines } from "../row.ts"
 
 interface KeyRow {
   keys: string
@@ -28,13 +29,16 @@ const KEYS: KeyRow[] = [
   { keys: "e", action: "Exportovat zobrazenou tabulku do CSV", where: "tabulky" },
   { keys: "Shift+E", action: "Uložit souhrnnou zprávu do textového souboru", where: "okres, zastupitelstvo" },
   { keys: "r", action: "Vyžádat okamžité obnovení (nejdříve po 60 s)", where: "všude" },
+  { keys: "Ctrl+P", action: "Otevřít paletu příkazů", where: "všude" },
+  { keys: "Ctrl+B", action: "Zobrazit nebo skrýt postranní panel", where: "všude" },
+  { keys: "Ctrl+T", action: "Přepnout motiv (tmavý, světlý, vysoký kontrast)", where: "všude" },
   { keys: "?", action: "Tato nápověda", where: "všude" },
   { keys: "q", action: "Ukončit aplikaci", where: "mimo hledání" },
   { keys: "Ctrl+C", action: "Ukončit aplikaci vždy", where: "všude" },
 ]
 
-export function renderHelp(width = 100): string[] {
-  const lines = ["Nápověda", rule(width), ""]
+export function buildHelpRows(width = 100): SemanticRow[] {
+  const rows: SemanticRow[] = [line("Nápověda", "heading"), line(rule(width), "muted"), blank()]
 
   const columns: Column[] = [
     { header: "Klávesa", width: 12 },
@@ -42,24 +46,32 @@ export function renderHelp(width = 100): string[] {
     { header: "Kde", width: 24 },
   ]
   const [header, underline] = headerRow(columns)
-  lines.push(header, underline)
+  rows.push(line(header, "heading"), line(underline, "muted"))
 
   for (const key of KEYS) {
-    lines.push(dataRow(columns, [key.keys, key.action, key.where]))
+    rows.push({ columns, cells: [cell(key.keys), cell(key.action), cell(key.where, "muted")] })
   }
 
-  lines.push("")
-  lines.push("Poznámky")
-  lines.push(rule(Math.min(width, 8)))
-  lines.push(
-    `Aplikace se dotazuje zdroje nejvýše jednou za 60 sekund; rychlejší dotazování ` +
-      `vrací stejná data a jen zatěžuje server.`,
+  rows.push(blank())
+  rows.push(line("Poznámky", "heading"))
+  rows.push(line(rule(Math.min(width, 8)), "muted"))
+  rows.push(
+    line(
+      `Aplikace se dotazuje zdroje nejvýše jednou za 60 sekund; rychlejší dotazování ` +
+        `vrací stejná data a jen zatěžuje server.`,
+    ),
   )
-  lines.push("Výsledky po jednotlivých okrscích se zveřejňují pouze dávkově a jsou mimo rozsah aplikace.")
-  lines.push("Zobrazené údaje pocházejí přímo ze zdroje; aplikace nic nedopočítává ani neodhaduje.")
-  lines.push(`Minimální velikost okna: ${MIN_COLUMNS} × ${MIN_ROWS}.`)
+  rows.push(
+    line("Výsledky po jednotlivých okrscích se zveřejňují pouze dávkově a jsou mimo rozsah aplikace."),
+  )
+  rows.push(line("Zobrazené údaje pocházejí přímo ze zdroje; aplikace nic nedopočítává ani neodhaduje."))
+  rows.push(line(`Minimální velikost okna: ${MIN_COLUMNS} × ${MIN_ROWS}.`))
 
-  return clampLines(lines, width)
+  return rows
+}
+
+export function renderHelp(width = 100): string[] {
+  return clampLines(toTextLines(buildHelpRows(width)), width)
 }
 
 /** Key names the help screen documents, for a test that the two cannot drift apart. */

@@ -388,9 +388,9 @@ once cannot be debugged, which is why the migration is one view at a time rather
 - [X] T113 [TDD] Persist the theme choice as `app_config.theme`, constrained to the values dark, light or high-contrast, in `src/storage/queries/preferences.ts`, with tests proving it survives a restart (FR-061). No schema change: `app_config` already exists
 - [X] T114 Migrate `src/ui/views/national.ts` to return semantic rows. Run the full suite; it MUST stay green, because the plain-text rendering is unchanged
 - [X] T115 [P] Migrate `src/ui/views/areas.ts` to return semantic rows. Suite green
-- [ ] T116 [P] Migrate `src/ui/views/search.ts` and `src/ui/views/watchlist.ts` to return semantic rows. Suite green
-- [ ] T117 Update `src/ui/screen.ts` and `src/export/tables.ts` to consume semantic rows, taking the plain-text rendering for exports so exported figures cannot drift from displayed ones
-- [ ] T118 **REVIEW** Phase 10 in `src/ui/`: verify the plain-text rendering is genuinely identical to the old output rather than merely similar, that colour appears in exactly one module, and that no view still returns a plain string array
+- [X] T116 [P] Migrate `src/ui/views/search.ts` and `src/ui/views/watchlist.ts` to return semantic rows. Suite green
+- [X] T117 Update `src/ui/screen.ts` and `src/export/tables.ts` to consume semantic rows, taking the plain-text rendering for exports so exported figures cannot drift from displayed ones
+- [X] T118 **REVIEW** Phase 10 in `src/ui/`: verify the plain-text rendering is genuinely identical to the old output rather than merely similar, that colour appears in exactly one module, and that no view still returns a plain string array
 
 **Checkpoint**: views carry meaning rather than pre-formatted text, themes exist and are tested, and
 the application looks exactly as before. Nothing user-visible has changed yet, by design.

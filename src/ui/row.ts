@@ -15,6 +15,7 @@
  * theme, so there is no path by which colour could become load-bearing.
  */
 
+import type { ChangeKind } from "../domain/status.ts"
 import { type Column, dataRow, pad } from "./format.ts"
 
 /** What a cell means. Resolved to a colour by the active theme (FR-059). */
@@ -47,9 +48,20 @@ export interface SemanticRow {
   columns?: Column[]
 }
 
-/** A cell with no styling. The common case. */
-export function cell(text: string, role?: Role): Cell {
-  return role === undefined ? { text } : { text, role }
+/**
+ * A cell, optionally with a role and a bar.
+ *
+ * The second argument takes a bare role for the common case and an object when a bar
+ * rides along too, so the great majority of call sites stay `cell(text)` or
+ * `cell(text, "muted")` rather than every one of them growing an options literal.
+ */
+export function cell(text: string, style?: Role | { role?: Role; bar?: number }): Cell {
+  if (style === undefined) return { text }
+  if (typeof style === "string") return { text, role: style }
+  const result: Cell = { text }
+  if (style.role !== undefined) result.role = style.role
+  if (style.bar !== undefined) result.bar = style.bar
+  return result
 }
 
 /** A row of plain cells. */
@@ -132,4 +144,17 @@ export function toChunks(r: SemanticRow, columns?: Column[], gap = 1): StyledChu
 /** True when any cell in the view carries a bar, so callers can reserve width. */
 export function hasBars(rows: SemanticRow[]): boolean {
   return rows.some((r) => r.cells.some((c) => c.bar !== undefined))
+}
+
+/**
+ * A change becomes a role, so a renderer can colour it without knowing what it means.
+ *
+ * Lives here rather than in one view because the national table, the watchlist and the
+ * district list all mark the same three states, and one mapping is what keeps them
+ * saying the same thing (Principle I).
+ */
+export function roleForChange(change: ChangeKind): Role | undefined {
+  if (change === "increased") return "increase"
+  if (change === "decreased") return "decrease"
+  return undefined
 }

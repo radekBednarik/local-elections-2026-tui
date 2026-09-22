@@ -1,5 +1,5 @@
 /**
- * Watchlist view (task T084).
+ * Watchlist view (task T084, migrated to semantic rows in T116).
  *
  * Several councils side by side, each refreshing in place. The point of the screen is
  * to watch a handful of places at once without navigating between them, so it shows the
@@ -12,7 +12,6 @@ import { listWatchlist } from "../../storage/queries/watchlist.ts"
 import {
   type Column,
   clampLines,
-  dataRow,
   formatInteger,
   formatPercent,
   formatProgress,
@@ -20,23 +19,28 @@ import {
   rule,
   withChange,
 } from "../format.ts"
+import { blank, cell, line, roleForChange, type SemanticRow, toTextLines } from "../row.ts"
 
-export interface WatchlistView {
-  lines: string[]
+export interface WatchlistRows {
+  rows: SemanticRow[]
   /** Council codes in display order, so a row can be opened. */
   codes: string[]
   firstRow: number
 }
 
-export function renderWatchlist(db: Database, width = 100): WatchlistView {
+export interface WatchlistView extends WatchlistRows {
+  lines: string[]
+}
+
+export function buildWatchlistRows(db: Database, width = 100): WatchlistRows {
   const watched = listWatchlist(db)
-  const lines = ["Sledovaná zastupitelstva", rule(width)]
+  const rows: SemanticRow[] = [line("Sledovaná zastupitelstva", "heading"), line(rule(width), "muted")]
 
   if (watched.length === 0) {
-    lines.push("")
-    lines.push("Zatím nesledujete žádné zastupitelstvo.")
-    lines.push("Otevřete zastupitelstvo a klávesou „w“ je přidejte do sledovaných.")
-    return { lines: clampLines(lines, width), codes: [], firstRow: lines.length }
+    rows.push(blank())
+    rows.push(line("Zatím nesledujete žádné zastupitelstvo."))
+    rows.push(line("Otevřete zastupitelstvo a klávesou „w“ je přidejte do sledovaných.", "muted"))
+    return { rows, codes: [], firstRow: rows.length }
   }
 
   const columns: Column[] = [
@@ -47,8 +51,8 @@ export function renderWatchlist(db: Database, width = 100): WatchlistView {
     { header: "Stav", width: 14 },
   ]
   const [header, underline] = headerRow(columns)
-  const firstRow = lines.length + 2
-  lines.push(header, underline)
+  const firstRow = rows.length + 2
+  rows.push(line(header, "heading"), line(underline, "muted"))
 
   for (const entry of watched) {
     const council = readCouncil(db, entry.kodzastup)
@@ -57,20 +61,35 @@ export function renderWatchlist(db: Database, width = 100): WatchlistView {
     if (council === null || !council.hasResult) {
       // A watched council with no data yet says so, rather than vanishing from a list
       // the user deliberately curated.
-      lines.push(dataRow(columns, [label, "–", "–", "–", "čeká se"]))
+      rows.push({
+        columns,
+        cells: [cell(label), cell("–"), cell("–"), cell("–"), cell("čeká se", "muted")],
+      })
       continue
     }
 
-    lines.push(
-      dataRow(columns, [
-        label,
-        withChange(formatProgress(council.districtsCounted, council.districtsTotal), council.countedChange),
-        withChange(formatPercent(council.turnoutPct), council.turnoutChange),
-        formatInteger(council.seatsTotal),
-        council.isFinal ? "konečné" : "průběžné",
-      ]),
-    )
+    rows.push({
+      columns,
+      cells: [
+        cell(label),
+        cell(
+          withChange(formatProgress(council.districtsCounted, council.districtsTotal), council.countedChange),
+          roleForChange(council.countedChange),
+        ),
+        cell(withChange(formatPercent(council.turnoutPct), council.turnoutChange), {
+          bar: council.turnoutPct === null ? undefined : council.turnoutPct / 100,
+          role: roleForChange(council.turnoutChange),
+        }),
+        cell(formatInteger(council.seatsTotal)),
+        cell(council.isFinal ? "konečné" : "průběžné"),
+      ],
+    })
   }
 
-  return { lines: clampLines(lines, width), codes: watched.map((w) => w.kodzastup), firstRow }
+  return { rows, codes: watched.map((w) => w.kodzastup), firstRow }
+}
+
+export function renderWatchlist(db: Database, width = 100): WatchlistView {
+  const built = buildWatchlistRows(db, width)
+  return { ...built, lines: clampLines(toTextLines(built.rows), width) }
 }

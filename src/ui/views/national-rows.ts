@@ -10,7 +10,7 @@
  */
 
 import type { Database } from "bun:sqlite"
-import { ageSeconds, type ChangeKind, formatAge, statusLabel } from "../../domain/status.ts"
+import { ageSeconds, formatAge, statusLabel } from "../../domain/status.ts"
 import { readNationalParties, readNationalTotals } from "../../storage/queries/national.ts"
 import {
   type Column,
@@ -21,7 +21,7 @@ import {
   rule,
   withChange,
 } from "../format.ts"
-import { blank, cell, line, type Role, type SemanticRow } from "../row.ts"
+import { blank, cell, line, roleForChange, type SemanticRow } from "../row.ts"
 
 const TYPE_LABELS: Record<string, string> = {
   OBEC: "Zastupitelstva obcí",
@@ -34,12 +34,8 @@ export interface NationalRowsOptions {
   now?: Date
 }
 
-/** A change becomes a role, so the renderer can colour it without knowing what it means. */
-export function roleForChange(change: ChangeKind): Role | undefined {
-  if (change === "increased") return "increase"
-  if (change === "decreased") return "decrease"
-  return undefined
-}
+// `roleForChange` moved to row.ts in T116, once the watchlist needed the same mapping.
+export { roleForChange }
 
 /** Builds the national overview as semantic rows. */
 export function buildNationalRows(db: Database, options: NationalRowsOptions = {}): SemanticRow[] {
