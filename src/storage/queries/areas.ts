@@ -21,6 +21,8 @@ export interface DistrictRow {
 export interface CouncilRow {
   kodzastup: string
   name: string
+  /** The publisher's timestamp for this council's current snapshot, if any. */
+  publishedAt: string | null
   /** OBEC = municipal assembly, MCMO = borough assembly. */
   oznacTypu: string
   parentKodzastup: string | null
@@ -89,7 +91,8 @@ const COUNCIL_SELECT = `
   SELECT c.kodzastup, c.name, c.oznac_typu, c.parent_kodzastup, c.mandaty, c.stav_obce,
          p.name AS parent_name,
          COALESCE(t.name, c.druhzastup) AS kind_label,
-         s.id AS snapshot_id, s.districts_total, s.districts_counted, s.turnout_pct, s.is_final,
+         s.id AS snapshot_id, s.published_at, s.districts_total, s.districts_counted,
+         s.turnout_pct, s.is_final,
          prev.turnout_pct AS prev_turnout, prev.districts_counted AS prev_counted
     FROM council c
     LEFT JOIN council p ON p.kodzastup = c.parent_kodzastup
@@ -109,6 +112,8 @@ function toCouncilRow(row: Record<string, unknown>): CouncilRow {
   return {
     kodzastup: String(row.kodzastup),
     name: String(row.name),
+    publishedAt:
+      row.published_at === null || row.published_at === undefined ? null : String(row.published_at),
     oznacTypu: String(row.oznac_typu),
     parentKodzastup: row.parent_kodzastup === null ? null : String(row.parent_kodzastup),
     parentName: row.parent_name === null || row.parent_name === undefined ? null : String(row.parent_name),

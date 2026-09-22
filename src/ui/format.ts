@@ -53,6 +53,26 @@ export function withChange(text: string, change: ChangeKind): string {
   return `${changeMarker(change)}${text}`
 }
 
+/**
+ * Czech plural agreement.
+ *
+ * Czech has three forms, not two: 1 takes the singular, 2-4 take a distinct plural, and
+ * 5 and above take the genitive plural. Writing "1 mandátů" or "4 mandátů" is wrong in
+ * a way every Czech reader notices immediately, so the rule is applied rather than
+ * approximated with an English-style singular/plural pair.
+ */
+export function plural(count: number, one: string, few: string, many: string): string {
+  const n = Math.abs(Math.trunc(count))
+  if (n === 1) return one
+  if (n >= 2 && n <= 4) return few
+  return many
+}
+
+/** `9 mandátů`, `4 mandáty`, `1 mandát`. */
+export function seatsLabel(count: number): string {
+  return `${formatInteger(count)} ${plural(count, "mandát", "mandáty", "mandátů")}`
+}
+
 /** A horizontal rule of `width` characters. */
 export function rule(width: number, char = "─"): string {
   return char.repeat(Math.max(0, width))

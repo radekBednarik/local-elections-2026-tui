@@ -30,6 +30,8 @@ export interface CliOptions {
   baseUrl: string
   intervalSeconds: number
   dataDir: string | null
+  /** Where exports are written. Defaults to the working directory. */
+  exportDir: string
   refreshReference: boolean
   logLevel: LogLevel
   showHelp: boolean
@@ -123,6 +125,7 @@ export function parseCliArgs(argv: string[]): ParseResult {
       baseUrl,
       intervalSeconds,
       dataDir: values["data-dir"] ?? null,
+      exportDir: values["export-dir"] ?? process.cwd(),
       refreshReference: values["refresh-reference"] === true,
       logLevel,
       showHelp: values.help === true,
@@ -137,6 +140,7 @@ const OPTION_SPEC = {
   "base-url": { type: "string" },
   interval: { type: "string" },
   "data-dir": { type: "string" },
+  "export-dir": { type: "string" },
   "refresh-reference": { type: "boolean" },
   "log-level": { type: "string" },
   help: { type: "boolean" },
@@ -150,6 +154,7 @@ export const USAGE = `Použití: volby-kv2026 [přepínače]
   --base-url <url>       Jiné umístění dat (http://, https:// nebo file://)
   --interval <sekundy>   Interval stahování, minimum ${MIN_INTERVAL_SECONDS}
   --data-dir <cesta>     Jiný adresář pro data aplikace
+  --export-dir <cesta>   Adresář pro exporty, výchozí aktuální adresář
   --refresh-reference    Znovu stáhnout registry a číselníky
   --log-level <úroveň>   error | warn | info | debug, výchozí info
   --version              Vypsat verzi a skončit

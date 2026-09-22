@@ -7,6 +7,8 @@ import {
   formatProgress,
   headerRow,
   pad,
+  plural,
+  seatsLabel,
   withChange,
 } from "../../src/ui/format.ts"
 
@@ -105,5 +107,31 @@ describe("table rows", () => {
 
   test("a missing cell renders as blank rather than throwing", () => {
     expect(() => dataRow(columns, ["jen jeden"])).not.toThrow()
+  })
+})
+
+describe("Czech plural agreement", () => {
+  test("uses all three forms, not an English singular/plural pair", () => {
+    // 1 takes the singular, 2-4 a distinct plural, 5+ the genitive plural. "1 mandátů"
+    // or "4 mandátů" is wrong in a way every Czech reader notices at once.
+    expect(seatsLabel(1)).toBe("1 mandát")
+    expect(seatsLabel(2)).toBe("2 mandáty")
+    expect(seatsLabel(4)).toBe("4 mandáty")
+    expect(seatsLabel(5)).toBe("5 mandátů")
+    expect(seatsLabel(9)).toBe("9 mandátů")
+  })
+
+  test("zero takes the genitive plural", () => {
+    expect(seatsLabel(0)).toBe("0 mandátů")
+  })
+
+  test("larger numbers keep the genitive plural and stay grouped", () => {
+    expect(seatsLabel(1234)).toBe("1\u00a0234 mandátů")
+  })
+
+  test("the rule is reusable for other nouns", () => {
+    expect(plural(1, "hlas", "hlasy", "hlasů")).toBe("hlas")
+    expect(plural(3, "hlas", "hlasy", "hlasů")).toBe("hlasy")
+    expect(plural(11, "hlas", "hlasy", "hlasů")).toBe("hlasů")
   })
 })

@@ -13,8 +13,12 @@
  */
 
 import type { Database } from "bun:sqlite"
+import { join } from "node:path"
 import { BoxRenderable, type CliRenderer, createCliRenderer, TextRenderable } from "@opentui/core"
 import type { CliOptions } from "../config/args.ts"
+import { reportForScreen } from "../export/report.ts"
+import { csvForScreen } from "../export/tables.ts"
+import { suggestFilename, writeExport } from "../export/writer.ts"
 import type { Logger } from "../logging/logger.ts"
 import { fetchDocument } from "../sources/client.ts"
 import { ingestCouncil, ingestDistrict, ingestNational } from "../sources/ingest.ts"
@@ -41,6 +45,7 @@ const HINTS: KeyHint[] = [
   { key: "t", label: "typ" },
   { key: "/", label: "hledat" },
   { key: "w", label: "sledovat" },
+  { key: "e", label: "export" },
   { key: "r", label: "obnovit" },
   { key: "q", label: "konec" },
 ]
@@ -255,6 +260,11 @@ export class App {
         }
         break
       }
+      case "e": {
+        // "e" exports the displayed table, "E" produces the summary report.
+        await this.exportCurrent(key.shift === true || key.sequence === "E")
+        break
+      }
       case "t": {
         const types = availableCouncilTypes(this.deps.db)
         if (types.length > 1) {
@@ -284,6 +294,38 @@ export class App {
     if (!result.handled) return false
     this.query = result.query
     return true
+  }
+
+  /**
+   * Exports the current screen (FR-049, FR-051).
+   *
+   * Runs off the key handler as an async task, so a large district never blocks the
+   * interface while it is written (FR-052). Every failure becomes a notice rather than
+   * an exception.
+   */
+  private async exportCurrent(asReport: boolean): Promise<void> {
+    const screen = this.nav.screen
+    const built = asReport
+      ? reportForScreen(this.deps.db, screen)
+      : csvForScreen(this.deps.db, screen, { councilType: this.councilType })
+
+    if (built === null) {
+      this.notice = asReport
+        ? "Tuto obrazovku nelze exportovat jako souhrn."
+        : "Na této obrazovce není tabulka k exportu."
+      this.draw()
+      return
+    }
+
+    const name = suggestFilename(built.areaLabel, asReport ? "txt" : "csv")
+    const path = join(this.deps.options.exportDir, name)
+    const result = await writeExport(path, built.content)
+
+    this.notice = result.ok
+      ? `Uloženo: ${result.path} (${result.bytes} B)`
+      : `Export selhal: ${result.reason}`
+    if (!result.ok) this.deps.log.warn("Export selhal", { reason: result.reason, path })
+    this.draw()
   }
 
   private currentContent() {

@@ -237,13 +237,13 @@ confirm no raw numeric codes appear where a name exists.
 **Independent Test**: Export a district table, open it in Excel under a Czech locale, and confirm columns
 and diacritics are intact with the provenance header present.
 
-- [ ] T088 [P] [US6] [TDD] Implement the CSV writer in `src/export/csv.ts` per [contracts/exports.md](./contracts/exports.md): **UTF-8 with BOM**, semicolon delimiter, comma decimal separator, CRLF endings, RFC 4180 quoting. Test explicitly that a party name containing `;` and `"` round-trips – 2000-character coalition names with punctuation are normal here, not an edge case
-- [ ] T089 [US6] [TDD] Implement the provenance header in `src/export/csv.ts`: area name and code, publisher timestamp, provisional or final status, export time. **No exported figure may be untraceable** (FR-050, SC-017)
-- [ ] T090 [P] [US6] [TDD] Implement the summary report writer in `src/export/report.ts`: plain UTF-8 text wrapped at 80 columns, containing area identification, timestamp and status, turnout and progress, seats by party, and elected candidates. A district report omits the candidate section (FR-051)
-- [ ] T091 [US6] [TDD] Implement export actions `e` and `E` in `src/ui/views/*`, writing to a user-chosen path **via a temporary file then rename**, so an interrupted export cannot leave a half-written file, and confirming before overwriting an existing file
-- [ ] T092 [US6] [TDD] Implement non-blocking export with error reporting in `src/export/writer.ts`: an unwritable path, permission failure, or lack of space is reported with its reason and the application keeps running (FR-052, FR-046)
-- [ ] T093 [US6] Run quickstart scenario **V10**, opening the output in real spreadsheet software under a Czech locale – this is the scenario most likely to fail, and it cannot be proven by unit tests alone
-- [ ] T094 **REVIEW** User Story 6: verify the BOM and delimiter are actually present in written bytes, not just intended, and that export cannot block the render loop
+- [X] T088 [P] [US6] [TDD] Implement the CSV writer in `src/export/csv.ts` per [contracts/exports.md](./contracts/exports.md): **UTF-8 with BOM**, semicolon delimiter, comma decimal separator, CRLF endings, RFC 4180 quoting. Test explicitly that a party name containing `;` and `"` round-trips – 2000-character coalition names with punctuation are normal here, not an edge case
+- [X] T089 [US6] [TDD] Implement the provenance header in `src/export/csv.ts`: area name and code, publisher timestamp, provisional or final status, export time. **No exported figure may be untraceable** (FR-050, SC-017)
+- [X] T090 [P] [US6] [TDD] Implement the summary report writer in `src/export/report.ts`: plain UTF-8 text wrapped at 80 columns, containing area identification, timestamp and status, turnout and progress, seats by party, and elected candidates. A district report omits the candidate section (FR-051)
+- [X] T091 [US6] [TDD] Implement export actions `e` and `E` in `src/ui/views/*`, writing to a user-chosen path **via a temporary file then rename**, so an interrupted export cannot leave a half-written file, and confirming before overwriting an existing file
+- [X] T092 [US6] [TDD] Implement non-blocking export with error reporting in `src/export/writer.ts`: an unwritable path, permission failure, or lack of space is reported with its reason and the application keeps running (FR-052, FR-046)
+- [X] T093 [US6] Run quickstart scenario **V10**, opening the output in real spreadsheet software under a Czech locale – this is the scenario most likely to fail, and it cannot be proven by unit tests alone
+- [X] T094 **REVIEW** User Story 6: verify the BOM and delimiter are actually present in written bytes, not just intended, and that export cannot block the render loop
 
 **Checkpoint**: All six user stories are independently functional.
 
