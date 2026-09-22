@@ -18,6 +18,18 @@
 - Q: Should the application's own labels, menus, status and error text be Czech or English? → A: Czech throughout, matching the source data and the intended audience. No runtime language switching and no string catalogue.
 - Q: Should the user be able to save what they are viewing to a file, or is the application view-only? → A: Both a tabular export of the currently displayed table and a formatted summary report for a chosen area, each written to a user-chosen location.
 
+### Session 2026-09-22 (UX amendment)
+
+Raised after the first build was run against real 2022 data: the application works, but the
+interface is basic. These clarifications turn "modern, user friendly, always know what to do" into
+testable requirements.
+
+- Q: Framed regions, one continuous text block, or split panes? → A: Framed regions stacked vertically (title bar with breadcrumb, bordered content area, status bar), plus a collapsible side panel for the watchlist.
+- Q: Should the interface use colour, and how far? → A: A small palette with fixed roles (headings, selection, warning, increase, decrease, muted), plus selectable light, dark and high-contrast themes. No per-party colours.
+- Q: How does a user discover what they can do on the current screen? → A: A context-sensitive footer showing only what applies here, plus a searchable command palette listing every action with its keyboard shortcut.
+- Q: Should vote shares be drawn as bars alongside the numbers? → A: Yes, a proportional bar beside each party's vote share, with the exact published figure kept next to it. No count-progress bars and no sparklines.
+- Q: Should the interface respond to the mouse? → A: Click to select, double-click or Enter to open, wheel to scroll. Shift+drag still performs the terminal's own text selection. No clickable chrome, resizing or context menus.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Watch the national count come in (Priority: P1)
@@ -359,6 +371,77 @@ council and confirm it is readable without further editing.
 - **FR-053**: Exported files and reports MUST preserve Czech diacritics intact when opened in common
   spreadsheet and text software on both supported platforms.
 
+#### Layout and visual design
+
+- **FR-054**: The interface MUST be divided into visible framed regions: a title bar, a bordered
+  content area, and a status bar. The user MUST be able to tell the regions apart without reading
+  their contents.
+- **FR-055**: The title bar MUST show the user's position as a breadcrumb of the path taken, for
+  example "ČR › Okres Brno-město › Brno-Bohunice", so the question "where am I" is answered without
+  the user having to remember.
+- **FR-056**: A side panel showing the watchlist MUST be available, and the user MUST be able to show
+  and hide it with a single key. Its state MUST persist between runs.
+- **FR-057**: The side panel MUST hide itself automatically when the terminal is too narrow to show it
+  and the content area side by side, and MUST return when there is room again. The content area is
+  never squeezed below a readable width to keep the panel open.
+- **FR-058**: Every region MUST keep its position as data refreshes. A refresh may change the figures
+  inside a region but MUST NOT move the regions themselves.
+- **FR-059**: The interface MUST use a small palette in which each colour carries a fixed role:
+  heading, selected row, warning, increase, decrease, and muted secondary text. A colour MUST mean the
+  same thing on every screen.
+- **FR-060**: The application MUST NOT colour anything by electoral party. With thousands of local
+  candidate lists there is no authoritative party colour, and assigning one would imply a political
+  affiliation the source never published.
+- **FR-061**: Users MUST be able to choose between a light, a dark and a high-contrast theme, and the
+  choice MUST persist between runs.
+- **FR-062**: The high-contrast theme MUST remain legible for a user who cannot distinguish the
+  palette's hues, relying on brightness difference rather than hue difference.
+- **FR-063**: Colour MUST remain decoration on top of meaning that is already carried by text, symbol
+  or position, so the interface stays complete on a monochrome terminal and under `NO_COLOR`
+  (restates and constrains FR-040).
+
+#### Discoverability
+
+- **FR-064**: The status bar MUST show only the actions available on the current screen, and MUST
+  change as the user moves between screens. An action that would do nothing here MUST NOT be offered.
+- **FR-065**: The application MUST provide a command palette, opened by a single key, listing every
+  action the application supports.
+- **FR-066**: Each palette entry MUST show its keyboard shortcut beside it, so that a user who
+  reaches an action through the palette learns the shortcut for next time.
+- **FR-067**: The palette MUST be searchable by typing, matching insensitively to case and to Czech
+  diacritics, consistent with the search behaviour in FR-038.
+- **FR-068**: Choosing a palette entry MUST perform that action directly. The palette is a way to do
+  things, not only a way to read about them.
+- **FR-069**: The palette MUST indicate when an action is unavailable on the current screen and why,
+  rather than hiding it, so the user learns the application's shape rather than guessing at it.
+
+#### Comparing results at a glance
+
+- **FR-070**: A party's vote share MUST be shown as a proportional bar beside its exact published
+  percentage. The bar is drawn from the published figure and is never shown without it.
+- **FR-071**: The bar is a visual aid only. The published figure remains the reported result, and the
+  application MUST NOT present a bar length as a value, nor derive any figure from a bar (FR-029).
+- **FR-072**: Bars MUST be drawn with characters that survive a monochrome terminal, so the comparison
+  they support does not depend on colour (FR-040).
+- **FR-073**: The application MUST NOT draw trend lines or any chart of how a figure moved over time.
+  It keeps no history to draw one from (FR-036a), and inventing one would misreport.
+- **FR-074**: Bars MUST be omitted rather than truncated when the terminal is too narrow to draw them
+  beside the figures, so a narrow terminal loses the aid and never the data.
+
+#### Mouse
+
+- **FR-075**: Clicking a row MUST select it, and double-clicking MUST open it, matching what Enter
+  does for the selected row.
+- **FR-076**: The scroll wheel MUST scroll the content area.
+- **FR-077**: Holding Shift while dragging MUST leave the terminal's own text selection working, so a
+  user can still copy a figure out of the screen. Taking that away would be a real loss in a tool
+  people will want to quote numbers from.
+- **FR-078**: The mouse MUST remain entirely optional. Every action reachable by mouse MUST also be
+  reachable by keyboard, and the application MUST stay fully usable in a terminal with no mouse
+  support at all (FR-005).
+- **FR-079**: The application MUST NOT require the mouse for chrome: the status bar, breadcrumb and
+  side panel are not clickable targets, and there are no context menus or draggable dividers.
+
 #### Resilience and local state
 
 - **FR-042**: The application MUST cache retrieved data locally so that a restart does not require
@@ -449,6 +532,28 @@ council and confirm it is readable without further editing.
 - **SC-017**: Every exported file and summary report states the area covered, the publication timestamp,
   and whether the result was provisional or final, so no exported figure is untraceable.
 
+These replace the unquantified words in the amendment request – "modern", "user friendly", "fast",
+"always know what to do" – with outcomes that can be checked.
+
+- **SC-018**: On every screen, the current location and at least one available action are visible
+  without the user pressing anything.
+- **SC-019**: A user who has never seen the application can name the key for any action they can see
+  offered, because the key is shown beside it.
+- **SC-020**: Every action the application supports can be found and performed through the command
+  palette, verified by checking the palette against the full key map.
+- **SC-021**: A user can reach any action in at most 3 keystrokes: open the palette, type enough to
+  narrow it, confirm.
+- **SC-022**: A first-time user can open a named municipality's result without consulting
+  documentation, using only what the screen offers.
+- **SC-023**: The interface remains complete and usable with colour disabled, at the minimum terminal
+  size, and with no mouse, all at once.
+- **SC-024**: The high-contrast theme remains legible when hues cannot be distinguished, so the
+  application does not depend on colour vision.
+- **SC-025**: Screen regions do not move as data refreshes: a user reading a row is never
+  repositioned by an update arriving.
+- **SC-026**: Every visible screen change completes within 100 milliseconds of the keystroke that
+  caused it, so the interface never feels slower than the user types (extends SC-010).
+
 ## Assumptions
 
 - **Scope of sources**: "All available data sources except batch" is read as the three ongoing result
@@ -476,6 +581,16 @@ council and confirm it is readable without further editing.
   cache locally in full.
 - **Distribution**: Executables are produced for Windows 11 on x86-64 and for Linux on x86-64, which covers
   the stated platform requirement; other architectures are not committed to.
+- **UX amendment is additive**: The layout, colour, palette, bar and mouse requirements (FR-054 to
+  FR-079) change how the existing results are presented. They add no new data source, no new figure,
+  and no new level of detail. Everything already decided about what the application shows, and what it
+  refuses to show, still holds.
+- **Tension with the simplicity principle, accepted deliberately**: the constitution's KISS principle
+  argues against a framed layout, theming, a command palette and mouse handling where plain text would
+  do. They are adopted because the user judged the plain-text interface inadequate in practice after
+  running it against real data. That is a concrete use case, not speculation, which is the test
+  Principle I actually sets. The scope is bounded by what was rejected: no per-party colours, no
+  sparklines, no clickable chrome, no context menus, no resizable panes.
 - **Test data before election day**: The live result files for 9 October 2026 do not exist until the count
   begins, so all development and testing runs against fixtures. Fixtures are derived from the published
   2022 municipal election data, which contains the same three non-batch result sets with genuine Czech

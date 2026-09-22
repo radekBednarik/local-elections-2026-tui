@@ -67,3 +67,36 @@ All five questions were asked and answered; no open decisions remain. Resulting 
    SC-016, SC-017.
 
 The "Open Questions" section has been removed from the spec, since it is now empty.
+
+### Clarification session 2026-09-22 (UX amendment)
+
+Raised after the first build was run against real 2022 data. Five questions asked and answered;
+no open decisions remain. The request used four unquantified words - "modern", "user friendly",
+"fast", "always know what to do" - which is exactly the ambiguity this checklist exists to catch,
+so each was converted into requirements and measurable criteria rather than left as intent.
+
+1. **Layout** - framed regions (title bar with breadcrumb, content area, status bar) plus a
+   collapsible watchlist side panel. FR-054 to FR-058.
+2. **Colour** - a small palette with fixed roles, plus light, dark and high-contrast themes. No
+   per-party colours, because no authoritative party colour exists and inventing one would imply a
+   political affiliation the source never published. FR-059 to FR-063.
+3. **Discoverability** - context-sensitive status bar plus a searchable command palette that shows
+   each action's shortcut beside it. FR-064 to FR-069.
+4. **Comparison** - a proportional bar beside each party's published vote share. No sparklines, since
+   no history is kept to draw one from. FR-070 to FR-074.
+5. **Mouse** - click to select, double-click to open, wheel to scroll, Shift+drag preserved for the
+   terminal's own text selection. FR-075 to FR-079.
+
+Added SC-018 to SC-026 so the amendment can be verified rather than judged by eye.
+
+**Re-validated: 16/16 items still passing.** The new requirements are testable, technology-agnostic
+and free of implementation detail; the spec remains readable by a non-technical stakeholder.
+
+Note on structure: this session's heading carries a "(UX amendment)" suffix because it falls on the
+same date as the first session and would otherwise collide with it.
+
+### Consequence for downstream artefacts
+
+This amendment arrived after implementation was complete. It does not invalidate any delivered
+behaviour - no data source, figure or level of detail changes - but plan.md and tasks.md do not
+cover FR-054 to FR-079, so both need a further pass before the work can be built.
