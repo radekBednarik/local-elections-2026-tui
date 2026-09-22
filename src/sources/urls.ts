@@ -29,9 +29,24 @@ export function nationalUrl(loc: SourceLocation): string {
   return `${odataRoot(loc)}/vysledky.xml`
 }
 
+/**
+ * What a district NUTS code looks like: CZ, three digits, one alphanumeric.
+ *
+ * THE ONE DEFINITION. The reference loader used to carry its own - "six characters long"
+ * - and the two disagreed about exactly one code: `CZZZZZ`, the Eurostat extra-regio
+ * entry, which the real 2026 codelist ships. The loader recorded it as a district, the
+ * application subscribed to it, and building its URL threw inside the refresh loop.
+ */
+const DISTRICT_NUTS = /^CZ\d{3}[0-9A-Z]$/
+
+/** True when this NUTS code names a district that has a per-district result file. */
+export function isDistrictNuts(nuts: string): boolean {
+  return DISTRICT_NUTS.test(nuts)
+}
+
 /** One district and all its councils (FR-008). `nuts` is a six-character code. */
 export function districtUrl(loc: SourceLocation, nuts: string): string {
-  if (!/^CZ\d{3}[0-9A-Z]$/.test(nuts)) {
+  if (!isDistrictNuts(nuts)) {
     throw new TypeError(`Neplatný kód okresu NUTS: ${JSON.stringify(nuts)}`)
   }
   return `${odataRoot(loc)}/okresy/vysledky_obce_okres_${nuts}.xml`

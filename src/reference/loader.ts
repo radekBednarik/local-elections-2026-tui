@@ -26,6 +26,7 @@ import {
   kvRosSchema,
   kvtypzasSchema,
 } from "../parsing/schemas/reference.ts"
+import { isDistrictNuts } from "../sources/urls.ts"
 
 /** Marker recorded once the load has succeeded. */
 const LOADED_KEY = "reference_loaded_at"
@@ -161,10 +162,13 @@ function loadCodelists(
       for (const row of rows as { NUMNUTS: string; NUTS: string; NAZEVNUTS: string }[]) {
         region.run({ n: row.NUMNUTS, nuts: row.NUTS, name: row.NAZEVNUTS, folded: fold(row.NAZEVNUTS) })
         n++
-        // A six-character NUTS code is a district, and the list of those is exactly the
-        // set of per-district result files to poll - 78 of them, not the 77 the plan
-        // assumed. Shorter codes are the country, its areas and its regions.
-        if (row.NUTS.length === 6) {
+        // A district is a code the publisher has a per-district result file for, which
+        // is what `isDistrictNuts` defines and the URL builder enforces. Testing the
+        // LENGTH instead was wrong by exactly one entry: CZZZZZ, the Eurostat
+        // extra-regio code, which the real codelist ships. It is six characters long and
+        // has no result file, so polling it threw. Every other code here - the country,
+        // its areas and its regions - is shorter.
+        if (isDistrictNuts(row.NUTS)) {
           district.run({ nuts: row.NUTS, n: row.NUMNUTS, name: row.NAZEVNUTS, folded: fold(row.NAZEVNUTS) })
           districts++
         }

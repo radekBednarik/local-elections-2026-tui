@@ -56,11 +56,11 @@ function seedBrno(): void {
 }
 
 describe("district list", () => {
-  test("lists all 78 districts once the code lists are loaded", () => {
+  test("lists all 77 districts once the code lists are loaded", () => {
     loadReference(db, archives)
     const lines = renderDistrictList(db)
     // Two header lines, a column header and an underline, then one row per district.
-    expect(lines.length).toBeGreaterThanOrEqual(78 + 4)
+    expect(lines.length).toBeGreaterThanOrEqual(77 + 4)
   })
 
   test("says so plainly when nothing is loaded yet", async () => {

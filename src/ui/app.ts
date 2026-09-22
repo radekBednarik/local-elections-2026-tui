@@ -105,7 +105,16 @@ export class App {
   }
 
   async start(): Promise<void> {
-    const renderer = await createCliRenderer({ exitOnCtrlC: false })
+    const renderer = await createCliRenderer({
+      exitOnCtrlC: false,
+      // OpenTUI opens and FOCUSES a console overlay on an unhandled error by default,
+      // and that overlay attaches stdin - so an error the user cannot even see the cause
+      // of leaves them unable to close it or to quit. Everything this application has to
+      // say already goes to the log file (src/logging/logger.ts), so the overlay can only
+      // cost the user their terminal.
+      consoleMode: "disabled",
+      openConsoleOnError: false,
+    })
     this.renderer = renderer
 
     const frame = new Frame(renderer)
@@ -137,6 +146,16 @@ export class App {
     frame.scroll.onMouseScroll = (event) => {
       this.onWheel(event)
     }
+
+    // Nothing should reach here now that the refresh loop guards itself, but an
+    // unhandled rejection must leave a trace in the log rather than vanishing, since the
+    // console overlay that used to show it is deliberately gone.
+    process.on("unhandledRejection", (reason) => {
+      this.deps.log.error("Neošetřené odmítnutí příslibu", reason)
+    })
+    process.on("uncaughtException", (error) => {
+      this.deps.log.error("Neošetřená výjimka", error)
+    })
 
     const shutdown = () => {
       this.stop()
@@ -599,10 +618,30 @@ export class App {
     for (const sub of scheduler.due(new Date(), 3)) {
       if (this.stopped) return
 
-      const outcome = await fetchDocument(urlForKey(this.location, sub.sourceKey), {
-        validators: { etag: sub.etag, lastModified: sub.lastModified },
-        signal: this.abort.signal,
-      })
+      // One source cannot take the loop down with it. A throw here used to escape into
+      // an unhandled rejection - the loop is driven by `void this.tick()` - and an
+      // unhandled rejection opened OpenTUI's console overlay over the interface, which
+      // then held the keyboard. Every failure becomes a recorded failure on that one
+      // subscription (FR-046).
+      let outcome: Awaited<ReturnType<typeof fetchDocument>>
+      try {
+        outcome = await fetchDocument(urlForKey(this.location, sub.sourceKey), {
+          validators: { etag: sub.etag, lastModified: sub.lastModified },
+          signal: this.abort.signal,
+        })
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error)
+        scheduler.recordFailure(sub.sourceKey, reason)
+        log.warn("Zdroj nelze načíst", { source: sub.sourceKey, reason })
+        // A source whose address cannot even be built will never succeed, so it is
+        // dropped rather than retried until the end of the night.
+        if (error instanceof TypeError) {
+          scheduler.unsubscribe(sub.sourceKey)
+          log.warn("Zdroj odhlášen, nelze sestavit adresu", { source: sub.sourceKey })
+        }
+        this.draw()
+        continue
+      }
 
       if (outcome.kind === "ok") {
         const result = ingestFor(db, sub.sourceKey, outcome.body)

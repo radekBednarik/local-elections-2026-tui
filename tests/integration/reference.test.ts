@@ -61,12 +61,16 @@ describe("loading", () => {
     }
   })
 
-  test("records exactly 78 districts, the number of per-district result files", () => {
+  test("records exactly 77 districts, the number of per-district result files", () => {
+    // It said 78, and 78 was wrong. The codelist holds 78 six-character NUTS codes, but
+    // one of them is CZZZZZ - the Eurostat extra-regio entry - which has no result file.
+    // Counting by length made the application poll it and throw. See
+    // tests/integration/czzzzz.test.ts.
     const db = openMemoryDatabase()
     try {
       loadInto(db)
       const row = db.query("SELECT COUNT(*) AS n FROM district").get() as { n: number }
-      expect(row.n).toBe(78)
+      expect(row.n).toBe(77)
     } finally {
       db.close()
     }

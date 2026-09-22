@@ -43,7 +43,8 @@ describe("routing (FR-032)", () => {
 
   test("a district row opens that district", () => {
     const content = composeScreen(db, { kind: "districts" }, opts)
-    expect(content.rowCount).toBe(78)
+    // 77, not 78: CZZZZZ is in the codelist but is not a district (czzzzz.test.ts).
+    expect(content.rowCount).toBe(77)
     const target = content.target(0)
     expect(target?.kind).toBe("district")
   })

@@ -230,7 +230,7 @@ describe("subscription lifecycle (FR-018a)", () => {
   test("an idle application polls only the live set, never every council", () => {
     const scheduler = new Scheduler(db, { intervalSeconds: 60 })
     scheduler.subscribeAll(liveSources(79), T0)
-    // 1 national + 78 districts. Roughly 6,000 councils must NOT be here.
+    // 1 national + the districts. Roughly 6,000 councils must NOT be here.
     expect(scheduler.all()).toHaveLength(79)
     expect(scheduler.all().filter((s) => s.areaKind === "council")).toHaveLength(0)
   })
