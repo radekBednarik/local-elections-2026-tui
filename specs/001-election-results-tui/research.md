@@ -64,6 +64,19 @@ branch and halves the native packages the build needs.
 **Scope note**: glibc only. A musl build is a separate target and is not committed to, consistent with the
 spec's distribution assumption.
 
+### R2a: `--bytecode` is unusable here (found during T006)
+
+`bun build --compile --bytecode` **fails** on this project:
+
+```text
+11882 | var backend2 = await loadBackend2();
+error: Expected "=>" but found ";"  (@opentui/core/chunk-bun-*.js)
+```
+
+Bytecode compilation cannot handle top-level `await`, and OpenTUI's own bundle uses it to load the native
+backend. The flag is therefore dropped from both build scripts; `--minify` is kept and saves about 11 MB
+before compilation. The startup gain `--bytecode` would have offered is not available on this stack.
+
 ---
 
 ## R3: Storage
@@ -84,11 +97,14 @@ concurrent access).
 - Reference data and result data live in the same file but are separated by table, since reference data is
   written once (FR-020) and results are overwritten continuously (FR-036a).
 
-**Caveat (documented, not verified)**: Bun's docs do not state whether `bun:sqlite` works inside a
-`--compile` binary. It is a built-in module rather than a native addon, so it should; **this must be
-smoke-tested in the first build task** rather than assumed. Note that the `type: "sqlite", embed: true`
-import form is explicitly read-only and in-memory, so it is *not* suitable here – the database is opened
-from a real path at runtime.
+**RESOLVED (T006, 2026-09-22)**: Bun's docs do not state whether `bun:sqlite` works inside a `--compile`
+binary. It was therefore smoke-tested rather than assumed, and it **works**: the compiled Windows binary
+opens an on-disk database, enables WAL, writes and reads back a row containing Czech diacritics. The binary
+was also run with `node_modules` removed entirely and still passed, confirming it is genuinely
+self-contained (FR-001). This closes the highest-severity risk in the plan.
+
+Note that the `type: "sqlite", embed: true` import form is explicitly read-only and in-memory, so it is
+*not* suitable here – the database is opened from a real path at runtime.
 
 ---
 

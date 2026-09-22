@@ -43,15 +43,15 @@ Single project at repository root: `src/`, `tests/`, `fixtures/`, `tools/`. Full
 
 **Purpose**: Make the project buildable and prove the riskiest assumption before anything depends on it.
 
-- [ ] T001 Initialize Bun project at repository root: create `package.json` (name `volby-kv2026`, `type: "module"`, `private: true`) and `tsconfig.json` with `strict: true`, `moduleResolution: "bundler"`, target ES2022
-- [ ] T002 Add pinned runtime dependencies to `package.json`: `@opentui/core@0.5.11`, `fast-xml-parser@5.11.1`, `zod@4.6.5`, `fflate@0.8.3`, then run `bun install`
-- [ ] T003 [P] Configure Biome v2.5.14 in `biome.json` (formatter + linter, 2-space indent, 110 column width) and add `check` / `format` scripts to `package.json`
-- [ ] T004 [P] Create the directory skeleton from plan.md: `src/{config,sources,parsing,reference,storage,domain,ui,export,logging}/`, `tests/{unit,integration,ui,contract}/`, `fixtures/{2026,edge-cases}/`, `tools/replay/`, each with a `.gitkeep`
-- [ ] T005 Add build scripts to `package.json`: `build:win` → `bun build --compile --target=bun-windows-x64 --minify --bytecode src/main.ts --outfile dist/volby-kv2026.exe`; `build:linux` → same with `--target=bun-linux-x64` plus `--define process.env.OPENTUI_LIBC='"glibc"'` (research R2 – without the define the build demands both glibc and musl native packages)
-- [ ] T006 **CRITICAL SMOKE TEST** – write `src/main.ts` as a stub that opens a `bun:sqlite` database, writes and reads one row, imports `@opentui/core`, prints the version, and exits. Compile with `build:win` and run the resulting binary. This resolves the one high-severity open risk in research R3: `bun:sqlite` is documented as a built-in but has **not** been verified inside a compiled binary. **Do not proceed to T007 until this passes.**
-- [ ] T007 Create `.github/workflows/build.yml` with a matrix over `windows-latest` and `ubuntu-latest`, each installing Bun, running `bun install`, `bun run check`, `bun test`, and its own platform build, then uploading the binary as an artifact
-- [ ] T008 [P] Add a `test` script to `package.json` and a `tests/helpers/tmpdir.ts` utility that creates and cleans an isolated temporary data directory per test, so tests never touch the real per-user location
-- [ ] T009 **REVIEW** Phase 1: verify the smoke test genuinely exercised SQLite inside the binary, that build scripts match research R1/R2, and that no dependency was added beyond the four in T002
+- [X] T001 Initialize Bun project at repository root: create `package.json` (name `volby-kv2026`, `type: "module"`, `private: true`) and `tsconfig.json` with `strict: true`, `moduleResolution: "bundler"`, target ES2022
+- [X] T002 Add pinned runtime dependencies to `package.json`: `@opentui/core@0.5.11`, `fast-xml-parser@5.11.1`, `zod@4.6.5`, `fflate@0.8.3`, then run `bun install`
+- [X] T003 [P] Configure Biome v2.5.14 in `biome.json` (formatter + linter, 2-space indent, 110 column width) and add `check` / `format` scripts to `package.json`
+- [X] T004 [P] Create the directory skeleton from plan.md: `src/{config,sources,parsing,reference,storage,domain,ui,export,logging}/`, `tests/{unit,integration,ui,contract}/`, `fixtures/{2026,edge-cases}/`, `tools/replay/`, each with a `.gitkeep`
+- [X] T005 Add build scripts to `package.json`: `build:win` → `bun build --compile --target=bun-windows-x64 --minify src/main.ts --outfile dist/volby-kv2026.exe` (**`--bytecode` removed: it cannot compile top-level await, which OpenTUI's bundle uses - research R2a**); `build:linux` → same with `--target=bun-linux-x64` plus `--define process.env.OPENTUI_LIBC='"glibc"'` (research R2 – without the define the build demands both glibc and musl native packages)
+- [X] T006 **CRITICAL SMOKE TEST** – write `src/main.ts` as a stub that opens a `bun:sqlite` database, writes and reads one row, imports `@opentui/core`, prints the version, and exits. Compile with `build:win` and run the resulting binary. This resolves the one high-severity open risk in research R3: `bun:sqlite` is documented as a built-in but has **not** been verified inside a compiled binary. **Do not proceed to T007 until this passes.**
+- [X] T007 Create `.github/workflows/build.yml` with a matrix over `windows-latest` and `ubuntu-latest`, each installing Bun, running `bun install`, `bun run check`, `bun test`, and its own platform build, then uploading the binary as an artifact
+- [X] T008 [P] Add a `test` script to `package.json` and a `tests/helpers/tmpdir.ts` utility that creates and cleans an isolated temporary data directory per test, so tests never touch the real per-user location
+- [X] T009 **REVIEW** Phase 1: verify the smoke test genuinely exercised SQLite inside the binary, that build scripts match research R1/R2, and that no dependency was added beyond the four in T002
 
 **Checkpoint**: The project builds to a running single binary on Windows, CI is wired, and the storage
 assumption is proven rather than assumed.
