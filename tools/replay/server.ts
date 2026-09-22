@@ -78,7 +78,15 @@ function atProgress(xml: string, p: number): string {
 
   // The publisher's generation timestamp advances with the count. The application must
   // take "last updated" from here rather than from its own clock.
-  const generated = new Date(startedAt + (Date.now() - startedAt)).toISOString().slice(0, 19)
+  //
+  // Written in LOCAL time with no zone suffix, exactly as the real publisher does. Using
+  // an ISO/UTC string here would make the age appear offset by the local zone and send
+  // someone hunting for a bug in the application that is not there.
+  const d = new Date()
+  const pad2 = (n: number) => String(n).padStart(2, "0")
+  const generated =
+    `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` +
+    `T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
   out = out.replace(/DATUM_CAS_GENEROVANI="[^"]*"/, `DATUM_CAS_GENEROVANI="${generated}"`)
 
   return out

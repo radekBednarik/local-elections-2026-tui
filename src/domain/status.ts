@@ -89,6 +89,13 @@ export function statusLabel(status: CountStatus): string {
  * clock disagrees with the publisher's, "last updated" must still reflect the data
  * (data-model, clock-skew edge case). A negative age means the local clock is behind
  * the publisher's and is reported as zero rather than as a nonsensical future value.
+ *
+ * TIMEZONE: `DATUM_CAS_GENEROVANI` carries no zone suffix - the publisher writes Czech
+ * local time, e.g. "2026-10-09T21:15:00". JavaScript parses such a string as LOCAL
+ * time, which is the behaviour we want for a Czech user and is why no zone is applied
+ * here. A user running in another zone will see an age offset by their difference from
+ * Prague; that is a known and accepted limitation, not a bug to work around by guessing
+ * a zone the source never stated.
  */
 export function ageSeconds(publishedAt: string, now: Date = new Date()): number | null {
   const published = Date.parse(publishedAt)

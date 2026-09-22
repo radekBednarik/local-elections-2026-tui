@@ -8,8 +8,11 @@
 import type { Database } from "bun:sqlite"
 import { type ChangeKind, compareValue } from "../../domain/status.ts"
 
+/** Extends CountStatus so it can be passed straight to statusLabel(). */
 export interface NationalTotals {
   oznacTypu: string
+  /** As published. Named to match CountStatus so the two are interchangeable. */
+  publishedPct: number | null
   publishedAt: string
   fetchedAt: string
   districtsTotal: number
@@ -69,6 +72,7 @@ export function readNationalTotals(db: Database, oznacTypu = "OBEC"): NationalTo
     districtsTotal: Number(now.districts_total ?? 0),
     districtsCounted: Number(now.districts_counted ?? 0),
     districtsPct: num(now, "districts_pct"),
+    publishedPct: num(now, "districts_pct"),
     votersRegistered: num(now, "voters_registered"),
     envelopesIssued: num(now, "envelopes_issued"),
     validVotes: num(now, "valid_votes"),

@@ -135,14 +135,14 @@ user action as the harness advances, and that the completion percentage and time
 - [ ] T042 [US1] [TDD] Implement the polling scheduler in `src/sources/scheduler.ts`. **Hard invariant: `next_due_at - last_attempt_at >= 60s` per source, always** (FR-016). Sources are spread across the polling window rather than fired together (research R8). A manual refresh (FR-019) is subject to the same floor. Test asserts no source is requested twice within 60 s across a simulated 5-minute run
 - [ ] T043 [US1] [TDD] Implement the national source subscription in `src/sources/national.ts`: fetch, parse, validate, store snapshot, update subscription record
 - [ ] T044 [P] [US1] [TDD] Implement national overview queries in `src/storage/queries/national.ts`: current snapshot with party results joined to electoral party names, ordered by seats then votes
-- [ ] T045 [US1] Create the OpenTUI application shell in `src/ui/app.ts`: renderer setup, root layout, footer with key hints, `q` to quit restoring the terminal (FR-006), `SIGINT`/`SIGTERM` handling
-- [ ] T046 [US1] [TDD] Implement the national overview view in `src/ui/views/national.ts` showing turnout, districts counted of total, and the seats table. Test with `createTestRenderer()` from `@opentui/core/testing` and assert on `captureCharFrame()` output
-- [ ] T047 [US1] [TDD] Implement the header status bar in `src/ui/components/status.ts` showing the **publisher's** generation timestamp as "last updated" (never local time) and a provisional-versus-final marker (FR-021, FR-022, data-model clock-skew edge case)
-- [ ] T048 [US1] [TDD] Implement change highlighting in `src/ui/components/table.ts`: values differing from the prior snapshot are marked. **The marker must be a symbol or text as well as a colour**, so it survives a monochrome terminal and `NO_COLOR` (FR-036, FR-040)
-- [ ] T049 [US1] Wire the background refresh loop into `src/ui/app.ts` so the view re-renders when new data lands, without blocking input. One document at a time through parse-validate-store, yielding between documents (research R8, SC-010)
-- [ ] T050 [US1] [TDD] Implement the minimum terminal size guard in `src/ui/app.ts`: below 80×24 render a single message stating the requirement and current size and keep running; reflow on resize (FR-041)
-- [ ] T051 [US1] Run quickstart scenario **V2** end to end against the replay harness and record the result
-- [ ] T052 **REVIEW** User Story 1: verify the 60-second floor cannot be bypassed by any path including manual refresh, that timestamps come from the publisher, and that nothing is conveyed by colour alone
+- [X] T045 [US1] Create the OpenTUI application shell in `src/ui/app.ts`: renderer setup, root layout, footer with key hints, `q` to quit restoring the terminal (FR-006), `SIGINT`/`SIGTERM` handling
+- [X] T046 [US1] [TDD] Implement the national overview view in `src/ui/views/national.ts` showing turnout, districts counted of total, and the seats table. Test with `createTestRenderer()` from `@opentui/core/testing` and assert on `captureCharFrame()` output
+- [X] T047 [US1] [TDD] Implement the header status bar in `src/ui/components/status.ts` showing the **publisher's** generation timestamp as "last updated" (never local time) and a provisional-versus-final marker (FR-021, FR-022, data-model clock-skew edge case)
+- [X] T048 [US1] [TDD] Implement change highlighting in `src/ui/components/table.ts`: values differing from the prior snapshot are marked. **The marker must be a symbol or text as well as a colour**, so it survives a monochrome terminal and `NO_COLOR` (FR-036, FR-040)
+- [X] T049 [US1] Wire the background refresh loop into `src/ui/app.ts` so the view re-renders when new data lands, without blocking input. One document at a time through parse-validate-store, yielding between documents (research R8, SC-010)
+- [X] T050 [US1] [TDD] Implement the minimum terminal size guard in `src/ui/app.ts`: below 80×24 render a single message stating the requirement and current size and keep running; reflow on resize (FR-041)
+- [X] T051 [US1] Run quickstart scenario **V2** end to end against the replay harness and record the result
+- [X] T052 **REVIEW** User Story 1: verify the 60-second floor cannot be bypassed by any path including manual refresh, that timestamps come from the publisher, and that nothing is conveyed by colour alone
 
 **Checkpoint**: MVP. A working live national dashboard, independently demonstrable.
 
@@ -182,7 +182,7 @@ votes, seats, and elected candidates match the fixture data.
 **Independent Test**: Stop the replay harness mid-run and confirm results stay visible with a staleness
 warning, retries slow down, and refreshing resumes by itself when the harness restarts.
 
-- [ ] T068 [US3] [TDD] Implement progressive backoff in `src/sources/backoff.ts`: interval grows with consecutive failures up to a ceiling, one success resets it, and **it never drops below the 60-second floor** (FR-043). Test with a simulated failure sequence
+- [X] T068 [US3] [TDD] Implement progressive backoff in `src/sources/backoff.ts`: interval grows with consecutive failures up to a ceiling, one success resets it, and **it never drops below the 60-second floor** (FR-043). Test with a simulated failure sequence
 - [ ] T069 [US3] [TDD] Implement last-good-data retention in `src/sources/scheduler.ts`: a failed fetch or a rejected document leaves the previous snapshot untouched (FR-027)
 - [ ] T070 [P] [US3] [TDD] Implement the staleness indicator in `src/ui/components/status.ts`: persistent, stating the reason and the **age computed from the publisher timestamp**, clearing automatically on the next success (FR-044)
 - [ ] T071 [P] [US3] [TDD] Implement the pre-publication state in `src/ui/views/national.ts`: a `404` before publication begins shows "results are not yet being published" and retrying continues, rather than failing at launch (FR-045)
