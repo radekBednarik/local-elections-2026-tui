@@ -114,6 +114,10 @@ export class App {
       // cost the user their terminal.
       consoleMode: "disabled",
       openConsoleOnError: false,
+      // 30 is the default, and 30 frames means up to 33 ms between a key press and the
+      // cursor moving - enough to feel like lag when a key is held down. Rendering is on
+      // demand, so a higher ceiling costs nothing on a still screen.
+      targetFps: 60,
     })
     this.renderer = renderer
 
@@ -275,12 +279,19 @@ export class App {
 
     if (intent.kind === "move") {
       this.nav.move(intent.delta, content.rowCount)
-    } else if (intent.kind === "jump") {
-      this.nav.moveTo(intent.to, content.rowCount)
-    } else {
-      await this.perform(intent.id, content)
+      // Moving the selection changes no data, so the screen just composed is still
+      // current and is drawn rather than composed again.
+      this.draw(content)
+      return
     }
 
+    if (intent.kind === "jump") {
+      this.nav.moveTo(intent.to, content.rowCount)
+      this.draw(content)
+      return
+    }
+
+    await this.perform(intent.id, content)
     this.draw()
   }
 
@@ -672,7 +683,7 @@ export class App {
     }
   }
 
-  private draw(): void {
+  private draw(content?: ScreenContent): void {
     const renderer = this.renderer
     const frame = this.frame
     if (renderer === null || frame === null) return
@@ -706,6 +717,9 @@ export class App {
         contentHeight: frame.contentHeight,
         warning: staleWarning(this.deps.scheduler.all()),
         notice: this.notice,
+        // Reuses the screen the key handler already composed, rather than composing the
+        // identical screen a second time on every keystroke.
+        content,
       }),
       this.theme,
     )

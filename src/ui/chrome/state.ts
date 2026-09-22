@@ -53,6 +53,14 @@ export interface FrameInputs {
   warning: string | null
   /** A one-off confirmation, shown only when nothing is wrong. */
   notice: string | null
+  /**
+   * An already-composed screen, when the caller has one.
+   *
+   * The key handler composes the screen to learn how many rows the selection may move
+   * over, and then the draw composed the very same screen a second time. Passing the
+   * first one through halves that.
+   */
+  content?: ScreenContent
 }
 
 export interface FrameState {
@@ -60,8 +68,14 @@ export interface FrameState {
   warning: string | null
   /** Plain text, one string per row, marker included. */
   lines: string[]
-  /** The same rows resolved against the theme. */
-  styled: StyledText[]
+  /**
+   * The same row, resolved against the theme, built on demand.
+   *
+   * A function rather than an array: the frame skips rows whose text is unchanged, and
+   * styling a row it is about to skip is work thrown away. On a selection move that is
+   * seventy-nine rows out of eighty-one.
+   */
+  styleRow: (index: number) => StyledText
   status: string
   /** Scroll position, in line coordinates. */
   offset: number
@@ -95,12 +109,14 @@ export function frameState(inputs: FrameInputs): FrameState {
   // that much and the marker is written beside it.
   const viewWidth = Math.max(20, inputs.contentWidth - GUTTER)
 
-  const content = composeScreen(db, nav.screen, {
-    width: viewWidth,
-    councilType: inputs.councilType,
-    query: inputs.query,
-    sort: inputs.sort,
-  })
+  const content =
+    inputs.content ??
+    composeScreen(db, nav.screen, {
+      width: viewWidth,
+      councilType: inputs.councilType,
+      query: inputs.query,
+      sort: inputs.sort,
+    })
 
   const context: ActionContext = {
     screen: nav.screen,
@@ -119,16 +135,18 @@ export function frameState(inputs: FrameInputs): FrameState {
     // A real staleness warning always wins the row: it is the more important message.
     warning: inputs.warning ?? inputs.notice,
     lines: withSelection(content.lines, content.firstRow, selected),
-    styled: content.rows.map((row, index) =>
-      styledRow(
+    styleRow: (index: number) => {
+      const row = content.rows[index]
+      if (row === undefined) return styledRow({ cells: [] }, theme, viewWidth)
+      return styledRow(
         // The selected row takes the selection role, while a cell that already says
         // something for itself - a figure that rose or fell - keeps saying it.
         index === selectedLine ? markSelected(row) : row,
         theme,
         viewWidth,
         lead(index, content.firstRow, selected, content.rows.length),
-      ),
-    ),
+      )
+    },
     status: statusBarLine(context, inputs.width),
     offset: nav.ensureVisible(inputs.contentHeight, content.firstRow, content.lines.length),
     content,
@@ -139,12 +157,29 @@ function markSelected(row: SemanticRow): SemanticRow {
   return { ...row, role: "selection" }
 }
 
+/**
+ * The theme each frame was last drawn with.
+ *
+ * A theme switch changes how rows look without changing a character of their text, so
+ * the row-level skip would keep the old colours. Tracked per frame rather than globally
+ * because tests build several.
+ */
+const lastTheme = new WeakMap<Frame, Theme>()
+
 /** Puts the state on screen. Nothing here decides anything; it only applies. */
 export function applyFrameState(frame: Frame, state: FrameState, theme?: Theme): void {
-  if (theme !== undefined) frame.setBorderColor(colorFor(theme, "muted"))
+  if (theme !== undefined) {
+    if (lastTheme.get(frame) !== theme) {
+      frame.invalidateRows()
+      frame.setBorderColor(colorFor(theme, "muted"))
+      lastTheme.set(frame, theme)
+    }
+  }
   frame.setBreadcrumb(state.breadcrumb)
   frame.setWarning(state.warning)
-  frame.setRows(state.styled)
+  // The plain lines are the comparison key: the selection marker is part of them, so a
+  // selection move changes exactly the two rows it affects.
+  frame.setRows(state.lines, state.styleRow)
   frame.setStatus(state.status)
   frame.scroll.scrollTo(state.offset)
 }

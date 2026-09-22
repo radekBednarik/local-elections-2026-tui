@@ -9,6 +9,8 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { createTestRenderer } from "@opentui/core/testing"
+import { extractArchiveFile } from "../../src/reference/archive.ts"
+import { loadReference } from "../../src/reference/loader.ts"
 import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { Scheduler } from "../../src/sources/scheduler.ts"
 import { openDatabase } from "../../src/storage/db.ts"
@@ -25,6 +27,15 @@ const NAT = readFileSync(join(F, "vysledky.xml"), "utf8")
 const DIST = readFileSync(join(F, "vysledky_obce_okres_CZ0642.xml"), "utf8")
 
 const db = openDatabase(":memory:")
+
+// Reference data loaded, which the soak used to skip. Without it `listDistricts`
+// returned NOTHING, so the run measured an empty screen and reported a comfortable
+// number for a list that was not there. The district list is 77 rows and is the screen a
+// user sits on while the count comes in.
+const reg = await extractArchiveFile(join(F, "reg.zip"))
+const cis = await extractArchiveFile(join(F, "ciselniky.zip"))
+if (!reg.ok || !cis.ok) throw new Error("fixture archives could not be extracted")
+loadReference(db, { registry: reg.files, codelists: cis.files })
 const scheduler = new Scheduler(db, { intervalSeconds: 60 })
 scheduler.subscribeAll([{ key: "national", areaKind: "national", areaId: "" }])
 
@@ -47,7 +58,8 @@ const setup = await createTestRenderer({ width: 120, height: 34 })
 const frame = new Frame(setup.renderer)
 frame.attach(setup.renderer.root)
 const nav = new Navigation()
-nav.push({ kind: "district", nuts: "CZ0642" })
+// The district LIST, not one district: 77 rows rather than three.
+nav.push({ kind: "districts" })
 const theme = themeByName("dark")
 
 for (let cycle = 0; cycle < CYCLES; cycle++) {
@@ -72,8 +84,12 @@ for (let cycle = 0; cycle < CYCLES; cycle++) {
 
   // A keystroke, as the user would make it: recompose the screen.
   const t0 = performance.now()
-  composeScreen(db, { kind: "district", nuts: "CZ0642" }, opts)
+  composeScreen(db, { kind: "districts" }, opts)
   maxKeyMs = Math.max(maxKeyMs, performance.now() - t0)
+
+  // The selection moves, as a user walking the list moves it. This is what makes the
+  // redraw representative: a still screen would never exercise the row updates.
+  nav.move(cycle % 2 === 0 ? 1 : -1, 77)
 
   // And the whole redraw, renderables included.
   const t1 = performance.now()

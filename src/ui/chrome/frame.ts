@@ -45,6 +45,8 @@ export class Frame {
   private rowNodes: TextRenderable[] = []
   /** How many pooled rows currently carry content. */
   private visibleRows = 0
+  /** What each pooled row was last drawn with, so an unchanged row can be skipped. */
+  private rowKeys: (string | undefined)[] = []
   private panelVisible = false
   private rowHandler: ((index: number, event: MouseEvent) => void) | null = null
   private overlay: (Renderable & { visible: boolean }) | null = null
@@ -181,40 +183,71 @@ export class Frame {
   }
 
   /**
-   * Replaces the content rows.
+   * Replaces the content rows, TOUCHING ONLY THE ONES THAT CHANGED.
    *
-   * The pool of row renderables only ever GROWS. Rows beyond the current view are
-   * hidden rather than destroyed, for two reasons:
+   * Moving the selection one row changes two rows out of eighty. Rewriting all eighty
+   * cost a native text-buffer rebuild and a layout invalidation each, on every single
+   * keystroke, which is what made holding an arrow key feel like wading. Each row keeps
+   * the key it was last drawn with and is left alone when the key is unchanged.
+   *
+   * The key must capture everything that can change a row's APPEARANCE, not only its
+   * text. The selection marker is part of the text, so moving the selection changes the
+   * keys of exactly the two affected rows. A theme switch changes no text at all, so
+   * `invalidateRows` exists for it.
+   *
+   * The pool of row renderables only ever GROWS. Rows beyond the current view are hidden
+   * rather than destroyed, for two reasons:
    *
    *   - Removing children and adding them back again leaves the scroll bar laid out on
    *     the wrong edge. Shrinking below the viewport and growing past it again - going
    *     from the district list to one district and then into a council does exactly
-   *     that - drew the bar down the LEFT of the content. Not churning the children
-   *     avoids the whole class of problem rather than working around this instance.
+   *     that - drew the bar down the LEFT of the content.
    *   - Creating and destroying several hundred renderables on every tick would cost
    *     more than the whole recomposition budget (SC-010).
    *
-   * The pool settles at the largest screen the user has visited, which is the district
-   * list at 78 rows or a large district at a few hundred. That is bounded and small.
-   *
-   * Takes plain strings or styled text indifferently: the two carry the same characters
-   * in the same columns, and only the colour differs.
+   * `content` is a function rather than an array so that the caller need not build the
+   * styled form of a row it is not going to use.
    */
-  setRows(lines: (string | StyledText)[]): void {
-    this.growRows(lines.length)
-    this.rowNodes.forEach((node, index) => {
-      const text = lines[index]
-      if (text === undefined) {
+  setRows(keys: string[], content?: (index: number) => string | StyledText): void {
+    const render = content ?? ((index: number) => keys[index] ?? "")
+    this.growRows(keys.length)
+
+    for (let index = 0; index < this.rowNodes.length; index += 1) {
+      const node = this.rowNodes[index]
+      if (node === undefined) continue
+      const key = keys[index]
+
+      if (key === undefined) {
+        // Past the end of the view. Hide it once, then leave it alone.
+        if (this.rowKeys[index] === undefined) continue
         node.content = ""
         node.height = 0
         node.visible = false
-        return
+        this.rowKeys[index] = undefined
+        continue
       }
-      node.content = text
-      node.height = 1
-      node.visible = true
-    })
-    this.visibleRows = lines.length
+
+      if (this.rowKeys[index] === key) continue
+
+      node.content = render(index)
+      if (!node.visible) {
+        node.height = 1
+        node.visible = true
+      }
+      this.rowKeys[index] = key
+    }
+
+    this.visibleRows = keys.length
+  }
+
+  /**
+   * Forces every row to be redrawn on the next update.
+   *
+   * For a change that alters how rows LOOK without altering their text, which in practice
+   * means switching the theme.
+   */
+  invalidateRows(): void {
+    this.rowKeys = []
   }
 
   /**
