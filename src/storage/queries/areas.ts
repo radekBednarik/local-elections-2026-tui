@@ -306,3 +306,16 @@ export function listRegisteredCandidates(
     }
   })
 }
+
+/**
+ * The name of one district, for the breadcrumb (T120).
+ *
+ * Returns null when the codelist has not been loaded, so the caller can fall back to
+ * the NUTS code rather than showing a blank trail (FR-011).
+ */
+export function readDistrictName(db: Database, nuts: string): string | null {
+  const row = db.query("SELECT name FROM district WHERE nuts = $n").get({ n: nuts }) as {
+    name: string
+  } | null
+  return row?.name ?? null
+}

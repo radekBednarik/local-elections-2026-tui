@@ -85,11 +85,29 @@ export class Navigation {
     this.current.selected = position === "first" ? 0 : Math.max(0, count - 1)
   }
 
-  /** Keeps the selected row visible within a window of `height` rows. */
-  ensureVisible(height: number): void {
+  /** Every screen on the stack, oldest first, for the breadcrumb (T120). */
+  get screens(): Screen[] {
+    return this.stack.map((entry) => entry.screen)
+  }
+
+  /**
+   * Keeps the selected row visible, and returns the scroll offset to apply.
+   *
+   * `firstRow` is where the selectable rows begin within the view, so the offset comes
+   * back in the same LINE coordinates the content area scrolls in - the headings above
+   * the table are lines too. `total` clamps the offset so the view cannot be scrolled
+   * past its own end.
+   *
+   * The offset lives on the stack entry, which is what makes a refresh leave the scroll
+   * position alone (FR-058): redrawing reads it, only a key press changes it.
+   */
+  ensureVisible(height: number, firstRow = 0, total = Number.POSITIVE_INFINITY): number {
     const entry = this.current
-    if (height <= 0) return
-    if (entry.selected < entry.offset) entry.offset = entry.selected
-    else if (entry.selected >= entry.offset + height) entry.offset = entry.selected - height + 1
+    if (height <= 0) return entry.offset
+    const line = firstRow + entry.selected
+    if (line < entry.offset) entry.offset = line
+    else if (line >= entry.offset + height) entry.offset = line - height + 1
+    entry.offset = Math.max(0, Math.min(entry.offset, Math.max(0, total - height)))
+    return entry.offset
   }
 }

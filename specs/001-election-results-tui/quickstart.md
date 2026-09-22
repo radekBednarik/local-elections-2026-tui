@@ -243,3 +243,34 @@ Run at exactly 80 × 24, with `NO_COLOR=1`, and without touching the mouse.
 
 **Expect**: the application is complete and usable. The side panel is hidden, bars are gone, colour is
 absent, and every figure, every action and every navigation path still works.
+
+---
+
+## Validation log
+
+Results of the amendment scenarios, recorded as they are run. A scenario that can be driven
+headlessly has a script under `tools/verify/`; one that cannot says so and names what was done
+instead.
+
+| Scenario | Run | Result | How |
+|---|---|---|---|
+| V13 – framed regions and breadcrumb | 2026-09-22 | **Pass** | `bun run tools/verify/v13.ts`, exit 0 |
+
+### V13 – 2026-09-22
+
+Drilled ČR → Okresy → Okres Brno-město → Brno and back, at 100 × 28, against the committed
+fixtures. All three regions present and distinguishable at every level; the breadcrumb grew
+(`ČR › Okresy › Okres Brno-město › Brno`) and shortened on the way back. A district document
+re-ingested with the view open moved nothing: regions `1,26,27` before and after, selection and
+scroll offset unchanged.
+
+Three defects were found by running it and fixed before the scenario was recorded as passing:
+
+1. The scroll bar drew itself down the **left** of the content, over the first character of every
+   row, after the content had shrunk below the viewport and grown past it again — which is exactly
+   what happens going from the district list into one district and then into a council. Pinned
+   visible so it never re-lays-out, and its column is now reserved.
+2. The district heading read `Okres CZ0642` while the breadcrumb above it read
+   `Okres Brno-město`. A raw code where the name is known is what FR-011 forbids.
+3. The status bar dropped `Ctrl+P příkazy` on narrower terminals. The palette is how everything
+   the bar dropped stays reachable, so it was moved up the registry.

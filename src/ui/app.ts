@@ -1,20 +1,22 @@
 /**
- * Application shell (tasks T045, T049, T050, T053, T054, T061).
+ * Application shell (tasks T045, T049, T050, T053, T054, T061; reframed in T119-T122).
  *
  * Owns the renderer, the key map, navigation, and the background refresh loop.
  *
- * Three rules shape the design:
+ * Four rules shape the design:
  *   - The renderer must be destroyed on EVERY exit path, or the terminal is left in raw
  *     mode with the alternate screen active (FR-006).
  *   - Fetching must never block input (SC-010), so refresh work runs as async tasks and
  *     one document is processed at a time with a yield between documents (research R8).
  *   - Councils are fetched ON DEMAND and unsubscribed when left (FR-018a). Roughly 6,000
  *     exist; subscribing to them all would breach the polling budget immediately.
+ *   - The frame is built ONCE and only its contents change, so a refresh cannot move the
+ *     regions, the scroll position or the selection (FR-058).
  */
 
 import type { Database } from "bun:sqlite"
 import { join } from "node:path"
-import { BoxRenderable, type CliRenderer, createCliRenderer, TextRenderable } from "@opentui/core"
+import { type CliRenderer, createCliRenderer } from "@opentui/core"
 import type { CliOptions } from "../config/args.ts"
 import { reportForScreen } from "../export/report.ts"
 import { csvForScreen } from "../export/tables.ts"
@@ -26,9 +28,11 @@ import type { Scheduler } from "../sources/scheduler.ts"
 import { type SourceKey, type SourceLocation, urlForKey } from "../sources/urls.ts"
 import { availableCouncilTypes } from "../storage/queries/national.ts"
 import { toggleWatchlist, watchedCodes } from "../storage/queries/watchlist.ts"
-import { isTooSmall, type KeyHint, keyHintLine, staleWarning, tooSmallMessage } from "./components/status.ts"
+import { Frame } from "./chrome/frame.ts"
+import { applyFrameState, frameState } from "./chrome/state.ts"
+import { isTooSmall, staleWarning, tooSmallMessage } from "./components/status.ts"
 import { Navigation } from "./navigation.ts"
-import { composeScreen, sourcesForScreen } from "./screen.ts"
+import { composeScreen, type ScreenContent, sourcesForScreen } from "./screen.ts"
 import { applySearchKey, type KeyEvent } from "./search-input.ts"
 
 export interface AppDependencies {
@@ -38,24 +42,9 @@ export interface AppDependencies {
   scheduler: Scheduler
 }
 
-const HINTS: KeyHint[] = [
-  { key: "↑↓", label: "výběr" },
-  { key: "⏎", label: "otevřít" },
-  { key: "esc", label: "zpět" },
-  { key: "t", label: "typ" },
-  { key: "/", label: "hledat" },
-  { key: "w", label: "sledovat" },
-  { key: "e", label: "export" },
-  { key: "r", label: "obnovit" },
-  { key: "?", label: "nápověda" },
-  { key: "q", label: "konec" },
-]
-
 export class App {
   private renderer: CliRenderer | null = null
-  private body: TextRenderable | null = null
-  private footer: TextRenderable | null = null
-  private warning: TextRenderable | null = null
+  private frame: Frame | null = null
   private loop: ReturnType<typeof setInterval> | null = null
   private readonly abort = new AbortController()
   private readonly nav = new Navigation()
@@ -79,14 +68,9 @@ export class App {
     const renderer = await createCliRenderer({ exitOnCtrlC: false })
     this.renderer = renderer
 
-    const panel = new BoxRenderable(renderer, { flexDirection: "column", flexGrow: 1 })
-    this.warning = new TextRenderable(renderer, { content: "" })
-    this.body = new TextRenderable(renderer, { content: "Načítám…" })
-    this.footer = new TextRenderable(renderer, { content: "" })
-    panel.add(this.warning)
-    panel.add(this.body)
-    panel.add(this.footer)
-    renderer.root.add(panel)
+    const frame = new Frame(renderer)
+    frame.attach(renderer.root)
+    this.frame = frame
 
     renderer.keyInput.on("keypress", (key: KeyEvent) => {
       void this.onKey(key)
@@ -118,6 +102,7 @@ export class App {
     this.abort.abort()
     this.renderer?.destroy()
     this.renderer = null
+    this.frame = null
   }
 
   /**
@@ -218,14 +203,7 @@ export class App {
         break
       case "return":
       case "enter": {
-        const target = content.target(this.nav.current.selected)
-        if (target !== null) {
-          this.nav.push(target)
-          this.syncSubscriptions()
-          // Fetch what the new screen needs straight away rather than waiting for the
-          // next tick, so opening a council is not followed by a blank pause.
-          void this.tick()
-        }
+        this.open(content)
         break
       }
       case "escape":
@@ -245,20 +223,7 @@ export class App {
           this.syncSubscriptions()
           break
         }
-        // Only a council can be watched, and it is the screen the user is on.
-        const screen = this.nav.screen
-        if (screen.kind === "council") {
-          const watched = toggleWatchlist(this.deps.db, screen.kodzastup)
-          // Pinning is what keeps a watched council polling once the user navigates
-          // away from it (FR-018a).
-          this.deps.scheduler.setPinned(`council:${screen.kodzastup}` as SourceKey, watched)
-          if (!watched) this.syncSubscriptions()
-          this.notice = watched
-            ? "Přidáno mezi sledovaná zastupitelstva."
-            : "Odebráno ze sledovaných zastupitelstev."
-        } else {
-          this.notice = "Sledovat lze pouze otevřené zastupitelstvo."
-        }
+        this.toggleWatch()
         break
       }
       case "?":
@@ -271,19 +236,11 @@ export class App {
         break
       }
       case "t": {
-        const types = availableCouncilTypes(this.deps.db)
-        if (types.length > 1) {
-          const index = types.indexOf(this.councilType)
-          this.councilType = types[(index + 1) % types.length] ?? "OBEC"
-        }
+        this.cycleCouncilType()
         break
       }
       case "r": {
-        for (const source of sourcesForScreen(this.nav.screen)) {
-          this.deps.scheduler.requestRefresh(source.key as SourceKey)
-        }
-        this.deps.scheduler.requestRefresh("national")
-        await this.tick()
+        await this.refreshNow()
         break
       }
       default:
@@ -291,6 +248,49 @@ export class App {
     }
 
     this.draw()
+  }
+
+  /** Opens whatever the selected row leads to. */
+  private open(content: ScreenContent): void {
+    const target = content.target(this.nav.current.selected)
+    if (target === null) return
+    this.nav.push(target)
+    this.syncSubscriptions()
+    // Fetch what the new screen needs straight away rather than waiting for the next
+    // tick, so opening a council is not followed by a blank pause.
+    void this.tick()
+  }
+
+  private toggleWatch(): void {
+    // Only a council can be watched, and it is the screen the user is on.
+    const screen = this.nav.screen
+    if (screen.kind !== "council") {
+      this.notice = "Sledovat lze pouze otevřené zastupitelstvo."
+      return
+    }
+    const watched = toggleWatchlist(this.deps.db, screen.kodzastup)
+    // Pinning is what keeps a watched council polling once the user navigates away
+    // from it (FR-018a).
+    this.deps.scheduler.setPinned(`council:${screen.kodzastup}` as SourceKey, watched)
+    if (!watched) this.syncSubscriptions()
+    this.notice = watched
+      ? "Přidáno mezi sledovaná zastupitelstva."
+      : "Odebráno ze sledovaných zastupitelstev."
+  }
+
+  private cycleCouncilType(): void {
+    const types = availableCouncilTypes(this.deps.db)
+    if (types.length <= 1) return
+    const index = types.indexOf(this.councilType)
+    this.councilType = types[(index + 1) % types.length] ?? "OBEC"
+  }
+
+  private async refreshNow(): Promise<void> {
+    for (const source of sourcesForScreen(this.nav.screen)) {
+      this.deps.scheduler.requestRefresh(source.key as SourceKey)
+    }
+    this.deps.scheduler.requestRefresh("national")
+    await this.tick()
   }
 
   /** Delegates to the pure rules in search-input.ts. */
@@ -333,13 +333,18 @@ export class App {
     this.draw()
   }
 
-  private currentContent() {
-    const renderer = this.renderer
+  private currentContent(): ScreenContent {
     return composeScreen(this.deps.db, this.nav.screen, {
-      width: renderer?.width ?? 100,
+      width: this.contentWidth(),
       councilType: this.councilType,
       query: this.query,
     })
+  }
+
+  /** Columns the content area has, which is the terminal less the frame's chrome. */
+  private contentWidth(): number {
+    const measured = this.frame?.contentWidth ?? 0
+    return measured > 0 ? measured : Math.max(40, (this.renderer?.width ?? 100) - 2)
   }
 
   /**
@@ -391,50 +396,35 @@ export class App {
 
   private draw(): void {
     const renderer = this.renderer
-    if (renderer === null || this.body === null) return
+    const frame = this.frame
+    if (renderer === null || frame === null) return
 
     const width = renderer.width
     const height = renderer.height
 
     if (isTooSmall(width, height)) {
-      if (this.warning !== null) this.warning.content = ""
-      this.body.content = tooSmallMessage(width, height).join("\n")
-      if (this.footer !== null) this.footer.content = ""
+      frame.setBreadcrumb("")
+      frame.setWarning(null)
+      frame.setLines(tooSmallMessage(width, height))
+      frame.setStatus("")
       return
     }
 
-    // A one-off confirmation takes the warning line when there is no warning; a real
-    // staleness warning always wins, because it is the more important message.
-    const warning = staleWarning(this.deps.scheduler.all())
-    if (this.warning !== null) this.warning.content = warning ?? this.notice ?? ""
-
-    const content = composeScreen(this.deps.db, this.nav.screen, {
-      width,
-      councilType: this.councilType,
-      query: this.query,
-    })
-
-    const available = Math.max(1, height - (warning === null ? 1 : 2) - 1)
-    this.nav.ensureVisible(Math.max(1, available - content.firstRow))
-
-    this.body.content = withSelection(content.lines, content.firstRow, this.nav.current.selected)
-      .slice(0, available)
-      .join("\n")
-
-    if (this.footer !== null) this.footer.content = keyHintLine(HINTS, width)
+    applyFrameState(
+      frame,
+      frameState({
+        db: this.deps.db,
+        nav: this.nav,
+        councilType: this.councilType,
+        query: this.query,
+        width,
+        contentWidth: this.contentWidth(),
+        contentHeight: frame.contentHeight,
+        warning: staleWarning(this.deps.scheduler.all()),
+        notice: this.notice,
+      }),
+    )
   }
-}
-
-/**
- * Marks the selected row.
- *
- * A leading marker rather than colour, so the selection is visible on a monochrome
- * terminal (FR-040).
- */
-function withSelection(lines: string[], firstRow: number, selected: number): string[] {
-  const index = firstRow + selected
-  if (firstRow >= lines.length) return lines
-  return lines.map((line, i) => (i === index ? `▶ ${line}` : `  ${line}`))
 }
 
 /** Routes a fetched body to the right ingest function. */

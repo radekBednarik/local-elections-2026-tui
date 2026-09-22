@@ -21,6 +21,7 @@ import {
   listElected,
   listRegisteredCandidates,
   readCouncil,
+  readDistrictName,
 } from "../../storage/queries/areas.ts"
 import {
   type Column,
@@ -112,7 +113,11 @@ export function renderDistrict(db: Database, nuts: string, width = 100): string[
 
 export function buildDistrictRows(db: Database, nuts: string, width: number): BuiltView {
   const councils = listCouncilsInDistrict(db, nuts)
-  const rows: SemanticRow[] = [line(`Okres ${nuts}`, "heading"), line(rule(width), "muted")]
+  // The name where one is known, the code only when the codelist has not loaded: a raw
+  // NUTS code where a name exists is what FR-011 forbids, and the breadcrumb above this
+  // heading was already showing the name.
+  const title = `Okres ${readDistrictName(db, nuts) ?? nuts}`
+  const rows: SemanticRow[] = [line(title, "heading"), line(rule(width), "muted")]
 
   if (councils.length === 0) {
     rows.push(line("Data tohoto okresu se zatím nenačetla."))

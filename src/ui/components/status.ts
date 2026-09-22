@@ -9,6 +9,7 @@
 import { formatAge } from "../../domain/status.ts"
 import type { Subscription } from "../../sources/scheduler.ts"
 import { pad } from "../format.ts"
+import { type ActionContext, availableActions } from "../palette/actions.ts"
 
 export const MIN_COLUMNS = 80
 export const MIN_ROWS = 24
@@ -62,8 +63,12 @@ export interface KeyHint {
 
 /** Footer hints, so the available keys are discoverable (FR-005). */
 export function keyHintLine(hints: KeyHint[], width: number): string {
-  const text = hints.map((h) => `${h.key} ${h.label}`).join("   ")
-  return pad(text, Math.max(0, width))
+  return pad(hintText(hints), Math.max(0, width))
+}
+
+/** Joins hints into one line. One joiner, so every bar reads the same way. */
+export function hintText(hints: KeyHint[]): string {
+  return hints.map((h) => `${h.key} ${h.label}`).join("   ")
 }
 
 export const NATIONAL_HINTS: KeyHint[] = [
@@ -72,3 +77,30 @@ export const NATIONAL_HINTS: KeyHint[] = [
   { key: "?", label: "nápověda" },
   { key: "q", label: "konec" },
 ]
+
+/**
+ * The context-sensitive status bar (task T122, FR-064).
+ *
+ * Built from the action registry rather than a list of its own, so the bar and the
+ * command palette cannot disagree about what this screen can do. An advertised key that
+ * does nothing teaches the user to distrust the whole bar, which is why the registry
+ * decides and this function only renders.
+ */
+export function contextHints(context: ActionContext): KeyHint[] {
+  return availableActions(context).map((action) => ({ key: action.key, label: action.hint }))
+}
+
+/**
+ * Renders the bar, dropping trailing hints until it fits.
+ *
+ * The registry is ordered by usefulness, so dropping from the end loses the most
+ * specialised action rather than the one the user most likely wants.
+ */
+export function statusBarLine(context: ActionContext, width: number): string {
+  const hints = contextHints(context)
+  for (let count = hints.length; count > 0; count -= 1) {
+    const text = hintText(hints.slice(0, count))
+    if ([...text].length <= width) return pad(text, Math.max(0, width))
+  }
+  return pad("", Math.max(0, width))
+}

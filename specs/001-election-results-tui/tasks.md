@@ -405,14 +405,14 @@ the application looks exactly as before. Nothing user-visible has changed yet, b
 without reading them, the breadcrumb grows and shrinks with the path, and the status bar changes
 between screens. A refresh moves nothing.
 
-- [ ] T119 [US7] [TDD] Build the frame in `src/ui/chrome/frame.ts` from `BoxRenderable`, giving a title bar, a bordered content area and a status bar. Assert on the captured frame that the three regions are visually distinguishable (FR-054)
-- [ ] T120 [US7] [TDD] Implement the breadcrumb in `src/ui/chrome/breadcrumb.ts` with a chevron separator, for example "ČR › Okres Brno-město › Brno-Bohunice". It MUST truncate from the LEFT when too long, keeping the current location visible, because "where am I" is the question it exists to answer (FR-055)
-- [ ] T121 [US7] [TDD] Replace the hand-rolled scroll arithmetic in `src/ui/app.ts` with `ScrollBoxRenderable`. The district list is 78 rows and a large district runs to hundreds of councils; a real viewport culls rather than slicing arrays (research R11)
-- [ ] T122 [US7] [TDD] Make the status bar context-sensitive in `src/ui/components/status.ts`: it MUST list only actions available on the current screen, and MUST NOT offer an action that would do nothing here (FR-064)
-- [ ] T123 [US7] [TDD] Assert region stability in `tests/ui/stability.test.ts`: ingest new data while a view is open and prove the regions, the scroll offset and the selected row are all unmoved (FR-058, and User Story 2 scenario 5 which must not regress)
-- [ ] T124 [US7] [TDD] Verify the frame still fits 80 by 24 in `tests/ui/stability.test.ts`: chrome costs rows, and the minimum terminal size is not negotiable (FR-041)
-- [ ] T125 [US7] Run quickstart scenario **V13** and record the result in `specs/001-election-results-tui/quickstart.md`
-- [ ] T126 **REVIEW** User Story 7 in `src/ui/chrome/`: verify a refresh cannot move the user, that the breadcrumb truncates from the correct end, and that no action is offered where it does nothing
+- [X] T119 [US7] [TDD] Build the frame in `src/ui/chrome/frame.ts` from `BoxRenderable`, giving a title bar, a bordered content area and a status bar. Assert on the captured frame that the three regions are visually distinguishable (FR-054)
+- [X] T120 [US7] [TDD] Implement the breadcrumb in `src/ui/chrome/breadcrumb.ts` with a chevron separator, for example "ČR › Okres Brno-město › Brno-Bohunice". It MUST truncate from the LEFT when too long, keeping the current location visible, because "where am I" is the question it exists to answer (FR-055)
+- [X] T121 [US7] [TDD] Replace the hand-rolled scroll arithmetic in `src/ui/app.ts` with `ScrollBoxRenderable`. The district list is 78 rows and a large district runs to hundreds of councils; a real viewport culls rather than slicing arrays (research R11)
+- [X] T122 [US7] [TDD] Make the status bar context-sensitive in `src/ui/components/status.ts`: it MUST list only actions available on the current screen, and MUST NOT offer an action that would do nothing here (FR-064)
+- [X] T123 [US7] [TDD] Assert region stability in `tests/ui/stability.test.ts`: ingest new data while a view is open and prove the regions, the scroll offset and the selected row are all unmoved (FR-058, and User Story 2 scenario 5 which must not regress)
+- [X] T124 [US7] [TDD] Verify the frame still fits 80 by 24 in `tests/ui/stability.test.ts`: chrome costs rows, and the minimum terminal size is not negotiable (FR-041)
+- [X] T125 [US7] Run quickstart scenario **V13** and record the result in `specs/001-election-results-tui/quickstart.md`
+- [X] T126 **REVIEW** User Story 7 in `src/ui/chrome/`: verify a refresh cannot move the user, that the breadcrumb truncates from the correct end, and that no action is offered where it does nothing
 
 **Checkpoint**: the user always knows where they are and what applies here. This is the single largest
 orientation gain and is worth shipping alone.
@@ -426,7 +426,7 @@ orientation gain and is worth shipping alone.
 **Independent Test**: open the palette from a council, type part of an action name without diacritics,
 and perform it. Every action is present; each shows its key.
 
-- [ ] T127 [US8] [TDD] Build the action registry in `src/ui/palette/actions.ts`: every action with its label, shortcut, and a predicate for whether it applies to the current screen. This registry MUST be the single source of truth shared with the status bar, so the two cannot disagree (Principle I)
+- [X] T127 [US8] [TDD] Build the action registry in `src/ui/palette/actions.ts`: every action with its label, shortcut, and a predicate for whether it applies to the current screen. This registry MUST be the single source of truth shared with the status bar, so the two cannot disagree (Principle I)
 - [ ] T128 [US8] [TDD] Build the palette view in `src/ui/palette/view.ts` from `InputRenderable` and `SelectRenderable`, opened by Ctrl+P from any screen (FR-065)
 - [ ] T129 [US8] [TDD] Show each action's shortcut beside its entry in `src/ui/palette/view.ts`, so a user reaching an action through the palette learns the key for next time (FR-066)
 - [ ] T130 [US8] [TDD] Filter palette entries as the user types in `src/ui/palette/view.ts`, reusing `fold()` from `src/domain/folding.ts` so matching is insensitive to case and Czech diacritics exactly as search is (FR-067). Reusing the function rather than reimplementing it is what keeps the two behaviours identical

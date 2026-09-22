@@ -16,6 +16,7 @@ import { loadReference, type ReferenceArchives } from "../../src/reference/loade
 import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { composeScreen } from "../../src/ui/screen.ts"
+import { renderDistrict } from "../../src/ui/views/areas.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
 const read = (name: string) => readFileSync(join(FIXTURES, name), "utf8")
@@ -187,5 +188,21 @@ describe("results are browsable with NO reference data at all (FR-011)", () => {
     expect(before).toContain("Brno-Bohunice")
     expect(after).toContain("Brno-Bohunice")
     expect(after).toContain("Zastupitelstvo městské části")
+  })
+})
+
+describe("the district heading names the district (FR-011, quickstart V8)", () => {
+  // It read "Okres CZ0642" while the breadcrumb above it read "Okres Brno-město".
+  // Showing a raw NUTS code where the name is known is exactly what FR-011 forbids.
+  test("shows the name, not the NUTS code", () => {
+    const lines = renderDistrict(db, "CZ0642", 100)
+    expect(lines[0]).toContain("Brno-město")
+    expect(lines[0]).not.toContain("CZ0642")
+  })
+
+  test("falls back to the code when the codelist was never loaded", () => {
+    const bare = openMemoryDatabase()
+    const lines = renderDistrict(bare, "CZ0642", 100)
+    expect(lines[0]).toContain("CZ0642")
   })
 })
