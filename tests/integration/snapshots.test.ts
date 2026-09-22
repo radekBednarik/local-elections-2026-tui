@@ -202,6 +202,7 @@ describe("child rows", () => {
         candidates: [
           {
             vstrana: "768",
+            ballotOrder: 3,
             ballotNumber: 1,
             givenName: "Antonín",
             familyName: "Brzobohatý",

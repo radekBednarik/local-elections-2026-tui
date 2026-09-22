@@ -32,6 +32,8 @@ export interface PartyResultInput {
 
 export interface CandidateResultInput {
   vstrana: string
+  /** The list's ballot position, which distinguishes two lists sharing a party code. */
+  ballotOrder: number | null
   ballotNumber: number
   givenName: string
   familyName: string
@@ -82,7 +84,7 @@ export type WriteOutcome =
 function digest(input: SnapshotInput): string {
   const parties = [...input.parties]
     .sort((a, b) => a.vstrana.localeCompare(b.vstrana))
-    .map((p) => `${p.vstrana}:${p.votes}:${p.votesPct}:${p.seatsWon}`)
+    .map((p) => `${p.vstrana}:${p.ballotOrder}:${p.votes}:${p.votesPct}:${p.seatsWon}`)
     .join("|")
   return [
     input.areaKind,
@@ -222,14 +224,15 @@ function insertSnapshot(db: Database, input: SnapshotInput, contentDigest: strin
 
   const insertCandidate = db.query(
     `INSERT INTO candidate_result (
-       snapshot_id, vstrana, ballot_number, given_name, family_name, name_folded,
+       snapshot_id, vstrana, ballot_order, ballot_number, given_name, family_name, name_folded,
        title_before, title_after, votes, votes_pct, elected
-     ) VALUES ($s, $v, $n, $given, $family, $folded, $tb, $ta, $votes, $pct, 1)`,
+     ) VALUES ($s, $v, $order, $n, $given, $family, $folded, $tb, $ta, $votes, $pct, 1)`,
   )
   for (const candidate of input.candidates ?? []) {
     insertCandidate.run({
       s: snapshotId,
       v: candidate.vstrana,
+      order: candidate.ballotOrder,
       n: candidate.ballotNumber,
       given: candidate.givenName,
       family: candidate.familyName,

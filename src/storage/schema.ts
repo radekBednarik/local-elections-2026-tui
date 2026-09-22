@@ -198,7 +198,16 @@ CREATE TABLE IF NOT EXISTS result_snapshot (
   digest             TEXT
 );
 
+-- Keyed by ballot position, not by party code.
+--
+-- One nationwide party code can field TWO SEPARATE LISTS in the same council: Brno-
+-- Bosonohy has VSTRANA 90 twice. Keying on (snapshot_id, vstrana) therefore loses a
+-- real candidate list, and did, until a district ingest hit the constraint. The ballot
+-- position (POR_STR_HLAS_LIST) is what actually distinguishes lists within a council.
+-- The national document has no ballot position, but its party codes are unique there,
+-- which is why the uniqueness rule coalesces a missing position rather than ignoring it.
 CREATE TABLE IF NOT EXISTS party_result (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
   snapshot_id   INTEGER NOT NULL REFERENCES result_snapshot(id) ON DELETE CASCADE,
   vstrana       TEXT NOT NULL,
   ballot_order  INTEGER,
@@ -208,14 +217,19 @@ CREATE TABLE IF NOT EXISTS party_result (
   votes_pct     REAL,
   candidates    INTEGER,
   seats_won     INTEGER NOT NULL DEFAULT 0,
-  seats_pct     REAL,
-  PRIMARY KEY (snapshot_id, vstrana)
+  seats_pct     REAL
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_party_result_unique
+  ON party_result(snapshot_id, vstrana, COALESCE(ballot_order, -1));
+
 -- Elected representatives as reported in the result document (FR-034).
+-- Scoped by ballot position for the same reason as party_result above.
 CREATE TABLE IF NOT EXISTS candidate_result (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
   snapshot_id   INTEGER NOT NULL REFERENCES result_snapshot(id) ON DELETE CASCADE,
   vstrana       TEXT NOT NULL,
+  ballot_order  INTEGER,
   ballot_number INTEGER NOT NULL,
   given_name    TEXT NOT NULL,
   family_name   TEXT NOT NULL,
@@ -224,9 +238,11 @@ CREATE TABLE IF NOT EXISTS candidate_result (
   title_after   TEXT,
   votes         INTEGER NOT NULL DEFAULT 0,
   votes_pct     REAL,
-  elected       INTEGER NOT NULL DEFAULT 1 CHECK (elected IN (0, 1)),
-  PRIMARY KEY (snapshot_id, vstrana, ballot_number)
+  elected       INTEGER NOT NULL DEFAULT 1 CHECK (elected IN (0, 1))
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_candidate_result_unique
+  ON candidate_result(snapshot_id, vstrana, COALESCE(ballot_order, -1), ballot_number);
 `
 
 const LOCAL_TABLES = `
