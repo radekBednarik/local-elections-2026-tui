@@ -33,6 +33,8 @@ export interface CliOptions {
   /** Where exports are written. Defaults to the working directory. */
   exportDir: string
   refreshReference: boolean
+  /** Drop every stored result and registry and start from nothing (FR-045). */
+  reset: boolean
   logLevel: LogLevel
   showHelp: boolean
   showVersion: boolean
@@ -129,6 +131,7 @@ export function parseCliArgs(argv: string[]): ParseResult {
       dataDir: values["data-dir"] ?? null,
       exportDir: values["export-dir"] ?? process.cwd(),
       refreshReference: values["refresh-reference"] === true,
+      reset: values.reset === true,
       logLevel,
       showHelp: values.help === true,
       showVersion: values.version === true,
@@ -145,6 +148,7 @@ const OPTION_SPEC = {
   "data-dir": { type: "string" },
   "export-dir": { type: "string" },
   "refresh-reference": { type: "boolean" },
+  reset: { type: "boolean" },
   "log-level": { type: "string" },
   help: { type: "boolean" },
   "self-test": { type: "boolean" },
@@ -160,6 +164,7 @@ export const USAGE = `Použití: volby-kv2026 [přepínače]
   --data-dir <cesta>     Jiný adresář pro data aplikace
   --export-dir <cesta>   Adresář pro exporty, výchozí aktuální adresář
   --refresh-reference    Znovu stáhnout registry a číselníky
+  --reset                Smazat uložené výsledky i registry a začít od nuly
   --log-level <úroveň>   error | warn | info | debug, výchozí info
   --version              Vypsat verzi a skončit
   --self-test            Ověřit funkčnost binárky a skončit

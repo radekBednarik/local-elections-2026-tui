@@ -17,6 +17,7 @@ import { runSelfTest } from "./self-test.ts"
 import { fetchArchive } from "./sources/client.ts"
 import { Scheduler } from "./sources/scheduler.ts"
 import { registryArchiveUrl, type SourceLocation } from "./sources/urls.ts"
+import { adoptDataset, datasetKey, resetData } from "./storage/dataset.ts"
 import { openDatabase } from "./storage/db.ts"
 import { App } from "./ui/app.ts"
 
@@ -71,6 +72,30 @@ async function main(): Promise<number> {
     baseUrl: options.baseUrl,
     election: options.election,
     date: options.date,
+  }
+
+  // Stored data belongs to the source it came from. A run against a mirror used to
+  // leave mirrored figures behind for the next run to find and draw as current, which is
+  // the one thing this application must never do (FR-029).
+  if (options.reset) {
+    resetData(db, location)
+    log.info("Uložená data smazána na žádost (--reset)")
+    process.stderr.write("Uložená data smazána. Aplikace začíná od nuly.\n")
+  } else {
+    const change = adoptDataset(db, location)
+    if (change.cleared) {
+      log.info("Jiný zdroj dat, uložená data smazána", {
+        previous: change.previous,
+        current: datasetKey(location),
+        watchlistCleared: change.watchlistCleared,
+      })
+      process.stderr.write(
+        "Uložená data pocházejí z jiného zdroje a byla smazána. Aplikace čeká na nová data.\n",
+      )
+      if (change.watchlistCleared) {
+        process.stderr.write("Jiné volby: seznam sledovaných zastupitelstev byl vyprázdněn.\n")
+      }
+    }
   }
 
   if (options.refreshReference) invalidateReference(db)

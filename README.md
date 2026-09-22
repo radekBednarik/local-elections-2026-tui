@@ -88,6 +88,7 @@ volby-kv2026 [přepínače]
   --data-dir <cesta>     Jiný adresář pro data aplikace
   --export-dir <cesta>   Adresář pro exporty, výchozí aktuální adresář
   --refresh-reference    Znovu stáhnout registry a číselníky
+  --reset                Smazat uložené výsledky i registry a začít od nuly
   --log-level <úroveň>   error | warn | info | debug, výchozí info
   --version              Vypsat verzi a skončit
   --help                 Vypsat tuto nápovědu a skončit
@@ -96,6 +97,12 @@ volby-kv2026 [přepínače]
 Press `?` inside the application for the full key map, or `Ctrl+P` for the command palette.
 
 Minimum terminal size is 80 × 24.
+
+**Stored data belongs to the source it came from.** The database remembers which election,
+date and base URL filled it. Point the application somewhere else - a mirror, a replay
+harness, the live source - and it drops what it holds and starts empty, waiting for fresh
+data, rather than showing you yesterday's figures as today's. `--reset` does the same on
+demand. Your watchlist, theme and panel state survive; they are yours, not the data's.
 
 ### First run
 

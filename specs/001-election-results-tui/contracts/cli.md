@@ -24,6 +24,7 @@ With no options the application starts the dashboard against the default electio
 | `--interval <seconds>` | Polling interval | `60` | FR-017 |
 | `--data-dir <path>` | Override the per-user data directory | OS convention | FR-047 |
 | `--refresh-reference` | Force re-retrieval of registries and code lists, then continue | off | FR-020a |
+| `--reset` | Drop every stored result and registry, then continue from nothing | off | FR-045 |
 | `--log-level <level>` | `error` \| `warn` \| `info` \| `debug` | `info` | FR-030 |
 | `--version` | Print version and exit | | |
 | `--help` | Print usage and exit | | |
@@ -37,6 +38,27 @@ With no options the application starts the dashboard against the default electio
 - `--base-url` accepts `http(s)://` and `file://`. The `file://` form is what lets the replay harness and
   fixture-driven tests run with no network at all (research R9).
 - An unknown option exits non-zero with usage on stderr. Options are never silently ignored.
+
+## Stored data belongs to its source
+
+The data directory holds one database, and that database records which dataset filled it:
+`election`, `date` and `base-url` together.
+
+| On start | Behaviour |
+|---|---|
+| Same dataset as last time | Stored results are kept and shown, marked with their age |
+| Any of the three differs | Results, subscriptions and reference data are dropped; the application starts empty and waiting (FR-045) |
+| Data present with no recorded dataset | Treated as foreign and dropped. Written by a version that did not record one |
+| `--reset` | Everything fetched is dropped, whatever the dataset |
+
+The watchlist is the user's, not the data's. It survives a change of source or date, because
+a council code means the same thing across mirrors of one election, and is cleared only when
+the **election** changes. Theme and side-panel state always survive.
+
+**Why this is a contract and not an implementation detail.** A run against a mirror used to
+leave mirrored figures in the database, and the next run would find them, decide they were
+current and draw them. Showing a 2022 figure as a 2026 one is the failure every provenance
+requirement exists to prevent (FR-029, FR-050, SC-017).
 
 ## Exit codes
 
