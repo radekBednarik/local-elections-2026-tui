@@ -54,7 +54,7 @@ for (const s of steps) nav.push(s)
 for (const label of ["district", "council"] as const) {
   const screen = label === "district" ? steps[1]! : steps[2]!
   const c = composeScreen(db, screen, opts)
-  console.log("\n" + "=".repeat(96))
+  console.log(`\n${"=".repeat(96)}`)
   console.log(`[${label}]  rows=${c.rowCount}  firstRow=${c.firstRow}  opens=${JSON.stringify(c.target(0))}`)
   console.log("-".repeat(96))
   for (const line of c.lines.slice(0, 14)) console.log(line)
@@ -65,6 +65,6 @@ const cand = composeScreen(
   { kind: "candidates", kodzastup: "551082", vstrana: "768", ballotOrder: null },
   opts,
 )
-console.log("\n" + "=".repeat(96))
+console.log(`\n${"=".repeat(96)}`)
 for (const line of cand.lines.slice(0, 10)) console.log(line)
 console.log("=".repeat(96))

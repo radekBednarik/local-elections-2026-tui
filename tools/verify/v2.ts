@@ -35,6 +35,6 @@ for (let pass = 1; pass <= 3; pass++) {
   if (pass < 3) await new Promise((r) => setTimeout(r, 2500))
 }
 
-console.log("\n" + "=".repeat(78))
+console.log(`\n${"=".repeat(78)}`)
 for (const line of renderNationalView(db, { width: 78 }).slice(0, 18)) console.log(line)
 console.log("=".repeat(78))
