@@ -20,14 +20,32 @@
  */
 
 import type { ChangeKind } from "../domain/status.ts"
-import { type Column, dataRow, pad } from "./format.ts"
+import { type Column, dataRow, pad, rule } from "./format.ts"
+import { markSorted, type SortState, UNSORTED } from "./sort.ts"
+import type { Role } from "./theme/roles.ts"
+import type { Slot } from "./theme/themes.ts"
 
 /** What a cell means. Resolved to a colour by the active theme (FR-059). */
-export type Role = "heading" | "selection" | "warning" | "increase" | "decrease" | "muted"
+export type { Role }
+
+/**
+ * A background a cell paints for itself, whatever row it sits on: cards, chips and
+ * badges (research R4). Text on any of them but `element` is drawn in `onAccent`.
+ */
+export type Surface = "element" | "primary" | "accent" | "success" | "warning"
 
 export interface Cell {
   text: string
   role?: Role
+  surface?: Surface
+  /** Marks a bar column, so the part of it the bar does not fill shows the track. */
+  bar?: boolean
+  /**
+   * A foreground named by slot rather than by role, for the two places no role fits: the
+   * `▌` joins between breadcrumb segments, whose foreground is the background of the
+   * segment to their left, and the rule under a table header, drawn in `border`.
+   */
+  fgSlot?: Slot
 }
 
 export interface SemanticRow {
@@ -43,6 +61,12 @@ export interface SemanticRow {
    * walk it the same way.
    */
   columns?: Column[]
+  /**
+   * What the row IS, for the frame to paint it (research R3). A header is tinted, a data
+   * row is striped by its position, a rule is drawn in the border colour. Absent means
+   * text: titles, summaries and notes, which are neither.
+   */
+  kind?: "header" | "rule" | "data"
 }
 
 /** A cell with an optional role. The common case. */
@@ -60,6 +84,53 @@ export function line(text: string, role?: Role): SemanticRow {
   return { cells: [cell(text, role)] }
 }
 
+/**
+ * A table's header and the rule under it, marked so the frame can tint them.
+ *
+ * Built on the same layout as `headerRow`, so the plain text is byte for byte what it
+ * always was. The sorted column keeps the marker `markSorted` writes into its title and
+ * takes the accent role, so it stands out in colour as well as by symbol.
+ */
+export function tableHeader(columns: Column[], sort: SortState = UNSORTED): SemanticRow[] {
+  const layout = markSorted(columns, sort)
+  return [
+    {
+      kind: "header",
+      columns: layout,
+      cells: layout.map((column, index) => cell(column.header, index === sort.column ? "accent" : "heading")),
+    },
+    {
+      kind: "rule",
+      columns: layout,
+      cells: layout.map((column) => ({ text: rule(column.width), fgSlot: "border" })),
+    },
+  ]
+}
+
+/**
+ * A status badge: its text on a coloured surface (002 FR-023). The text states the
+ * status on its own, so the badge reads the same without colour.
+ */
+export function badge(text: string, surface: Surface = "success"): Cell {
+  return { text: ` ${text} `, role: "heading", surface }
+}
+
+/** A label and value chip pair, for a figure shown on its own (002 FR-022). */
+export function chip(label: string, value: string): Cell[] {
+  return [
+    { text: ` ${label} `, role: "subtle", surface: "element" },
+    { text: ` ${value} `, role: "heading", surface: "primary" },
+  ]
+}
+
+/**
+ * Display cells a run of cells or chunks occupies, one per character. The one measure
+ * the chrome, the chips and the row padding all lay themselves out by.
+ */
+export function cellsWide(parts: { text: string }[]): number {
+  return parts.reduce((sum, part) => sum + [...part.text].length, 0)
+}
+
 /** A blank separator row. */
 export function blank(): SemanticRow {
   return { cells: [{ text: "" }] }
@@ -75,10 +146,12 @@ export function blank(): SemanticRow {
 export function toText(r: SemanticRow, columns?: Column[], gap = 1): string {
   const layout = r.columns ?? columns
   if (layout === undefined || layout.length === 0) {
-    // A non-tabular row: join the cells with a single space and leave the text alone.
+    // A non-tabular row: its cells side by side, exactly as the styled form draws them.
+    // Any space between two cells is written into the cells, so the plain and styled
+    // forms cannot disagree about it (002: chips, badges and the seat strip).
     return r.cells
       .map((c) => c.text)
-      .join(" ")
+      .join("")
       .trimEnd()
   }
   return dataRow(
@@ -97,6 +170,9 @@ export function toTextLines(rows: SemanticRow[], columns?: Column[], gap = 1): s
 export interface StyledChunk {
   text: string
   role?: Role
+  surface?: Surface
+  bar?: boolean
+  fgSlot?: Slot
 }
 
 /**
@@ -105,11 +181,15 @@ export interface StyledChunk {
  * Padding is applied here rather than left to the renderer so that a styled row and a
  * plain row occupy exactly the same columns. A layout that drifted between the two
  * would make the test assertions meaningless.
+ *
+ * Trailing blanks are trimmed, as `toText` trims them. Left in place, the padding of the
+ * last column is what the clamp cut first: a row whose text fitted was still given an
+ * ellipsis, because its invisible padding did not.
  */
 export function toChunks(r: SemanticRow, columns?: Column[], gap = 1): StyledChunk[] {
   const layout = r.columns ?? columns
   if (layout === undefined || layout.length === 0) {
-    return r.cells.map((c) => ({ text: c.text, role: c.role ?? r.role }))
+    return trimTrailing(r.cells.map((c) => chunkOf(c, c.text, r.role)))
   }
 
   const chunks: StyledChunk[] = []
@@ -118,13 +198,42 @@ export function toChunks(r: SemanticRow, columns?: Column[], gap = 1): StyledChu
   layout.forEach((column, index) => {
     if (index > 0) chunks.push({ text: separator })
     const source = r.cells[index]
-    chunks.push({
-      text: pad(source?.text ?? "", column.width, column.align),
-      role: source?.role ?? r.role,
-    })
+    chunks.push(chunkOf(source ?? { text: "" }, pad(source?.text ?? "", column.width, column.align), r.role))
   })
 
-  return chunks
+  return trimTrailing(chunks)
+}
+
+/** A cell as a styled chunk, carrying everything that decides how it looks. */
+function chunkOf(source: Cell, text: string, rowRole: Role | undefined): StyledChunk {
+  const chunk: StyledChunk = { text }
+  const role = source.role ?? rowRole
+  if (role !== undefined) chunk.role = role
+  if (source.surface !== undefined) chunk.surface = source.surface
+  if (source.bar === true) chunk.bar = true
+  if (source.fgSlot !== undefined) chunk.fgSlot = source.fgSlot
+  return chunk
+}
+
+/**
+ * Drops the blanks at the end of a row, across as many chunks as they span.
+ *
+ * Stops at a chunk that paints its own background: the padding inside a chip or a bar
+ * track is part of what the user sees, not slack to be cut.
+ */
+function trimTrailing(chunks: StyledChunk[]): StyledChunk[] {
+  const out = [...chunks]
+  while (out.length > 0) {
+    const last = out[out.length - 1] as StyledChunk
+    if (last.surface !== undefined || last.bar === true) break
+    const trimmed = last.text.trimEnd()
+    if (trimmed !== "") {
+      out[out.length - 1] = { ...last, text: trimmed }
+      break
+    }
+    out.pop()
+  }
+  return out
 }
 
 /**

@@ -54,7 +54,7 @@ describe("contents (FR-056, T150)", () => {
 
   test("a watched council with no data yet says so rather than vanishing", () => {
     toggleWatchlist(db, "999999")
-    expect(lines().join("\n")).toMatch(/čeká se|Sledované/)
+    expect(lines().join("\n")).toMatch(/čeká se|SLEDOVANÉ/)
   })
 
   test("two watched councils both appear", () => {
@@ -100,7 +100,7 @@ describe("the content area always wins (FR-057, T152)", () => {
       const nav = new Navigation()
       nav.push({ kind: "council", kodzastup: "582786" })
 
-      applyPanel(frame, db, themeByName("dark"), panelFits(frame.rawContentWidth))
+      applyPanel(frame, db, themeByName("tokyonight"), panelFits(frame.rawContentWidth))
       applyFrameState(
         frame,
         frameState({
@@ -108,7 +108,7 @@ describe("the content area always wins (FR-057, T152)", () => {
           nav,
           councilType: "OBEC",
           query: "",
-          theme: themeByName("dark"),
+          theme: themeByName("tokyonight"),
           sort: UNSORTED,
           width: 80,
           contentWidth: frame.contentWidth,
@@ -121,7 +121,7 @@ describe("the content area always wins (FR-057, T152)", () => {
 
       expect(frame.panelIsVisible).toBe(false)
       expect(frame.contentWidth).toBeGreaterThanOrEqual(MIN_CONTENT_COLUMNS)
-      expect(setup.captureCharFrame()).not.toContain("Sledované")
+      expect(setup.captureCharFrame()).not.toContain("SLEDOVANÉ")
     } finally {
       setup.renderer.destroy()
     }
@@ -138,7 +138,7 @@ describe("the content area always wins (FR-057, T152)", () => {
 
       // Two passes: the first lets the layout settle so the measured width is real.
       for (let pass = 0; pass < 2; pass += 1) {
-        applyPanel(frame, db, themeByName("dark"), panelFits(frame.rawContentWidth))
+        applyPanel(frame, db, themeByName("tokyonight"), panelFits(frame.rawContentWidth))
         applyFrameState(
           frame,
           frameState({
@@ -146,11 +146,11 @@ describe("the content area always wins (FR-057, T152)", () => {
             nav,
             councilType: "OBEC",
             query: "",
-            theme: themeByName("dark"),
+            theme: themeByName("tokyonight"),
             sort: UNSORTED,
             width: 130,
-            contentWidth: frame.contentWidth > 0 ? frame.contentWidth : 120,
-            contentHeight: frame.contentHeight > 0 ? frame.contentHeight : 26,
+            contentWidth: frame.contentWidth > 0 ? frame.contentWidth : 128,
+            contentHeight: frame.contentHeight > 0 ? frame.contentHeight : 27,
             warning: null,
             notice: null,
           }),
@@ -161,7 +161,7 @@ describe("the content area always wins (FR-057, T152)", () => {
       expect(frame.panelIsVisible).toBe(true)
       expect(frame.contentWidth).toBeGreaterThanOrEqual(MIN_CONTENT_COLUMNS)
       const captured = setup.captureCharFrame()
-      expect(captured).toContain("Sledované")
+      expect(captured).toContain("SLEDOVANÉ")
       // The table is still there beside it, not squeezed away.
       expect(captured).toContain("Volební strana")
     } finally {
@@ -178,7 +178,7 @@ describe("the content area always wins (FR-057, T152)", () => {
       const frame = new Frame(setup.renderer)
       frame.attach(setup.renderer.root)
       for (const visible of [true, false, true]) {
-        applyPanel(frame, db, themeByName("dark"), visible)
+        applyPanel(frame, db, themeByName("tokyonight"), visible)
         frame.setRows(Array.from({ length: 40 }, (_, i) => `  řádek ${i}`))
         await setup.renderOnce()
         for (const line of setup
@@ -192,5 +192,26 @@ describe("the content area always wins (FR-057, T152)", () => {
     } finally {
       setup.renderer.destroy()
     }
+  })
+})
+
+describe("the panel's look (002 T054, FR-018)", () => {
+  test("the title is SLEDOVANÉ in the accent role, and each turnout bar is marked for its track", () => {
+    toggleWatchlist(db, "582786")
+    const rows = buildPanelRows(db)
+    const title = rows[0]?.cells[0]
+    expect(title?.text.trim()).toBe("SLEDOVANÉ")
+    expect(title?.role).toBe("accent")
+    const bars = rows.flatMap((r) => r.cells).filter((c) => c.bar === true)
+    expect(bars.length).toBeGreaterThan(0)
+    for (const b of bars) expect(b.text).toMatch(/^[█▉▊▋▌▍▎▏ ]+$/)
+  })
+
+  test("the plain text still reads a name, then its turnout beside its bar", () => {
+    toggleWatchlist(db, "582786")
+    const text = toTextLines(buildPanelRows(db)).join("\n")
+    expect(text).toContain("Brno")
+    // formatPercent writes a no-break space before the sign, hence \s.
+    expect(text).toMatch(/41,90\s%\s[█▉▊▋▌▍▎▏]/)
   })
 })

@@ -12,7 +12,9 @@ import { TextRenderable } from "@opentui/core"
 import { createTestRenderer } from "@opentui/core/testing"
 import { ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
+import { type SemanticRow, toTextLines } from "../../src/ui/row.ts"
 import { renderNationalView } from "../../src/ui/views/national.ts"
+import { buildNationalRows } from "../../src/ui/views/national-rows.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
 const NATIONAL = readFileSync(join(FIXTURES, "vysledky.xml"), "utf8")
@@ -50,8 +52,8 @@ describe("with results (User Story 1)", () => {
 
   test("renders turnout, count progress and seats per party (FR-031)", async () => {
     const frame = await frameOf(renderNationalView(db, { now: new Date("2026-10-09T21:20:00Z") }))
-    expect(frame).toContain("Sečteno okrsků")
-    expect(frame).toContain("Účast")
+    expect(frame).toMatch(/sečteno okrsků/i)
+    expect(frame).toMatch(/účast/i)
     expect(frame).toContain("Volební strana")
     expect(frame).toContain("Mandáty")
   })
@@ -129,5 +131,89 @@ describe("with results (User Story 1)", () => {
     expect(frame).not.toContain("undefined")
     expect(frame).not.toContain("NaN")
     expect(frame).not.toContain("null")
+  })
+})
+
+describe("the summary as cards (002 T049, T050, FR-020, FR-021, FR-026)", () => {
+  beforeEach(() => {
+    ingestNational(db, NATIONAL)
+  })
+
+  /**
+   * The rows above the party table: the summary, whatever form it takes. The formatters
+   * write no-break spaces inside figures; they are compared here as plain spaces.
+   */
+  const summary = (rows: SemanticRow[]) => {
+    const header = rows.findIndex((r) => r.kind === "header")
+    return toTextLines(rows.slice(0, header))
+      .join("\n")
+      .replace(/[\u00a0\u202f]/g, " ")
+  }
+  const count = (text: string, figure: string) => text.split(figure).length - 1
+
+  test("keeps every figure shown before, each exactly once", () => {
+    const text = summary(buildNationalRows(db, { width: 100 }))
+    for (const figure of [
+      "14 722 / 14 722",
+      "100,00 %",
+      "46,07 %",
+      "87 076 331",
+      "8 255 204",
+      "3 803 131",
+      "59 228",
+    ]) {
+      expect(`${figure}: ${count(text, figure)}`).toBe(`${figure}: 1`)
+    }
+    expect(text).toContain("2026-10-09T21:15:00")
+  })
+
+  test("opens with the status as a badge, and the three card labels", () => {
+    const rows = buildNationalRows(db, { width: 100 })
+    const text = summary(rows)
+    expect(text).toContain("✓ konečné výsledky")
+    for (const label of ["SEČTENO OKRSKŮ", "ÚČAST", "PLATNÉ HLASY"]) expect(text).toContain(label)
+    const badge = rows.flatMap((r) => r.cells).find((c) => c.text.includes("konečné výsledky"))
+    expect(badge?.surface).toBe("success")
+  })
+
+  test("each card is three rows on element, with the count and turnout drawn as bars", () => {
+    const rows = buildNationalRows(db, { width: 100 })
+    const cardRows = rows.filter((r) => r.cells.some((c) => c.surface === "element"))
+    expect(cardRows).toHaveLength(3)
+    const bars = cardRows[2]?.cells.filter((c) => c.bar === true) ?? []
+    expect(bars).toHaveLength(2)
+    // 100 % counted fills its bar; 46,07 % fills a little under half of the same width.
+    const filled = (text: string) => [...text].filter((ch) => ch !== " ").length
+    const [counted, turnout] = bars
+    expect(filled(counted?.text ?? "")).toBe([...(counted?.text ?? "")].length)
+    expect(filled(turnout?.text ?? "")).toBeLessThan([...(turnout?.text ?? "")].length / 2 + 1)
+  })
+
+  test("no card figure is ever cut, at any width the content area can have", () => {
+    for (let width = 60; width <= 140; width += 7) {
+      const text = summary(buildNationalRows(db, { width }))
+      for (const figure of ["14 722 / 14 722", "46,07 %", "87 076 331"]) {
+        expect(`${width}: ${text.includes(figure)}`).toBe(`${width}: true`)
+      }
+    }
+  })
+
+  test("collapses to compact lines, every figure kept, when the cards would crowd out the table", () => {
+    const roomy = buildNationalRows(db, { width: 100, contentHeight: 30 })
+    const tight = buildNationalRows(db, { width: 100, contentHeight: 15 })
+    expect(summary(roomy)).toContain("SEČTENO OKRSKŮ")
+    expect(summary(tight)).not.toContain("SEČTENO OKRSKŮ")
+    for (const figure of [
+      "14 722 / 14 722",
+      "100,00 %",
+      "46,07 %",
+      "87 076 331",
+      "8 255 204",
+      "3 803 131",
+      "59 228",
+    ]) {
+      expect(summary(tight)).toContain(figure)
+    }
+    expect(summary(tight).split("\n").length).toBeLessThan(summary(roomy).split("\n").length)
   })
 })

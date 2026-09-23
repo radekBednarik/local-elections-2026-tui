@@ -27,9 +27,23 @@ function write(db: Database, key: string, value: string): void {
   db.query("INSERT OR REPLACE INTO app_config (key, value) VALUES ($k, $v)").run({ k: key, v: value })
 }
 
+/**
+ * Themes that existed before the visual refresh, and what each became (002 FR-006a).
+ *
+ * "dark" and "light" took their colours from the terminal's own palette, which a
+ * painted background cannot. A user who had chosen one gets its nearest replacement
+ * rather than losing the choice. The stored value is left alone; the next theme switch
+ * writes the new name.
+ */
+const LEGACY_THEMES: Record<string, ThemeName> = {
+  dark: "tokyonight",
+  light: "catppuccin-latte",
+}
+
 /** The stored theme, or null when none is stored or the value is unrecognised (FR-061). */
 export function readTheme(db: Database): ThemeName | null {
-  const value = read(db, THEME_KEY)
+  const stored = read(db, THEME_KEY)
+  const value = stored === null ? null : (LEGACY_THEMES[stored] ?? stored)
   return value !== null && isThemeName(value) ? value : null
 }
 

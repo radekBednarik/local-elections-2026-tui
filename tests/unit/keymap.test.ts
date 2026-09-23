@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from "bun:test"
 import { intentFor } from "../../src/ui/keymap.ts"
-import { ACTIONS, type ActionId } from "../../src/ui/palette/actions.ts"
+import { ACTIONS, type ActionId, type RegistryActionId } from "../../src/ui/palette/actions.ts"
 import type { KeyEvent } from "../../src/ui/search-input.ts"
 
 function press(name: string, modifiers: Partial<KeyEvent> = {}): KeyEvent {
@@ -22,7 +22,8 @@ const actionOf = (key: KeyEvent): ActionId | null => {
 
 describe("every action has a key (FR-078)", () => {
   // Keys the registry advertises, pressed as the user would press them.
-  const PRESSES: Record<ActionId, KeyEvent> = {
+  // The per-theme palette entries (002 FR-005) have no key of their own: Ctrl+T cycles.
+  const PRESSES: Record<RegistryActionId, KeyEvent> = {
     move: press("down"),
     open: press("return"),
     back: press("escape"),
@@ -43,7 +44,7 @@ describe("every action has a key (FR-078)", () => {
 
   for (const action of ACTIONS) {
     test(`${action.id} is reachable`, () => {
-      const key = PRESSES[action.id]
+      const key = PRESSES[action.id as RegistryActionId]
       expect(key).toBeDefined()
       const intent = intentFor(key)
       expect(intent).not.toBeNull()

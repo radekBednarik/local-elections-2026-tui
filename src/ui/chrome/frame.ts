@@ -1,19 +1,25 @@
 /**
- * The framed regions (task T119, FR-054).
+ * The framed regions (tasks T119, T032, FR-054, 002 FR-009, FR-010).
  *
- * Three regions the user can always find: a title bar carrying the breadcrumb, a
- * bordered content area, and a status bar listing the actions available here. A fourth,
- * the watchlist side panel, sits beside the content area when it is open and there is
- * room (FR-056, FR-057).
+ * Four regions the user can always find: a title bar carrying the breadcrumb, the
+ * content area, and a status bar listing the actions available here, plus the watchlist
+ * side panel beside the content when it is open and there is room (FR-056, FR-057).
+ *
+ * The regions are told apart by SURFACE rather than by a box drawn round the content
+ * (002 research R5): the title and status bars sit on the panel tone, the content on the
+ * base tone with a heavy rail down its left edge, and the side panel on the panel tone
+ * behind a rail of its own. Each bar is a box painted in its tone with its text inside,
+ * because a text background covers only the cells that hold glyphs (research R1).
  *
  * The regions are created ONCE and only their contents change. That is what FR-058
  * requires: a refresh may change the figures inside a region but must never move the
  * regions, the scroll position or the selection. Rebuilding the tree on every draw would
  * break that guarantee in a way no amount of care elsewhere could restore.
  *
- * Chrome costs four rows at 80 by 24 - breadcrumb, two borders, status bar - which
- * leaves twenty for content. The warning row is created with zero height and grows only
- * when there is something to warn about, so a healthy run does not pay for it (FR-041).
+ * Chrome costs three rows at 80 by 24 - breadcrumb, a padding row above the content,
+ * status bar - which leaves twenty-one for content. The warning row is created with zero
+ * height and grows only when there is something to warn about, so a healthy run does not
+ * pay for it (FR-041).
  */
 
 import {
@@ -26,10 +32,26 @@ import {
   type StyledText,
   TextRenderable,
 } from "@opentui/core"
+import { slotColor, TRANSPARENT } from "../theme/apply.ts"
+import type { Slot, Theme } from "../theme/themes.ts"
 import { PANEL_COST, PANEL_WIDTH } from "./panel.ts"
 
 /** The vertical scroll bar overlays the last column of the viewport. */
 const SCROLLBAR_WIDTH = 1
+
+/** The rail down the content's left edge. */
+const RAIL_WIDTH = 1
+
+/** The empty row between the title bar and the first content row, as in the mock. */
+const TOP_PADDING = 1
+
+/** A bar painted in its own tone, holding its text. */
+function bar(renderer: CliRenderer, height: number): { box: BoxRenderable; text: TextRenderable } {
+  const box = new BoxRenderable(renderer, { height, flexShrink: 0, flexDirection: "row" })
+  const text = new TextRenderable(renderer, { content: "", flexGrow: 1 })
+  box.add(text)
+  return { box, text }
+}
 
 export class Frame {
   readonly root: BoxRenderable
@@ -40,7 +62,12 @@ export class Frame {
   readonly panel: BoxRenderable
   readonly statusBar: TextRenderable
 
+  private readonly titleBox: BoxRenderable
+  private readonly warningBox: BoxRenderable
+  private readonly statusBox: BoxRenderable
   private readonly panelText: TextRenderable
+  /** What OpenTUI draws before any theme is applied, restored when colour goes away. */
+  private readonly defaults: { rail: RGBA; panelRail: RGBA; thumb: RGBA }
   /** One renderable per content row, reused between draws rather than rebuilt. */
   private rowNodes: TextRenderable[] = []
   /** How many pooled rows currently carry content. */
@@ -48,22 +75,28 @@ export class Frame {
   /** What each pooled row was last drawn with, so an unchanged row can be skipped. */
   private rowKeys: (string | undefined)[] = []
   private panelVisible = false
+  /** The theme the surfaces were last painted with, for the warning row's tone. */
+  private theme: Theme | null = null
   private rowHandler: ((index: number, event: MouseEvent) => void) | null = null
-  private overlay: (Renderable & { visible: boolean }) | null = null
 
   constructor(private readonly renderer: CliRenderer) {
     this.root = new BoxRenderable(renderer, { flexDirection: "column", flexGrow: 1 })
 
-    this.titleBar = new TextRenderable(renderer, { content: "", height: 1, flexShrink: 0 })
+    const title = bar(renderer, 1)
+    this.titleBox = title.box
+    this.titleBar = title.text
     // Height zero until there is a warning: an empty row would cost the content area a
     // line for nothing, and at 24 rows every line is spent.
-    this.warningBar = new TextRenderable(renderer, { content: "", height: 0, flexShrink: 0 })
+    const warning = bar(renderer, 0)
+    this.warningBox = warning.box
+    this.warningBar = warning.text
 
     this.body = new BoxRenderable(renderer, {
       flexDirection: "row",
       flexGrow: 1,
-      border: true,
-      borderStyle: "single",
+      border: ["left"],
+      borderStyle: "heavy",
+      paddingTop: TOP_PADDING,
     })
 
     this.scroll = new ScrollBoxRenderable(renderer, {
@@ -81,12 +114,14 @@ export class Frame {
       width: PANEL_WIDTH,
       flexShrink: 0,
       border: ["left"],
-      borderStyle: "single",
+      borderStyle: "heavy",
     })
     this.panelText = new TextRenderable(renderer, { content: "" })
     this.panel.add(this.panelText)
 
-    this.statusBar = new TextRenderable(renderer, { content: "", height: 1, flexShrink: 0 })
+    const status = bar(renderer, 1)
+    this.statusBox = status.box
+    this.statusBar = status.text
 
     // Pinned visible rather than left to appear when content overflows, for two
     // reasons. It toggles the content width, which moves the table under the user as
@@ -96,36 +131,42 @@ export class Frame {
     // is both steadier and correct.
     this.scroll.verticalScrollBar.visible = true
 
+    this.defaults = {
+      rail: this.body.borderColor,
+      panelRail: this.panel.borderColor,
+      thumb: this.scroll.verticalScrollBar.slider.foregroundColor,
+    }
+
     this.body.add(this.scroll)
-    this.root.add(this.titleBar)
-    this.root.add(this.warningBar)
+    this.root.add(this.titleBox)
+    this.root.add(this.warningBox)
     this.root.add(this.body)
-    this.root.add(this.statusBar)
+    this.root.add(this.statusBox)
   }
 
   /**
-   * Adds a region that takes the whole content area when shown, such as the command
-   * palette. Added once and toggled, never added and removed: swapping children of the
-   * body is what put the scroll bar on the wrong edge.
-   */
-  attachOverlay(node: Renderable & { visible: boolean }): void {
-    this.overlay = node
-    this.root.add(node)
-  }
-
-  /**
-   * Shows either the content area or the overlay.
+   * Adds a region drawn OVER the content area when shown, such as the command palette.
    *
-   * The regions above and below are untouched, so the breadcrumb and the status bar stay
-   * exactly where they were while the palette is open (FR-054).
+   * Placed inside the body and positioned absolutely by the caller, so it covers the
+   * content without taking any of its layout: the content stays exactly where it was,
+   * visible beneath (002 research R7). Added once and toggled, never added and removed:
+   * swapping children of the body is what put the scroll bar on the wrong edge.
    */
-  setContentVisible(visible: boolean): void {
-    this.body.visible = visible
-    this.body.flexGrow = visible ? 1 : 0
-    // "auto" hands the row back to flex; a fixed 0 is what collapses it.
-    this.body.height = visible ? "auto" : 0
-    if (this.overlay === null) return
-    this.overlay.visible = !visible
+  attachOverlay(node: Renderable): void {
+    this.body.add(node)
+  }
+
+  /**
+   * Withholds the content rows while an overlay covers them, for monochrome only.
+   *
+   * With colour, the overlay dims the content and the palette's own surface covers it.
+   * Without colour nothing can be painted, and a space written with no background does
+   * not clear the character beneath it, so the content would read through the palette.
+   * Hiding the rows' container leaves the rail, the scroll bar and every region where they
+   * were; the next draw restores the scroll position.
+   */
+  setContentHidden(hidden: boolean): void {
+    this.scroll.content.visible = !hidden
   }
 
   /** Adds the frame to a parent, usually `renderer.root`. */
@@ -133,36 +174,52 @@ export class Frame {
     parent.add(this.root)
   }
 
-  setBreadcrumb(text: string): void {
-    this.titleBar.content = text
+  setBreadcrumb(content: string | StyledText): void {
+    this.titleBar.content = content
   }
 
-  setStatus(text: string): void {
-    this.statusBar.content = text
+  setStatus(content: string | StyledText): void {
+    this.statusBar.content = content
   }
 
   /**
-   * Colours the borders from the theme (T136).
+   * Paints every surface from the theme (002 T032, FR-009, FR-010).
    *
-   * The borders are the one part of the frame the role system did not reach: they were
-   * drawn in the layout engine's own default grey whatever theme was chosen. They take
-   * the `muted` role, which is what they are.
+   * The content rail takes `primary` and the side panel's rail `accent`; the scroll bar
+   * track takes `track` and its thumb `muted`. A theme that asks for no colour paints no
+   * surface, and hands the rails and the thumb back to OpenTUI's own colours rather than
+   * guessing at the terminal's: a colour guessed wrong can be invisible.
    *
-   * A theme that asks for no colour leaves them to the default rather than pinning a
-   * value. Pinning one would mean guessing whether the user's terminal is light or dark,
-   * and a border guessed wrong is invisible - worse than a border that is merely not
-   * themed.
+   * Border colours are set only on boxes that HAVE a border. Setting one on a borderless
+   * box switches on a border on all four sides (research R5).
    */
-  setBorderColor(color: RGBA | undefined): void {
-    if (color === undefined) return
-    this.body.borderColor = color
-    this.panel.borderColor = color
+  applyTheme(theme: Theme): void {
+    this.theme = theme
+    const paint = (slot: Slot) => slotColor(theme, slot) ?? TRANSPARENT
+    this.root.backgroundColor = paint("bg")
+    this.titleBox.backgroundColor = paint("panel")
+    this.statusBox.backgroundColor = paint("panel")
+    this.warningBox.backgroundColor = paint("warning")
+    this.body.backgroundColor = paint("bg")
+    this.panel.backgroundColor = paint("panel")
+    this.body.borderColor = slotColor(theme, "primary") ?? this.defaults.rail
+    this.panel.borderColor = slotColor(theme, "accent") ?? this.defaults.panelRail
+    const slider = this.scroll.verticalScrollBar.slider
+    slider.backgroundColor = paint("track")
+    slider.foregroundColor = slotColor(theme, "muted") ?? this.defaults.thumb
   }
 
-  /** Shows a warning, or hides the row entirely when there is none. */
-  setWarning(text: string | null): void {
-    this.warningBar.content = text ?? ""
-    this.warningBar.height = text === null || text === "" ? 0 : 1
+  /**
+   * Shows a warning, or hides the row entirely when there is none.
+   *
+   * `tone` is the surface the row sits on: `warning` for stale data, `element` for a
+   * one-off confirmation, which is news rather than a problem.
+   */
+  setWarning(content: string | StyledText | null, tone: Slot = "warning"): void {
+    const empty = content === null || content === ""
+    this.warningBar.content = content ?? ""
+    this.warningBox.height = empty ? 0 : 1
+    if (this.theme !== null) this.warningBox.backgroundColor = slotColor(this.theme, tone) ?? TRANSPARENT
   }
 
   /** Shows or hides the side panel (FR-056). */
@@ -276,14 +333,14 @@ export class Frame {
 
   /** How many rows of content the terminal currently affords. */
   get contentHeight(): number {
-    // Two of the body's rows are its own border.
-    return Math.max(0, this.body.height - 2)
+    // The body's first row is the padding under the title bar.
+    return Math.max(0, this.body.height - TOP_PADDING)
   }
 
   /**
    * Columns a content row may use.
    *
-   * The body's own border costs two, the side panel its width, and the scroll bar one:
+   * The rail costs one column, the side panel its width, and the scroll bar one:
    * the bar draws over the last column of the viewport rather than beside it, so a row
    * written to the full width loses its final character underneath it.
    */
@@ -293,7 +350,7 @@ export class Frame {
 
   /** What the content area would have if the panel were closed, for the fit rule. */
   get rawContentWidth(): number {
-    return Math.max(0, this.body.width - 2 - SCROLLBAR_WIDTH)
+    return Math.max(0, this.body.width - RAIL_WIDTH - SCROLLBAR_WIDTH)
   }
 
   private growRows(count: number): void {

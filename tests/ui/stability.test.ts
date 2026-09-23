@@ -19,8 +19,8 @@ import { loadReference, type ReferenceArchives } from "../../src/reference/loade
 import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
-import { applyFrameState, frameState } from "../../src/ui/chrome/state.ts"
-import { Navigation } from "../../src/ui/navigation.ts"
+import { applyFrameState, type FrameState, frameState } from "../../src/ui/chrome/state.ts"
+import { Navigation, type Screen } from "../../src/ui/navigation.ts"
 import { UNSORTED } from "../../src/ui/sort.ts"
 import { themeByName } from "../../src/ui/theme/themes.ts"
 
@@ -46,8 +46,9 @@ beforeEach(() => {
 /** Where each region sits in the captured frame. */
 interface Regions {
   breadcrumb: number
-  borderTop: number
-  borderBottom: number
+  /** First and last rows of the content, found by the rail down its left edge. */
+  contentTop: number
+  contentBottom: number
   status: number
 }
 
@@ -55,8 +56,8 @@ function regionsOf(captured: string): Regions {
   const lines = captured.split("\n")
   return {
     breadcrumb: lines.findIndex((l) => l.includes("ČR")),
-    borderTop: lines.findIndex((l) => l.includes("┌")),
-    borderBottom: lines.findIndex((l) => l.includes("└")),
+    contentTop: lines.findIndex((l) => l.startsWith("┃")),
+    contentBottom: lines.reduce((last, l, i) => (l.startsWith("┃") ? i : last), -1),
     // The status bar is the last written row. Located by position rather than by
     // content, because a narrow terminal drops hints from the end and no single word is
     // reliably present in it.
@@ -67,7 +68,9 @@ function regionsOf(captured: string): Regions {
 interface Harness {
   frame: Frame
   nav: Navigation
-  draw: () => Promise<string>
+  draw: (warning?: string | null) => Promise<string>
+  /** The state the last draw applied. */
+  state: () => FrameState | null
   destroy: () => void
 }
 
@@ -76,29 +79,32 @@ async function harness(width = 100, height = 30): Promise<Harness> {
   const frame = new Frame(setup.renderer)
   frame.attach(setup.renderer.root)
   const nav = new Navigation()
+  // Laid out once first, so every draw is composed against the real content metrics.
+  await setup.renderOnce()
 
-  const draw = async () => {
-    applyFrameState(
-      frame,
-      frameState({
-        db,
-        nav,
-        councilType: "OBEC",
-        query: "",
-        theme: themeByName("dark"),
-        sort: UNSORTED,
-        width,
-        contentWidth: frame.contentWidth > 0 ? frame.contentWidth : width - 2,
-        contentHeight: frame.contentHeight > 0 ? frame.contentHeight : height - 4,
-        warning: null,
-        notice: null,
-      }),
-    )
+  let last: FrameState | null = null
+  const draw = async (warning: string | null = null) => {
+    last = frameState({
+      db,
+      nav,
+      councilType: "OBEC",
+      query: "",
+      theme: themeByName("tokyonight"),
+      sort: UNSORTED,
+      width,
+      contentWidth: frame.contentWidth,
+      contentHeight: frame.contentHeight,
+      warning,
+      notice: null,
+    })
+    applyFrameState(frame, last, themeByName("tokyonight"))
+    // A warning row changes the content height; lay out again so the next draw sees it.
+    await setup.renderOnce()
     await setup.renderOnce()
     return setup.captureCharFrame()
   }
 
-  return { frame, nav, draw, destroy: () => setup.renderer.destroy() }
+  return { frame, nav, draw, state: () => last, destroy: () => setup.renderer.destroy() }
 }
 
 describe("a refresh moves nothing (FR-058, User Story 2 scenario 5)", () => {
@@ -174,13 +180,13 @@ describe("the minimum terminal, end to end (T124, FR-041)", () => {
 
       const regions = regionsOf(captured)
       expect(regions.breadcrumb).toBeGreaterThanOrEqual(0)
-      expect(regions.borderTop).toBeGreaterThan(regions.breadcrumb)
-      expect(regions.borderBottom).toBeGreaterThan(regions.borderTop)
-      expect(regions.status).toBeGreaterThan(regions.borderBottom)
+      expect(regions.contentTop).toBeGreaterThan(regions.breadcrumb)
+      expect(regions.contentBottom).toBeGreaterThan(regions.contentTop)
+      expect(regions.status).toBeGreaterThan(regions.contentBottom)
 
       for (const line of lines) expect([...line].length).toBeLessThanOrEqual(80)
       // Chrome must not eat the screen: a table needs rows to be worth showing.
-      expect(h.frame.contentHeight).toBeGreaterThanOrEqual(19)
+      expect(h.frame.contentHeight).toBeGreaterThanOrEqual(21)
     } finally {
       h.destroy()
     }
@@ -198,7 +204,7 @@ describe("the minimum terminal, end to end (T124, FR-041)", () => {
         nav: h.nav,
         councilType: "OBEC",
         query: "",
-        theme: themeByName("dark"),
+        theme: themeByName("tokyonight"),
         sort: UNSORTED,
         width: 80,
         contentWidth: 78,
@@ -207,7 +213,52 @@ describe("the minimum terminal, end to end (T124, FR-041)", () => {
         notice: null,
       })
       expect([...state.breadcrumb].length).toBeLessThanOrEqual(80)
-      expect(captured).toContain(state.breadcrumb.slice(-8))
+      // The title bar joins segments with ▌ rather than ›; what matters is that the current
+      // location, the last segment of the trail, is on screen.
+      const current = state.breadcrumb.split(" › ").at(-1) ?? ""
+      expect(current.length).toBeGreaterThan(0)
+      expect(captured.split("\n")[0]).toContain(current)
+    } finally {
+      h.destroy()
+    }
+  })
+})
+
+describe("every screen fits 80 by 24 with the warning shown (002 T025, SC-007, FR-028)", () => {
+  const WARNING = "! ZASTARALÁ DATA (CZ0642): časový limit spojení. Zobrazena poslední známá data před 4 min."
+  const screens: [string, Screen[]][] = [
+    ["national", []],
+    ["districts", [{ kind: "districts" }]],
+    ["district", [{ kind: "district", nuts: "CZ0642" }]],
+    ["council", [{ kind: "council", kodzastup: "582786" }]],
+    ["watchlist", [{ kind: "watchlist" }]],
+    ["search", [{ kind: "search" }]],
+    ["help", [{ kind: "help" }]],
+  ]
+
+  test.each(screens)("%s: no row is cut, and a table keeps ten rows in view", async (_name, stack) => {
+    const h = await harness(80, 24)
+    try {
+      for (const screen of stack) h.nav.push(screen)
+      await h.draw(WARNING)
+      const captured = await h.draw(WARNING)
+      const state = h.state()
+      expect(state).not.toBeNull()
+      if (state === null) return
+
+      expect(captured).toContain("ZASTARALÁ DATA")
+      for (const line of captured.split("\n")) expect([...line].length).toBeLessThanOrEqual(80)
+
+      // Every row in view appears whole: its text was composed for the width it is drawn
+      // at, so nothing the view wrote is lost to the chrome.
+      const visible = state.lines.slice(state.offset, state.offset + h.frame.contentHeight)
+      for (const line of visible) expect(captured).toContain(line.trimEnd())
+
+      const firstData = state.content.rows.findIndex((r) => r.kind === "data")
+      const dataRows = state.content.rows.filter((r) => r.kind === "data").length
+      if (firstData >= 0 && dataRows >= 10) {
+        expect(h.frame.contentHeight - (firstData - state.offset)).toBeGreaterThanOrEqual(10)
+      }
     } finally {
       h.destroy()
     }

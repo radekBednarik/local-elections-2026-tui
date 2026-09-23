@@ -40,7 +40,7 @@ console.log(`okresů v databázi: ${listDistricts(db).length}`)
 
 const WIDTH = 110
 const HEIGHT = 30
-const theme = themeByName("dark")
+const theme = themeByName("tokyonight")
 const setup = await createTestRenderer({ width: WIDTH, height: HEIGHT })
 const frame = new Frame(setup.renderer)
 frame.attach(setup.renderer.root)

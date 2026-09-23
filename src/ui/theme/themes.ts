@@ -1,118 +1,278 @@
 /**
- * Themes (task T111, FR-061, FR-062).
+ * Themes (tasks T006, FR-001, FR-002, FR-007).
  *
- * Dark and light resolve each role to an ANSI PALETTE INDEX rather than a hex value.
- * `RGBA.fromIndex` targets the terminal's own palette, so the interface inherits
- * whatever scheme the user has already configured and looks at home in their terminal
- * instead of fighting it. Hardcoded hex would clash with every solarized or gruvbox
- * setup (research R13).
+ * A theme is a table of colour SLOTS, each with one meaning that is the same in every
+ * theme: "stripe background", "accent", "text on an accent background". Screens never
+ * name a colour; they name a role or a slot, and the active theme decides what it looks
+ * like. That is what lets six themes share one layout.
  *
- * High contrast is the exception and pins explicit values, because an unknown user
- * palette cannot promise the brightness separation FR-062 requires.
+ * The values are the published palettes of Tokyo Night, Catppuccin, Gruvbox and Nord,
+ * with stripe and selection tones chosen between their own surface colours. Tones that
+ * missed the contrast floor were nudged until they passed and nothing else was touched
+ * (research R9, specs/002-tui-visual-refresh/data-model.md). The contrast test in
+ * tests/ui/theme-contrast.test.ts is what keeps it that way.
+ *
+ * These replace the themes that deferred to the terminal's own palette (FR-006a). A
+ * painted background cannot come from a palette whose background is unknown.
  */
 
-import type { Role } from "./roles.ts"
+export const SLOTS = [
+  "bg",
+  "panel",
+  "element",
+  "zebra",
+  "sel",
+  "track",
+  "border",
+  "borderActive",
+  "text",
+  "muted",
+  "subtle",
+  "primary",
+  "accent",
+  "success",
+  "error",
+  "warning",
+  "onAccent",
+  "bar",
+] as const
 
-export const THEME_NAMES = ["dark", "light", "high-contrast"] as const
+export type Slot = (typeof SLOTS)[number]
+
+/** In the order the theme key cycles through them (FR-005). */
+export const THEME_NAMES = [
+  "tokyonight",
+  "catppuccin-mocha",
+  "gruvbox",
+  "nord",
+  "catppuccin-latte",
+  "high-contrast",
+] as const
+
 export type ThemeName = (typeof THEME_NAMES)[number]
 
 export function isThemeName(value: string): value is ThemeName {
   return (THEME_NAMES as readonly string[]).includes(value)
 }
 
-/**
- * How a role is expressed.
- *
- * `indexed` defers to the terminal's palette; `hex` pins a value. `none` is what the
- * monochrome path returns, and is what keeps FR-063 honest: a theme can legitimately
- * say "no colour at all" and everything must still work.
- */
-export type ColorSpec =
-  | { kind: "indexed"; index: number; bold?: boolean }
-  | { kind: "hex"; value: string; bold?: boolean }
-  | { kind: "none"; bold?: boolean }
-
 export interface Theme {
   name: ThemeName
-  /** True when this theme relies on brightness rather than hue (FR-062). */
+  /** Shown in the status bar and the command palette. */
+  label: string
+  /** True when this theme relies on brightness rather than hue (001 FR-062). */
   contrastByBrightness: boolean
-  roles: Record<Role, ColorSpec>
+  /** Hex `#rrggbb` per slot. `null` only in monochrome, where nothing is coloured. */
+  slots: Record<Slot, string | null>
+  /**
+   * The slot the selected row's text takes. `text` everywhere but high contrast, whose
+   * selection is white and so needs black text on it.
+   */
+  selectionText: Slot
+  /**
+   * Drawn as the nearest xterm-256 colours rather than the exact values, for a terminal
+   * that reports 256 colours but not true colour (research R8). Set only on the variants
+   * detect.ts derives; every theme defined here is true colour.
+   */
+  palette256: boolean
 }
 
-/**
- * Standard ANSI slots 0-15. Using the bright variants for emphasis means the contrast
- * follows the user's own palette rather than a value guessed here.
- */
-const DARK: Theme = {
-  name: "dark",
+const TOKYO_NIGHT: Theme = {
+  name: "tokyonight",
+  label: "Tokyo Night",
   contrastByBrightness: false,
-  roles: {
-    heading: { kind: "indexed", index: 14, bold: true }, // bright cyan
-    selection: { kind: "indexed", index: 15, bold: true }, // bright white
-    warning: { kind: "indexed", index: 11, bold: true }, // bright yellow
-    increase: { kind: "indexed", index: 10 }, // bright green
-    decrease: { kind: "indexed", index: 9 }, // bright red
-    muted: { kind: "indexed", index: 8 }, // bright black / grey
+  selectionText: "text",
+  palette256: false,
+  slots: {
+    bg: "#1a1b26",
+    panel: "#16161e",
+    element: "#24283b",
+    zebra: "#1e2030",
+    sel: "#2e3c64",
+    track: "#292e42",
+    border: "#3b4261",
+    borderActive: "#7aa2f7",
+    text: "#c0caf5",
+    muted: "#697196",
+    subtle: "#737aa2",
+    primary: "#7aa2f7",
+    accent: "#bb9af7",
+    success: "#9ece6a",
+    error: "#f7768e",
+    warning: "#e0af68",
+    onAccent: "#1a1b26",
+    bar: "#7aa2f7",
   },
 }
 
-const LIGHT: Theme = {
-  name: "light",
+const CATPPUCCIN_MOCHA: Theme = {
+  name: "catppuccin-mocha",
+  label: "Catppuccin Mocha",
   contrastByBrightness: false,
-  roles: {
-    heading: { kind: "indexed", index: 4, bold: true }, // blue
-    selection: { kind: "indexed", index: 0, bold: true }, // black
-    warning: { kind: "indexed", index: 1, bold: true }, // red
-    increase: { kind: "indexed", index: 2 }, // green
-    decrease: { kind: "indexed", index: 1 }, // red
-    muted: { kind: "indexed", index: 8 }, // grey
+  selectionText: "text",
+  palette256: false,
+  slots: {
+    bg: "#1e1e2e",
+    panel: "#181825",
+    element: "#313244",
+    zebra: "#24243a",
+    sel: "#45475a",
+    track: "#313244",
+    border: "#45475a",
+    borderActive: "#cba6f7",
+    text: "#cdd6f4",
+    muted: "#787b90",
+    subtle: "#a6adc8",
+    primary: "#89b4fa",
+    accent: "#cba6f7",
+    success: "#a6e3a1",
+    error: "#f38ba8",
+    warning: "#f9e2af",
+    onAccent: "#1e1e2e",
+    bar: "#b4befe",
+  },
+}
+
+const GRUVBOX: Theme = {
+  name: "gruvbox",
+  label: "Gruvbox Dark",
+  contrastByBrightness: false,
+  selectionText: "text",
+  palette256: false,
+  slots: {
+    bg: "#282828",
+    panel: "#1d2021",
+    element: "#3c3836",
+    zebra: "#2f2c2a",
+    sel: "#504945",
+    track: "#3c3836",
+    border: "#504945",
+    borderActive: "#fabd2f",
+    text: "#ebdbb2",
+    muted: "#928374",
+    subtle: "#bdae93",
+    primary: "#88a99c",
+    accent: "#fabd2f",
+    success: "#b8bb26",
+    error: "#fc7c6c",
+    warning: "#fabd2f",
+    onAccent: "#282828",
+    bar: "#8ec07c",
+  },
+}
+
+const NORD: Theme = {
+  name: "nord",
+  label: "Nord",
+  contrastByBrightness: false,
+  selectionText: "text",
+  palette256: false,
+  slots: {
+    bg: "#2e3440",
+    panel: "#272c36",
+    element: "#3b4252",
+    zebra: "#333a47",
+    sel: "#434c5e",
+    track: "#3b4252",
+    border: "#4c566a",
+    borderActive: "#88c0d0",
+    text: "#e5e9f0",
+    muted: "#848ea2",
+    subtle: "#aeb7c6",
+    primary: "#88c0d0",
+    accent: "#96b1cc",
+    success: "#a3be8c",
+    error: "#d89fa4",
+    warning: "#ebcb8b",
+    onAccent: "#2e3440",
+    bar: "#88c0d0",
+  },
+}
+
+const CATPPUCCIN_LATTE: Theme = {
+  name: "catppuccin-latte",
+  label: "Catppuccin Latte",
+  contrastByBrightness: false,
+  selectionText: "text",
+  palette256: false,
+  slots: {
+    bg: "#eff1f5",
+    panel: "#e6e9ef",
+    element: "#dce0e8",
+    zebra: "#e7eaf0",
+    sel: "#ccd0da",
+    track: "#dce0e8",
+    border: "#bcc0cc",
+    borderActive: "#8839ef",
+    text: "#4c4f69",
+    muted: "#7b7e8e",
+    subtle: "#6c6f85",
+    primary: "#1a5ad8",
+    accent: "#7e35de",
+    success: "#2d701e",
+    error: "#c50e36",
+    warning: "#8b5812",
+    onAccent: "#eff1f5",
+    bar: "#1e66f5",
   },
 }
 
 /**
  * High contrast.
  *
- * Every role is separated by BRIGHTNESS, not hue, so it remains legible to a user who
- * cannot distinguish the palette's colours (FR-062). Emphasis is carried by bold as
- * well, so even a terminal rendering all of these identically still shows the
- * difference.
+ * Every state is separated by BRIGHTNESS, not hue, so it stays legible to a user who
+ * cannot tell the palette's colours apart (001 FR-062): rises, falls and muted text sit
+ * on three distinct grey levels. The selection is reversed, white with black text.
  */
 const HIGH_CONTRAST: Theme = {
   name: "high-contrast",
+  label: "Vysoký kontrast",
   contrastByBrightness: true,
-  roles: {
-    heading: { kind: "hex", value: "#ffffff", bold: true },
-    selection: { kind: "hex", value: "#ffffff", bold: true },
-    warning: { kind: "hex", value: "#ffff00", bold: true },
-    increase: { kind: "hex", value: "#e0e0e0", bold: true },
-    decrease: { kind: "hex", value: "#a0a0a0", bold: true },
-    muted: { kind: "hex", value: "#707070" },
+  selectionText: "bg",
+  palette256: false,
+  slots: {
+    bg: "#000000",
+    panel: "#262626",
+    element: "#1f1f1f",
+    zebra: "#141414",
+    sel: "#ffffff",
+    track: "#2a2a2a",
+    border: "#ffffff",
+    borderActive: "#ffff00",
+    text: "#ffffff",
+    muted: "#808080",
+    subtle: "#d0d0d0",
+    primary: "#ffffff",
+    accent: "#ffff00",
+    success: "#e0e0e0",
+    error: "#a0a0a0",
+    warning: "#ffff00",
+    onAccent: "#000000",
+    bar: "#ffffff",
   },
 }
 
 /**
- * The monochrome fallback (FR-063).
+ * The monochrome fallback (FR-008).
  *
- * Not user-selectable: it is what a terminal without colour, or `NO_COLOR`, resolves
- * to. Every role returns no colour, which is the strongest possible test that meaning
- * is carried by text, symbol and position rather than by hue.
+ * Not selectable: it is what a terminal without colour, or `NO_COLOR`, resolves to.
+ * Every slot is null, which is the strongest possible test that meaning is carried by
+ * text, symbol and position rather than by hue.
  */
 export const MONOCHROME: Theme = {
-  name: "dark",
+  name: "tokyonight",
+  label: "bez barev",
   contrastByBrightness: true,
-  roles: {
-    heading: { kind: "none", bold: true },
-    selection: { kind: "none", bold: true },
-    warning: { kind: "none", bold: true },
-    increase: { kind: "none" },
-    decrease: { kind: "none" },
-    muted: { kind: "none" },
-  },
+  selectionText: "text",
+  palette256: false,
+  slots: Object.fromEntries(SLOTS.map((slot) => [slot, null])) as Record<Slot, null>,
 }
 
 const THEMES: Record<ThemeName, Theme> = {
-  dark: DARK,
-  light: LIGHT,
+  tokyonight: TOKYO_NIGHT,
+  "catppuccin-mocha": CATPPUCCIN_MOCHA,
+  gruvbox: GRUVBOX,
+  nord: NORD,
+  "catppuccin-latte": CATPPUCCIN_LATTE,
   "high-contrast": HIGH_CONTRAST,
 }
 
@@ -123,17 +283,10 @@ export function themeByName(name: ThemeName): Theme {
 /** The next theme in the cycle, for the theme-switch key. */
 export function nextTheme(current: ThemeName): ThemeName {
   const index = THEME_NAMES.indexOf(current)
-  return THEME_NAMES[(index + 1) % THEME_NAMES.length] ?? "dark"
+  return THEME_NAMES[(index + 1) % THEME_NAMES.length] ?? "tokyonight"
 }
 
-/** Czech label for the theme, for the status line and the command palette. */
+/** The theme's name as the user sees it, in the status bar and the command palette. */
 export function themeLabel(name: ThemeName): string {
-  switch (name) {
-    case "dark":
-      return "tmavé"
-    case "light":
-      return "světlé"
-    case "high-contrast":
-      return "vysoký kontrast"
-  }
+  return THEMES[name].label
 }

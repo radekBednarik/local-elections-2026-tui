@@ -48,7 +48,7 @@ async function draw(): Promise<string> {
       db,
       nav,
       councilType: "OBEC",
-      theme: themeByName("dark"),
+      theme: themeByName("tokyonight"),
       sort: UNSORTED,
       query: "",
       width: WIDTH,

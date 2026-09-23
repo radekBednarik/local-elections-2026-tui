@@ -8,9 +8,9 @@
 
 import type { Database } from "bun:sqlite"
 import { type SearchHit, search } from "../../storage/queries/search.ts"
-import { type Column, clampLines, headerRow, rule } from "../format.ts"
-import { blank, cell, line, type SemanticRow, toTextLines } from "../row.ts"
-import { applySort, markSorted, type SortState, UNSORTED } from "../sort.ts"
+import { type Column, clampLines, rule } from "../format.ts"
+import { blank, cell, line, type SemanticRow, tableHeader, toTextLines } from "../row.ts"
+import { applySort, type SortState, UNSORTED } from "../sort.ts"
 
 const KIND_LABEL: Record<SearchHit["kind"], string> = {
   council: "zastupitelstvo",
@@ -66,12 +66,12 @@ export function buildSearchRows(
     { header: "Typ", width: 16 },
     { header: "Kde", width: 32 },
   ]
-  const [header, underline] = headerRow(markSorted(columns, sort))
   const firstRow = rows.length + 2
-  rows.push(line(header, "heading"), line(underline, "muted"))
+  rows.push(...tableHeader(columns, sort))
 
   for (const hit of hits) {
     rows.push({
+      kind: "data",
       columns,
       cells: [cell(hit.label), cell(KIND_LABEL[hit.kind], "muted"), cell(hit.detail, "muted")],
     })

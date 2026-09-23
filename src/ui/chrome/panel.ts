@@ -50,7 +50,7 @@ export function panelFits(contentAreaWidth: number): boolean {
  */
 export function buildPanelRows(db: Database, width = PANEL_WIDTH): SemanticRow[] {
   const watched = listWatchlist(db)
-  const rows: SemanticRow[] = [line(pad("Sledované", width), "heading")]
+  const rows: SemanticRow[] = [line(pad("SLEDOVANÉ", width), "accent")]
 
   if (watched.length === 0) {
     rows.push(line("", "muted"))
@@ -69,15 +69,14 @@ export function buildPanelRows(db: Database, width = PANEL_WIDTH): SemanticRow[]
     rows.push(
       council === null || !council.hasResult
         ? line(pad("  čeká se", width), "muted")
-        : line(
-            pad(
-              `  ${formatPercent(council.turnoutPct)} ${bar(
-                council.turnoutPct === null ? null : council.turnoutPct / 100,
-                6,
-              )}`,
-              width,
-            ),
-          ),
+        : {
+            // The turnout, then its bar as a cell of its own, so the part the bar does
+            // not fill shows the track (002 FR-018).
+            cells: [
+              { text: `  ${formatPercent(council.turnoutPct)} ` },
+              { text: bar(council.turnoutPct === null ? null : council.turnoutPct / 100, 6), bar: true },
+            ],
+          },
     )
   }
 

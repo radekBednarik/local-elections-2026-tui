@@ -7,6 +7,7 @@ import {
   writeSidePanelOpen,
   writeTheme,
 } from "../../src/storage/queries/preferences.ts"
+import { THEME_NAMES, type ThemeName } from "../../src/ui/theme/themes.ts"
 import { withTempDataDir } from "../helpers/tmpdir.ts"
 
 let db: Database
@@ -20,7 +21,7 @@ describe("theme preference (FR-061)", () => {
   })
 
   test("round-trips every theme", () => {
-    for (const theme of ["dark", "light", "high-contrast"] as const) {
+    for (const theme of THEME_NAMES) {
       writeTheme(db, theme)
       expect(readTheme(db)).toBe(theme)
     }
@@ -40,6 +41,22 @@ describe("theme preference (FR-061)", () => {
         second.close()
       }
     })
+  })
+
+  test.each([
+    ["dark", "tokyonight"],
+    ["light", "catppuccin-latte"],
+    ["high-contrast", "high-contrast"],
+  ])("a stored %s from before the refresh carries over to %s (002 FR-006a)", (stored, expected) => {
+    db.query("INSERT OR REPLACE INTO app_config (key, value) VALUES ('theme', $v)").run({ v: stored })
+    expect(readTheme(db)).toBe(expected as ThemeName)
+  })
+
+  test("carrying a legacy value over does not rewrite it; the next theme switch does", () => {
+    db.query("INSERT OR REPLACE INTO app_config (key, value) VALUES ('theme', 'dark')").run()
+    readTheme(db)
+    const stored = db.query("SELECT value FROM app_config WHERE key = 'theme'").get() as { value: string }
+    expect(stored.value).toBe("dark")
   })
 
   test("an unrecognised stored value reads as absent, not as an error", () => {
@@ -81,7 +98,7 @@ describe("side panel preference (FR-056)", () => {
 
 describe("no schema change was needed", () => {
   test("both preferences live in the existing app_config table", () => {
-    writeTheme(db, "light")
+    writeTheme(db, "catppuccin-latte")
     writeSidePanelOpen(db, false)
 
     const keys = (db.query("SELECT key FROM app_config ORDER BY key").all() as { key: string }[]).map(

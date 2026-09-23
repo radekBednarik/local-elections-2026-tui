@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volby TUI mocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0e0f13; --fg:#d7dae0; --muted:#8a8f98; --line:#2a2d35; --chip:#1b1d23; --on:#7aa2f7; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:Inter, system-ui, sans-serif; }
+  header { padding:20px 24px 8px; }
+  h1 { font-size:18px; margin:0 0 4px; font-weight:600; }
+  p.lead { margin:0; color:var(--muted); font-size:13px; max-width:900px; line-height:1.5; }
+  .controls { display:flex; flex-wrap:wrap; gap:18px; padding:14px 24px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:2; }
+  .group { display:flex; flex-direction:column; gap:6px; }
+  .group label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+  .seg { display:flex; flex-wrap:wrap; gap:4px; }
+  .seg button { font:inherit; font-size:12.5px; background:var(--chip); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:5px 10px; cursor:pointer; }
+  .seg button[aria-pressed="true"] { border-color:var(--on); color:#fff; background:#1f2a44; }
+  main { padding:18px 24px 40px; display:flex; flex-direction:column; gap:14px; }
+  .term-wrap { overflow:auto; max-width:100%; }
+  .term { display:inline-block; border-radius:10px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,.5); border:1px solid #000; }
+  .titlebar { background:#2b2d33; height:26px; display:flex; align-items:center; gap:7px; padding:0 10px; font-size:12px; color:#aaa; }
+  .dot { width:11px; height:11px; border-radius:50%; background:#555; }
+  pre.grid { margin:0; font-family:"JetBrains Mono", "Cascadia Mono", Consolas, monospace; font-size:14px; line-height:18px; }
+  pre.grid span { display:inline-block; height:18px; white-space:pre; vertical-align:top; }
+  .notes { max-width:1000px; font-size:13.5px; line-height:1.6; color:#c8ccd4; }
+  .notes h2 { font-size:14px; margin:10px 0 4px; }
+  .notes code { font-family:"JetBrains Mono", monospace; font-size:12.5px; background:var(--chip); padding:1px 5px; border-radius:4px; }
+  .swatches { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .sw { font-family:"JetBrains Mono", monospace; font-size:11px; padding:4px 6px; border-radius:4px; border:1px solid #0004; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Volby KV 2026: vizuální návrhy TUI</h1>
+  <p class="lead">Každý obrázek níže je mřížka terminálových buněk: jeden znak na buňku, s vlastní barvou písma, pozadím a tučností. Nic jiného (zaoblené rohy CSS, stíny, průhlednost) se v terminálu nepoužívá, takže vše je vykreslitelné v OpenTUI (Box backgroundColor, borderStyle, title/bottomTitle, Text fg/bg na úrovni chunků). Data jsou skutečná, vytažená z fixtur.</p>
+</header>
+
+<div class="controls">
+  <div class="group"><label>Varianta rozvržení</label><div class="seg" id="variant"></div></div>
+  <div class="group"><label>Motiv</label><div class="seg" id="theme"></div></div>
+  <div class="group"><label>Obrazovka</label><div class="seg" id="screen"></div></div>
+  <div class="group"><label>Velikost</label><div class="seg" id="size"></div></div>
+  <div class="group"><label>Stav</label><div class="seg" id="toggles"></div></div>
+</div>
+
+<main>
+  <div class="term-wrap"><div class="term"><div class="titlebar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span style="margin-left:8px" id="ttitle">volby-kv2026</span></div><pre class="grid" id="grid"></pre></div></div>
+  <div class="notes" id="notes"></div>
+</main>
+
+<script>
+// ---------------------------------------------------------------- themes
+// Token set modelled on OpenCode's layered surfaces: three background levels
+// plus a zebra tone and a selection tone. Every token is a plain hex colour.
+const THEMES = {
+  "tokyonight": { label:"Tokyo Night",
+    bg:"#1a1b26", panel:"#16161e", element:"#24283b", zebra:"#1e2030", sel:"#2e3c64", border:"#3b4261", borderActive:"#7aa2f7",
+    text:"#c0caf5", muted:"#565f89", subtle:"#737aa2", primary:"#7aa2f7", accent:"#bb9af7", info:"#7dcfff",
+    success:"#9ece6a", error:"#f7768e", warning:"#e0af68", orange:"#ff9e64", onAccent:"#1a1b26", bar:"#7aa2f7", track:"#292e42" },
+  "catppuccin-mocha": { label:"Catppuccin Mocha",
+    bg:"#1e1e2e", panel:"#181825", element:"#313244", zebra:"#24243a", sel:"#45475a", border:"#45475a", borderActive:"#cba6f7",
+    text:"#cdd6f4", muted:"#6c7086", subtle:"#a6adc8", primary:"#89b4fa", accent:"#cba6f7", info:"#94e2d5",
+    success:"#a6e3a1", error:"#f38ba8", warning:"#f9e2af", orange:"#fab387", onAccent:"#1e1e2e", bar:"#b4befe", track:"#313244" },
+  "gruvbox": { label:"Gruvbox Dark",
+    bg:"#282828", panel:"#1d2021", element:"#3c3836", zebra:"#2f2c2a", sel:"#504945", border:"#504945", borderActive:"#fabd2f",
+    text:"#ebdbb2", muted:"#928374", subtle:"#bdae93", primary:"#83a598", accent:"#fabd2f", info:"#8ec07c",
+    success:"#b8bb26", error:"#fb4934", warning:"#fabd2f", orange:"#fe8019", onAccent:"#282828", bar:"#8ec07c", track:"#3c3836" },
+  "nord": { label:"Nord",
+    bg:"#2e3440", panel:"#272c36", element:"#3b4252", zebra:"#333a47", sel:"#434c5e", border:"#4c566a", borderActive:"#88c0d0",
+    text:"#e5e9f0", muted:"#616e88", subtle:"#aeb7c6", primary:"#88c0d0", accent:"#81a1c1", info:"#8fbcbb",
+    success:"#a3be8c", error:"#bf616a", warning:"#ebcb8b", orange:"#d08770", onAccent:"#2e3440", bar:"#88c0d0", track:"#3b4252" },
+  "catppuccin-latte": { label:"Catppuccin Latte (světlý)",
+    bg:"#eff1f5", panel:"#e6e9ef", element:"#dce0e8", zebra:"#e7eaf0", sel:"#ccd0da", border:"#bcc0cc", borderActive:"#8839ef",
+    text:"#4c4f69", muted:"#8c8fa1", subtle:"#6c6f85", primary:"#1e66f5", accent:"#8839ef", info:"#179299",
+    success:"#40a02b", error:"#d20f39", warning:"#df8e1d", orange:"#fe640b", onAccent:"#eff1f5", bar:"#1e66f5", track:"#dce0e8" },
+  "high-contrast": { label:"Vysoký kontrast",
+    bg:"#000000", panel:"#000000", element:"#1f1f1f", zebra:"#141414", sel:"#ffffff", border:"#ffffff", borderActive:"#ffff00",
+    text:"#ffffff", muted:"#a8a8a8", subtle:"#d0d0d0", primary:"#ffffff", accent:"#ffff00", info:"#ffffff",
+    success:"#ffffff", error:"#ffffff", warning:"#ffff00", orange:"#ffff00", onAccent:"#000000", bar:"#ffffff", track:"#2a2a2a", selText:"#000000" },
+}
+
+// ---------------------------------------------------------------- data (from fixtures)
+const NATIONAL = [
+  ["Sdružení nezávislých kandidátů - místní","·","12 927 293",14.85,"37 712",63.67],
+  ["Nezávislý kandidát","·","586 989",0.67,"5 764",9.73],
+  ["KDU-ČSL","▲","2 017 667",2.32,"2 667",4.50],
+  ["Sdružení STAN, NK","·","2 289 112",2.63,"1 773",2.99],
+  ["Občanská demokratická strana","▲","2 994 783",3.44,"1 409",2.38],
+  ["ANO 2011","▲","14 297 232",16.42,"1 240",2.09],
+  ["STAROSTOVÉ A NEZÁVISLÍ","▼","2 798 591",3.21,"881",1.49],
+  ["Sdružení SOCDEM, NK","·","1 529 011",1.76,"515",0.87],
+  ["Sociální demokracie","·","865 783",0.99,"492",0.83],
+  ["Sdružení KDU-ČSL, NK","·","636 216",0.73,"488",0.82],
+  ["Sdružení ODS, NK","·","675 527",0.78,"399",0.67],
+  ["Komunistická strana Čech a Moravy","▼","1 456 470",1.67,"391",0.66],
+  ["Svoboda a přímá demokracie (SPD)","·","2 361 692",2.71,"316",0.53],
+  ["Sdružení ANO 2011, NK","·","1 169 141",1.34,"276",0.47],
+  ["Sdružení TOP 09, NK","·","360 739",0.41,"272",0.46],
+  ["Nestraníci","·","225 444",0.26,"209",0.35],
+  ["Sdružení SLK, NK","·","184 457",0.21,"201",0.34],
+  ["Koalice KDU-ČSL, ODS a TOP 09","·","7 860 321",9.03,"181",0.31],
+  ["Sdružení NEZ, NK","·","448 880",0.52,"163",0.28],
+  ["NEZÁVISLÍ","·","274 799",0.32,"162",0.27],
+]
+const COUNCIL = [
+  [4,"KDU-ČSL","32 584",36.56,"9"],
+  [3,"ANO 2011","16 752",18.80,"4"],
+  [8,"Pro Bohunice s podporou Sociální demokracie","10 121",11.36,"2"],
+  [2,"SPD, Trikolora, Moravané a nezávislí","8 653",9.71,"2"],
+  [1,"SPOLEČNĚ TOP 09 a nezávislí","6 916",7.76,"2"],
+  [6,"Občanská demokratická strana","6 791",7.62,"1"],
+  [5,"Brno Plus","6 439",7.22,"1"],
+  [7,"RESTART PRO BRNO","873",0.98,"0"],
+]
+const DISTRICTS = ["Benešov CZ0201","Beroun CZ0202","Blansko CZ0641","Brno-město CZ0642 3 / 3","Brno-venkov CZ0643","Bruntál CZ0801","Břeclav CZ0644","Cheb CZ0411","Chomutov CZ0422","Chrudim CZ0531","Domažlice CZ0321","Děčín CZ0421","Frýdek-Místek CZ0802","Havlíčkův Brod CZ0631","Hodonín CZ0645","Hradec Králové CZ0521","Jablonec nad Nisou CZ0512","Jeseník CZ0711","Jihlava CZ0632","Jindřichův Hradec CZ0313","Jičín CZ0522","Karlovy Vary CZ0412","Karviná CZ0803","Kladno CZ0203","Klatovy CZ0322"]
+const WATCH = [["Brno-Bohunice",46.21],["Brno-Bosonohy",62.57],["Brno",41.90]]
+const PALETTE = [
+  ["Hledat obec, stranu nebo kandidáta","/",null],["Přidat nebo odebrat ze sledovaných","w",null],
+  ["Zobrazit sledovaná zastupitelstva","Shift+W",null],["Exportovat zobrazenou tabulku do CSV","e",null],
+  ["Uložit souhrnnou zprávu","Shift+E",null],["Přepnout typ zastupitelstva","t",null],
+  ["Seřadit podle dalšího sloupce","s",null],["Vyžádat okamžité obnovení","r",null],
+  ["Zobrazit nebo skrýt postranní panel","Ctrl+B",null],["Přepnout motiv","Ctrl+T",null],
+  ["Zpět o úroveň výš","Esc","jste na nejvyšší úrovni"],["Nápověda","?",null],["Ukončit aplikaci","q",null],
+]
+
+// ---------------------------------------------------------------- cell grid
+class Grid {
+  constructor(w, h, T) { this.w=w; this.h=h; this.T=T; this.c=[]; for (let y=0;y<h;y++){ const r=[]; for(let x=0;x<w;x++) r.push({ch:" ",fg:T.text,bg:T.bg,b:false}); this.c.push(r) } }
+  fill(x,y,w,h,bg){ for(let j=y;j<y+h&&j<this.h;j++) for(let i=x;i<x+w&&i<this.w;i++){ if(i<0||j<0) continue; const c=this.c[j][i]; c.bg=bg; c.ch=" "; c.b=false } }
+  tint(x,y,w,bg){ for(let i=x;i<x+w&&i<this.w;i++) if(i>=0&&y>=0&&y<this.h) this.c[y][i].bg=bg }
+  put(x,y,s,fg,bg,b=false){ if(y<0||y>=this.h) return x; for(const ch of [...s]){ if(x>=0&&x<this.w){ const c=this.c[y][x]; c.ch=ch; if(fg) c.fg=fg; if(bg) c.bg=bg; c.b=b } x++ } return x }
+  box(x,y,w,h,{style="round",color,title,titleColor,bottom,bottomColor,bg,sides="all"}={}){
+    const S={round:"╭╮╰╯─│",single:"┌┐└┘─│",heavy:"┏┓┗┛━┃",double:"╔╗╚╝═║"}[style]
+    if(bg) this.fill(x,y,w,h,bg)
+    const B=bg
+    if(sides==="all"){
+      this.put(x,y,S[0]+S[4].repeat(w-2)+S[1],color,B); this.put(x,y+h-1,S[2]+S[4].repeat(w-2)+S[3],color,B)
+      for(let j=y+1;j<y+h-1;j++){ this.put(x,j,S[5],color,B); this.put(x+w-1,j,S[5],color,B) }
+      if(title) this.put(x+2,y,` ${title} `,titleColor||color,B,true)
+      if(bottom) this.put(x+w-3-[...bottom].length-1,y+h-1,` ${bottom} `,bottomColor||color,B)
+    }
+  }
+  html(){ let out=""; for(const row of this.c){ let i=0; while(i<row.length){ const a=row[i]; let s=""; let j=i; while(j<row.length&&row[j].fg===a.fg&&row[j].bg===a.bg&&row[j].b===a.b){ s+=row[j].ch; j++ } out+=`<span style="color:${a.fg};background:${a.bg}${a.b?";font-weight:700":""}">${s.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</span>`; i=j } out+="\n" } return out }
+}
+
+const EIGHTHS=["▏","▎","▍","▌","▋","▊","▉"]
+function bar(frac,w){ const e=Math.round(Math.min(1,Math.max(0,frac))*w*8); const f=Math.floor(e/8), r=e%8; return ("█".repeat(f)+(r?EIGHTHS[r-1]:"")).padEnd(w," ") }
+const pad=(s,w,al="left")=>{ const a=[...s]; if(a.length>w) return a.slice(0,Math.max(0,w-1)).join("")+"…"; return al==="right"? " ".repeat(w-a.length)+s : s+" ".repeat(w-a.length) }
+const pct=v=>v.toFixed(2).replace(".",",")+" %"
+const len=s=>[...s].length
+
+// ---------------------------------------------------------------- state
+const state = { variant:"A", theme:"tokyonight", screen:"national", size:"100x30", panel:true, warning:false, zebra:true }
+
+// ---------------------------------------------------------------- chrome per variant
+function chrome(g, T, crumbs, hints, opts){
+  const W=g.w, H=g.h, V=state.variant
+  // ---- header row
+  g.fill(0,0,W,1,T.panel)
+  let x=0
+  if(V==="A"){
+    x=g.put(0,0," ◆ VOLBY 2026 ",T.onAccent,T.accent,true)
+    x=g.put(x,0,"  ",null,T.panel)
+    crumbs.forEach((c,i)=>{ const last=i===crumbs.length-1; x=g.put(x,0,c,last?T.text:T.subtle,T.panel,last); if(!last) x=g.put(x,0,"  ›  ",T.muted,T.panel) })
+  } else if(V==="B"){
+    x=g.put(1,0,"volby",T.primary,T.panel,true); x=g.put(x,0,"·kv2026",T.muted,T.panel); x=g.put(x,0,"   ")
+    crumbs.forEach((c,i)=>{ const last=i===crumbs.length-1; x=g.put(x,0,c,last?T.primary:T.subtle,T.panel,last); if(!last) x=g.put(x,0," › ",T.muted,T.panel) })
+  } else {
+    // segmented breadcrumb: each segment its own background, joined by half-blocks
+    const segs=[[" ◆ VOLBY ",T.onAccent,T.accent]].concat(crumbs.map((c,i)=>i===crumbs.length-1?[` ${c} `,T.onAccent,T.primary]:[` ${c} `,T.text,T.element]))
+    segs.forEach((s,i)=>{ x=g.put(x,0,s[0],s[1],s[2],true); const next=segs[i+1]; x=g.put(x,0,"▌",s[2],next?next[2]:T.panel) })
+  }
+  // right side of header: live indicator + clock
+  const live = state.warning ? [" ● ZASTARALÉ ",T.onAccent,T.warning] : [" ● živě ",T.success,T.panel]
+  const clock = " 21:15:03 "
+  const rx = W - len(live[0]) - len(clock) - 1
+  g.put(rx,0,live[0],live[1],live[2],true); g.put(rx+len(live[0]),0,clock,T.muted,T.panel)
+
+  let top=1
+  if(state.warning){
+    g.fill(0,1,W,1,T.warning)
+    g.put(1,1,"! ZASTARALÁ DATA (CZ0642): časový limit spojení. Zobrazena poslední známá data před 4 min.",T.onAccent,T.warning,true)
+    top=2
+  }
+  // ---- footer
+  g.fill(0,H-1,W,1,T.panel)
+  x=1
+  if(V==="C"){ x=g.put(0,H-1," PŘEHLED ",T.onAccent,T.primary,true); x=g.put(x,H-1,"▌",T.primary,T.panel); x+=1 }
+  for(const [k,l] of hints){
+    if(x+len(k)+len(l)+5>W-18) break
+    if(V==="B"){ x=g.put(x,H-1,k,T.primary,T.panel,true); x=g.put(x,H-1," "+l,T.subtle,T.panel); x=g.put(x,H-1,"   ",null,T.panel) }
+    else { x=V==="C" ? g.put(x,H-1,` ${k} `,T.onAccent,T.accent,true) : g.put(x,H-1,` ${k} `,T.accent,T.element,true); x=g.put(x,H-1," "+l+"  ",T.subtle,T.panel) }
+  }
+  const tl=` ${T.label} `
+  g.put(W-len(tl)-1,H-1,tl,T.muted,T.panel)
+  return {top, bottom:H-1}
+}
+
+// ---------------------------------------------------------------- content area frame
+function contentArea(g,T,top,bottom,title,count){
+  const V=state.variant, W=g.w
+  const panelW = state.panel && W>=100 ? 24 : 0
+  let area
+  if(V==="A"){
+    // Layered: no borders at all, surfaces separated by background tone.
+    g.fill(0,top,W,bottom-top,T.bg)
+    area={x:1,y:top+1,w:W-2-panelW-(panelW?1:0),h:bottom-top-2}
+    if(panelW){ g.fill(W-panelW,top,panelW,bottom-top,T.panel); area.px=W-panelW+1; area.py=top+1; area.pw=panelW-2 }
+  } else if(V==="B"){
+    const cw=W-panelW
+    g.box(0,top,cw,bottom-top,{style:"round",color:T.borderActive,title,titleColor:T.primary,bottom:count,bottomColor:T.muted,bg:T.bg})
+    area={x:1,y:top+1,w:cw-3,h:bottom-top-2}
+    if(panelW){ g.box(cw,top,panelW,bottom-top,{style:"round",color:T.border,title:"Sledované",titleColor:T.accent,bg:T.bg}); area.px=cw+2; area.py=top+1; area.pw=panelW-4 }
+  } else {
+    const cw=W-panelW
+    g.fill(0,top,cw,bottom-top,T.bg)
+    // heavy left accent rail, like OpenCode's message gutters
+    for(let y=top;y<bottom;y++) g.put(0,y,"┃",T.primary,T.bg)
+    area={x:2,y:top+1,w:cw-4,h:bottom-top-2}
+    if(panelW){ g.fill(cw,top,panelW,bottom-top,T.panel); for(let y=top;y<bottom;y++) g.put(cw,y,"┃",T.accent,T.panel); area.px=cw+2; area.py=top+1; area.pw=panelW-3 }
+  }
+  // scrollbar: track + thumb on the right edge of the content
+  const sx = V==="B" ? (W-panelW)-2 : area.x+area.w
+  for(let y=area.y;y<area.y+area.h;y++) g.put(sx,y,"│",T.track,V==="A"?T.bg:null)
+  for(let y=area.y;y<area.y+Math.max(2,Math.floor(area.h/3));y++) g.put(sx,y,"┃",T.muted)
+  area.w -= 1
+  return area
+}
+
+function panel(g,T,a){
+  if(a.px===undefined) return
+  const V=state.variant
+  let y=a.py
+  if(V!=="B"){ g.put(a.px,y,"SLEDOVANÉ",T.accent,null,true); g.put(a.px+10,y,"3",T.muted); y+=2 }
+  WATCH.forEach(([n,t],i)=>{
+    g.put(a.px,y,pad(n,a.pw),i===0?T.text:T.subtle,null,i===0); y++
+    g.put(a.px,y,"účast ",T.muted); g.put(a.px+6,y,pct(t).padStart(8),T.text)
+    const bw=a.pw-15; g.put(a.px+15,y,bar(t/100,bw),T.bar); g.tint(a.px+15,y,bw,T.track)
+    y+=2
+  })
+  g.put(a.px,y+1,"w",T.accent,null,true); g.put(a.px+2,y+1,"přidat / odebrat",T.muted)
+}
+
+// ---------------------------------------------------------------- table drawing
+function table(g,T,a,y,cols,rows,{selected=0,headBg}={}){
+  const V=state.variant
+  const flex=cols.findIndex(c=>c.flex)
+  const fixed=cols.reduce((s,c)=>s+(c.flex?0:c.w)+1,0)
+  cols[flex].w=Math.max(10,a.w-fixed-2)
+  // header
+  const hb = headBg ?? T.element
+  g.fill(a.x,y,a.w,1,hb)
+  let x=a.x+2
+  cols.forEach(c=>{ x=g.put(x,y,pad(c.h,c.w,c.al),c.sort?T.accent:T.primary,hb,true); x+=1 })
+  y++
+  const maxRows = a.y+a.h-y
+  rows.slice(0,maxRows).forEach((r,i)=>{
+    const sel=i===selected
+    const rb = sel ? T.sel : (state.zebra && i%2===1 ? T.zebra : T.bg)
+    g.fill(a.x,y,a.w,1,rb)
+    const selText = T.selText
+    // gutter marker: a glyph, so selection survives a monochrome terminal
+    if(sel) g.put(a.x,y,V==="A"?"▌":"▶",selText||T.accent,rb,true)
+    let x=a.x+2
+    cols.forEach((c,ci)=>{
+      const cell=r[ci]
+      let fg = sel ? (selText||T.text) : (cell.role? T[cell.role] : T.text)
+      if(c.bar){
+        g.put(x,y,bar(cell.v,c.w),sel&&selText?selText:T.bar,rb)
+        if(state.variant!=="B") g.tint(x,y,c.w,sel?rb:T.track)
+      } else g.put(x,y,pad(cell.t,c.w,c.al),fg,rb,sel||cell.b)
+      x+=c.w+1
+    })
+    y++
+  })
+  return y
+}
+
+// ---------------------------------------------------------------- screens
+function statusBadge(g,T,x,y,text){ return g.put(x,y,` ${text} `,T.onAccent,T.success,true) }
+
+function screenNational(g,T,a){
+  let y=a.y
+  if(state.variant!=="B"){ const x=g.put(a.x,y,"Zastupitelstva obcí",T.primary,null,true); statusBadge(g,T,x+2,y,"✓ konečné výsledky"); y+=2 }
+  else { statusBadge(g,T,a.x,y,"✓ konečné výsledky"); g.put(a.x+22,y,"Zveřejněno 2026-10-09 21:15:00",T.muted); y+=2 }
+  // stat cards
+  const stats=[["SEČTENO OKRSKŮ","14 722 / 14 722","100,00 %",1],["ÚČAST","46,07 %","3 803 131 obálek",0.4607],["PLATNÉ HLASY","87 076 331","",null]]
+  const cw=Math.floor((a.w-2*2)/3)
+  if(state.variant==="C" || a.h>=24){
+    stats.forEach((s,i)=>{
+      const cx=a.x+i*(cw+2)
+      g.fill(cx,y,cw,3,T.element)
+      g.put(cx+1,y,s[0],T.muted,T.element)
+      g.put(cx+1,y+1,s[1],T.text,T.element,true)
+      // the secondary figure only when it fits beside the main one, never over it
+      if(len(s[1])+len(s[2])+3<=cw) g.put(cx+cw-1-len(s[2]),y+1,s[2],T.subtle,T.element)
+      if(s[3]!==null){ g.put(cx+1,y+2,bar(s[3],cw-2),T.success,T.element); g.tint(cx+1,y+2,cw-2,T.track) }
+      else g.put(cx+1,y+2,"59 228 zvolených",T.muted,T.element)
+    })
+    y+=4
+  } else {
+    g.put(a.x,y,"Sečteno okrsků ",T.muted); g.put(a.x+15,y,"14 722 / 14 722  100,00 %",T.text,null,true)
+    g.put(a.x+44,y,"Účast ",T.muted); g.put(a.x+50,y,"46,07 %",T.text,null,true); y+=2
+  }
+  const wide=a.w>=66
+  const cols=[{h:"Volební strana",flex:true},{h:"Hlasy",w:12,al:"right"},{h:"Podíl",w:8,al:"right"}]
+  if(wide) cols.push({h:"",w:a.w>=90?14:10,bar:true})
+  cols.push({h:"Mandáty ▼",w:9,al:"right",sort:true},{h:"Podíl",w:8,al:"right"})
+  const rows=NATIONAL.map(r=>{
+    const ch=r[1], role=ch==="▲"?"success":ch==="▼"?"error":null
+    const out=[{t:r[0]},{t:(ch==="·"?"":ch+" ")+r[2],role},{t:pct(r[3])}]
+    if(wide) out.push({v:r[3]/100})
+    out.push({t:r[4],b:false},{t:pct(r[5]),role:"subtle"})
+    return out
+  })
+  table(g,T,a,y,cols,rows,{selected:2})
+}
+
+function screenCouncil(g,T,a){
+  let y=a.y
+  // variant B already names the council in the frame's top edge
+  let x = state.variant==="B" ? a.x : g.put(g.put(a.x,y,"Brno-Bohunice",T.primary,null,true),y," (Brno)",T.subtle)
+  x=statusBadge(g,T,state.variant==="B"?x:x+2,y,"✓ konečné")
+  g.put(x+2,y,"Zastupitelstvo městské části nebo městského obvodu",T.muted); y+=2
+  const kv=[["Okrsky","13 / 13"],["Účast","46,21 %"],["Mandáty","21"]]
+  x=a.x; kv.forEach(([k,v])=>{ x=g.put(x,y,` ${k} `,T.subtle,T.element); x=g.put(x,y,` ${v} `,T.onAccent,T.primary,true); x+=2 })
+  y+=2
+  const cols=[{h:"Č.",w:3,al:"right"},{h:"Volební strana",flex:true},{h:"Hlasy",w:9,al:"right"},{h:"Podíl",w:8,al:"right"},{h:"",w:14,bar:true},{h:"Mandáty",w:7,al:"right"}]
+  const rows=COUNCIL.map(r=>[{t:String(r[0]),role:"muted"},{t:r[1]},{t:r[2]},{t:pct(r[3]),b:true},{v:r[3]/100},{t:r[4],role:"accent",b:true}])
+  y=table(g,T,a,y,cols,rows,{selected:0})
+  // seat strip: one block per seat, shape plus position carry the meaning
+  y+=1
+  g.put(a.x,y,"Rozdělení mandátů ",T.muted)
+  let sx=a.x+18
+  COUNCIL.forEach((r,i)=>{ const n=+r[4]; if(!n) return; g.put(sx,y,"■".repeat(n),i%2?T.subtle:T.primary); sx+=n; g.put(sx,y," ",null); sx+=1 })
+  g.put(sx+1,y,"21",T.text,null,true)
+  y+=2
+  if(y<a.y+a.h) g.put(a.x,y,pad("Výsledky po jednotlivých okrscích nejsou k dispozici: zveřejňují se pouze dávkově.",a.w),T.muted)
+}
+
+function screenDistricts(g,T,a){
+  let y=a.y
+  g.put(a.x,y,"Okresy",T.primary,null,true); g.put(a.x+8,y,"77",T.onAccent,T.accent,true); g.put(a.x+11,y,"načteno 1 z 77",T.muted)
+  y+=2
+  const cols=[{h:"Okres",flex:true},{h:"NUTS",w:8},{h:"Zastupitelstva",w:16,al:"right"}]
+  const rows=DISTRICTS.map(d=>{ const m=d.match(/^(.*) (CZ\d{4})(?: (.*))?$/); const loaded=!!m[3]; return [{t:m[1]},{t:m[2],role:"muted"},{t:loaded?m[3]:"◌ načítá se…",role:loaded?"success":"muted"}] })
+  table(g,T,a,y,cols,rows,{selected:3})
+}
+
+function screenPalette(g,T,a){
+  screenNational(g,T,a)
+  // dim everything behind the palette by re-tinting cells toward the panel tone
+  for(let y=a.y-1;y<a.y+a.h+1;y++) for(let x=0;x<g.w;x++){ const c=g.c[y]&&g.c[y][x]; if(c){ c.fg=T.muted; c.bg=T.panel; c.b=false } }
+  const w=Math.min(64,g.w-8), h=Math.min(20,a.h), x0=Math.floor((g.w-w)/2), y0=a.y+1
+  g.box(x0,y0,w,h,{style:"round",color:T.borderActive,title:"Příkazy",titleColor:T.accent,bottom:"Enter spustit · Esc zavřít",bottomColor:T.muted,bg:T.element})
+  g.fill(x0+2,y0+1,w-4,1,T.bg)
+  g.put(x0+3,y0+1,"› ",T.accent,T.bg,true); g.put(x0+5,y0+1,"exp",T.text,T.bg); g.put(x0+8,y0+1,"▏",T.accent,T.bg)
+  let y=y0+3
+  PALETTE.slice(0,h-5).forEach(([l,k,why],i)=>{
+    const sel=i===3, rb=sel?T.sel:T.element
+    g.fill(x0+1,y,w-2,1,rb)
+    if(why){ g.put(x0+3,y,pad(l,w-8-len(k)),T.muted,rb); g.put(x0+w-3-len(k)-1-len(why)-3,y,`(${why})`,T.muted,rb) }
+    else { g.put(x0+3,y,l,sel?(T.selText||T.text):T.text,rb,sel) }
+    g.put(x0+w-3-len(k)-1,y,` ${k} `,sel?T.onAccent:T.accent,sel?T.accent:T.panel,true)
+    y++
+  })
+}
+
+const SCREENS = {
+  national:{label:"Přehled ČR", crumbs:["ČR"], title:"Zastupitelstva obcí", count:"1-20 / 81", fn:screenNational,
+    hints:[["↑↓","pohyb"],["Enter","otevřít"],["t","typ"],["s","řadit"],["/","hledat"],["Ctrl+P","příkazy"],["?","nápověda"]]},
+  districts:{label:"Seznam okresů", crumbs:["ČR","Okresy"], title:"Okresy", count:"4 / 77", fn:screenDistricts,
+    hints:[["↑↓","pohyb"],["Enter","otevřít"],["Esc","zpět"],["/","hledat"],["Ctrl+P","příkazy"]]},
+  council:{label:"Zastupitelstvo", crumbs:["ČR","Okres Brno-město","Brno-Bohunice"], title:"Brno-Bohunice", count:"1 / 8", fn:screenCouncil,
+    hints:[["↑↓","pohyb"],["Enter","kandidáti"],["Esc","zpět"],["w","sledovat"],["e","export"],["Ctrl+P","příkazy"]]},
+  palette:{label:"Paleta příkazů", crumbs:["ČR"], title:"Zastupitelstva obcí", count:"", fn:screenPalette,
+    hints:[["↑↓","vybrat"],["Enter","spustit"],["Esc","zavřít"]]},
+}
+
+const VARIANTS = {
+  A:{label:"A · Vrstvené plochy", notes:`<b>A · Vrstvené plochy (OpenCode styl).</b> Žádné rámečky. Oblasti se odlišují jen tónem pozadí: záhlaví a zápatí mají <code>panel</code>, obsah <code>bg</code>, hlavička tabulky <code>element</code>, postranní panel zase <code>panel</code>. Výběr je celý řádek v tónu <code>sel</code> se svislým proužkem <code>▌</code> v barvě akcentu. Klávesy v zápatí jsou „čipy“ s vlastním pozadím. Nejmodernější vzhled a nejvíc místa pro data, protože rámečky nestojí žádný řádek.`},
+  B:{label:"B · Zaoblené rámy", notes:`<b>B · Zaoblené rámy.</b> Nejbližší dnešnímu rozvržení. Obsah i postranní panel jsou v zaoblených rámečcích (<code>borderStyle: "rounded"</code>), aktivní oblast má rámeček v akcentové barvě. Název oblasti je vepsaný do horní hrany, počet řádků do dolní (<code>title</code>/<code>bottomTitle</code>). Pruhy mají čisté pozadí bez stopy, takže vypadají lehčeji.`},
+  C:{label:"C · Segmenty a karty", notes:`<b>C · Segmenty a karty.</b> Nejvíc „blingu“. Drobečková navigace je řada barevných segmentů spojených půlblokem <code>▌</code> (není potřeba Nerd Font). Levý okraj je silná akcentová lišta <code>┃</code>, souhrnná čísla jsou ve třech kartách s vlastním pozadím a průběhovým pruhem. Zápatí začíná štítkem režimu, jako mají editory typu Helix nebo OpenCode.`},
+}
+
+// ---------------------------------------------------------------- render
+function render(){
+  const T=THEMES[state.theme]
+  const [W,H]=state.size.split("x").map(Number)
+  const g=new Grid(W,H,T)
+  const S=SCREENS[state.screen]
+  const {top,bottom}=chrome(g,T,S.crumbs,S.hints)
+  const a=contentArea(g,T,top,bottom,S.title,S.count)
+  S.fn(g,T,a)
+  if(state.screen!=="palette") panel(g,T,a)
+  document.getElementById("grid").innerHTML=g.html()
+  document.getElementById("ttitle").textContent=`volby-kv2026 · ${W}×${H}`
+  const sw=["bg","panel","element","zebra","sel","border","text","muted","primary","accent","success","error","warning","bar"].map(k=>`<span class="sw" style="background:${T[k]};color:${["bg","panel","element","zebra","sel","track","border"].includes(k)?T.text:T.bg}">${k} ${T[k]}</span>`).join("")
+  document.getElementById("notes").innerHTML = `<p>${VARIANTS[state.variant].notes}</p>
+  <h2>Společné pro všechny varianty</h2>
+  <p>Střídání řádků: liché řádky tabulky mají pozadí <code>zebra</code>, sudé <code>bg</code> (<code>i % 2</code>). Vybraný řádek přebíjí zebru tónem <code>sel</code> a pořád nese textový znak (▶ nebo ▌), takže funguje i bez barev. Hlavička tabulky má pozadí <code>element</code>. Pruh podílu má stopu <code>track</code>, takže je vidět i jeho plná délka. Nárůst ▲ je zelený, pokles ▼ červený, seřazený sloupec má akcentovou barvu. Stranám se barva nepřiřazuje (FR-060), pruhy a mandáty jsou jednobarevné.</p>
+  <h2>Tokeny motivu: ${T.label}</h2><div class="swatches">${sw}</div>`
+  for(const [id,key] of [["variant","variant"],["theme","theme"],["screen","screen"],["size","size"]]) document.querySelectorAll(`#${id} button`).forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===state[key])))
+  document.querySelectorAll("#toggles button").forEach(b=>b.setAttribute("aria-pressed",String(state[b.dataset.v])))
+}
+
+function seg(id,entries,key){ const el=document.getElementById(id); for(const [v,l] of entries){ const b=document.createElement("button"); b.textContent=l; b.dataset.v=v; b.onclick=()=>{ state[key]=v; render() }; el.append(b) } }
+seg("variant",Object.entries(VARIANTS).map(([k,v])=>[k,v.label]),"variant")
+seg("theme",Object.entries(THEMES).map(([k,v])=>[k,v.label]),"theme")
+seg("screen",Object.entries(SCREENS).map(([k,v])=>[k,v.label]),"screen")
+seg("size",[["80x24","80 × 24 (minimum)"],["100x30","100 × 30"],["120x34","120 × 34"]],"size")
+for(const [k,l] of [["panel","Postranní panel"],["warning","Zastaralá data"],["zebra","Zebra řádky"]]){ const b=document.createElement("button"); b.textContent=l; b.dataset.v=k; b.onclick=()=>{ state[k]=!state[k]; render() }; document.getElementById("toggles").append(b) }
+render()
+</script>
+</body>
+</html>

@@ -53,6 +53,8 @@ export interface ScreenOptions {
   query?: string
   /** The column the user has sorted by, if any (FR-037). */
   sort?: SortState
+  /** Rows the content area affords, for a view that adapts its summary to it (FR-021). */
+  contentHeight?: number
 }
 
 /** Completes a screen, deriving the plain-text rendering from the rows. */
@@ -85,6 +87,7 @@ export function composeScreen(db: Database, screen: Screen, options: ScreenOptio
         oznacTypu: options.councilType,
         width,
         now: options.now,
+        contentHeight: options.contentHeight,
       })
       // The national overview is a summary, not a list to walk; Enter moves on to the
       // district list rather than selecting a row.

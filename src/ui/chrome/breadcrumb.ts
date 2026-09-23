@@ -43,6 +43,31 @@ export function breadcrumbText(segments: string[], width: number): string {
   return pad(last, width).trimEnd()
 }
 
+/** What one styled segment costs beyond its text: a space either side and the `▌` join. */
+const SEGMENT_COST = 3
+
+/**
+ * The segments the styled title bar can show in `width` columns (002 T033, FR-011).
+ *
+ * The same rule as the plain breadcrumb, for the segmented form: drop from the front,
+ * mark the gap with a segment of its own, and never drop the current location. A
+ * segment costs its text plus its padding and join rather than a separator, so the two
+ * forms measure differently and each keeps its own width arithmetic.
+ */
+export function breadcrumbSegments(segments: string[], width: number): string[] {
+  if (segments.length === 0 || width <= 0) return []
+  const cost = (parts: string[]) => parts.reduce((sum, part) => sum + [...part].length + SEGMENT_COST, 0)
+
+  if (cost(segments) <= width) return segments
+  for (let start = 1; start < segments.length; start += 1) {
+    const candidate = [ELLIPSIS, ...segments.slice(start)]
+    if (cost(candidate) <= width) return candidate
+  }
+  // Not even the current location fits beside the ellipsis: cut it.
+  const last = segments[segments.length - 1] ?? ""
+  return [pad(last, Math.max(1, width - SEGMENT_COST)).trimEnd()]
+}
+
 /** The Czech label for one screen in the trail. */
 export function segmentFor(db: Database, screen: Screen): string {
   switch (screen.kind) {
@@ -73,10 +98,12 @@ export function segmentFor(db: Database, screen: Screen): string {
   }
 }
 
+/** The trail for a whole navigation stack, one label per level. */
+export function segmentsFor(db: Database, stack: Screen[]): string[] {
+  return stack.map((screen) => segmentFor(db, screen)).filter((s) => s !== "")
+}
+
 /** The breadcrumb for a whole navigation stack. */
 export function breadcrumbFor(db: Database, stack: Screen[], width: number): string {
-  return breadcrumbText(
-    stack.map((screen) => segmentFor(db, screen)).filter((s) => s !== ""),
-    width,
-  )
+  return breadcrumbText(segmentsFor(db, stack), width)
 }
