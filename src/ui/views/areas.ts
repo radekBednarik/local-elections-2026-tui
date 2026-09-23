@@ -32,12 +32,22 @@ import {
   formatInteger,
   formatPercent,
   formatProgress,
-  headerRow,
   rule,
   withChange,
 } from "../format.ts"
-import { blank, type Cell, cell, line, roleForChange, type SemanticRow, toTextLines } from "../row.ts"
-import { applySort, markSorted, type SortState, UNSORTED } from "../sort.ts"
+import {
+  badge,
+  blank,
+  type Cell,
+  cell,
+  chip,
+  line,
+  roleForChange,
+  type SemanticRow,
+  tableHeader,
+  toTextLines,
+} from "../row.ts"
+import { applySort, type SortState, UNSORTED } from "../sort.ts"
 
 /**
  * A built view: its rows, and where the selectable ones begin.
@@ -141,12 +151,12 @@ export function buildDistrictListRows(
     { header: "NUTS", width: 8 },
     { header: "Zastupitelstva", width: 20, align: "right" },
   ]
-  const [header, underline] = headerRow(markSorted(columns, sort))
-  rows.push(line(header, "heading"), line(underline, "muted"))
+  rows.push(...tableHeader(columns, sort))
   const firstRow = rows.length
 
   for (const district of districts) {
     rows.push({
+      kind: "data",
       columns,
       cells: [
         cell(district.name),
@@ -194,14 +204,13 @@ export function buildDistrictRows(
     { header: "Mandáty", width: 9, align: "right" },
     { header: "Stav", width: 14 },
   ]
-  const [header, underline] = headerRow(markSorted(columns, sort))
-  rows.push(line(header, "heading"), line(underline, "muted"))
+  rows.push(...tableHeader(columns, sort))
   const firstRow = rows.length
 
   for (const council of councils) {
     // A borough is indented under its parent so the grouping is visible (FR-035).
     const indent = council.parentKodzastup === null ? "" : "  └ "
-    rows.push({ columns, cells: [cell(indent + council.name), ...councilCells(council)] })
+    rows.push({ kind: "data", columns, cells: [cell(indent + council.name), ...councilCells(council)] })
   }
   return { rows, firstRow, items: councils }
 }
@@ -271,17 +280,24 @@ export function buildCouncilRows(
     return { rows, firstRow: rows.length, items: [] }
   }
 
-  rows.push(
-    line(
-      `Stav: ${statusLabel({
-        districtsTotal: council.districtsTotal,
-        districtsCounted: council.districtsCounted,
-        publishedPct: null,
-        isFinal: council.isFinal,
-      })}   Okrsky: ${formatProgress(council.districtsCounted, council.districtsTotal)}   ` +
-        `Účast: ${formatPercent(council.turnoutPct)}   Mandáty: ${formatInteger(council.seatsTotal)}`,
-    ),
-  )
+  // The status as a badge, then the figures as chips (002 FR-022, FR-023).
+  const status = statusLabel({
+    districtsTotal: council.districtsTotal,
+    districtsCounted: council.districtsCounted,
+    publishedPct: null,
+    isFinal: council.isFinal,
+  })
+  rows.push({
+    cells: [
+      badge(`${council.isFinal ? "✓" : "◌"} ${status}`),
+      cell(" "),
+      ...chip("Okrsky", formatProgress(council.districtsCounted, council.districtsTotal)),
+      cell(" "),
+      ...chip("Účast", formatPercent(council.turnoutPct)),
+      cell(" "),
+      ...chip("Mandáty", formatInteger(council.seatsTotal)),
+    ],
+  })
   rows.push(blank())
 
   const parties = applySort(listCouncilParties(db, kodzastup), sort, partyKey)
@@ -305,12 +321,12 @@ export function buildCouncilRows(
     ...(bars ? [{ header: "", width: BAR_WIDTH } satisfies Column] : []),
     { header: "Mandáty", width: 10, align: "right" },
   ]
-  const [header, underline] = headerRow(markSorted(columns, sort))
-  rows.push(line(header, "heading"), line(underline, "muted"))
+  rows.push(...tableHeader(columns, sort))
   const firstRow = rows.length
 
   for (const party of parties) {
     rows.push({
+      kind: "data",
       columns,
       cells: [
         cell(party.ballotOrder === null ? "–" : String(party.ballotOrder), "muted"),
@@ -319,11 +335,14 @@ export function buildCouncilRows(
         // The bar sits BESIDE the published share, in its own column, and the share is
         // shown whether or not the bar is (FR-070, FR-071).
         cell(formatPercent(party.votesPct)),
-        ...(bars ? [cell(bar(party.votesPct === null ? null : party.votesPct / 100), "muted")] : []),
+        ...(bars ? [{ text: bar(party.votesPct === null ? null : party.votesPct / 100), bar: true }] : []),
         cell(withChange(formatInteger(party.seatsWon), party.seatsChange), roleForChange(party.seatsChange)),
       ],
     })
   }
+
+  const strip = seatStrip(parties, width)
+  if (strip !== null) rows.push(blank(), strip)
 
   const boroughs = listBoroughs(db, kodzastup)
   if (boroughs.length > 0) {
@@ -337,6 +356,30 @@ export function buildCouncilRows(
   rows.push(blank())
   rows.push(line(OKRSKY_NOTE, "muted"))
   return { rows, firstRow, items: parties }
+}
+
+/**
+ * How the seats divided, one block per seat (002 FR-022).
+ *
+ * One group per party that won any, in the order the table shows them, so sorting the
+ * table reorders the strip with it. Groups alternate between two roles so neighbours
+ * can be told apart; nothing is coloured by party (FR-060). The total follows as a
+ * figure, which is what the strip is read against.
+ *
+ * Left out rather than wrapped or cut when it does not fit: a strip cut short would
+ * misstate how the seats divided (as bars are dropped, 001 FR-074).
+ */
+export function seatStrip(parties: { seatsWon: number }[], width: number): SemanticRow | null {
+  const groups = parties.filter((p) => p.seatsWon > 0)
+  if (groups.length === 0) return null
+  const total = groups.reduce((sum, p) => sum + p.seatsWon, 0)
+  const cells: Cell[] = [cell("Rozdělení mandátů", "muted")]
+  groups.forEach((party, index) => {
+    cells.push(cell(` ${"■".repeat(party.seatsWon)}`, index % 2 === 0 ? "heading" : "subtle"))
+  })
+  cells.push(cell(`  ${formatInteger(total)}`, "heading"))
+  const row: SemanticRow = { cells }
+  return [...(toTextLines([row])[0] ?? "")].length <= width ? row : null
 }
 
 /**
@@ -381,16 +424,17 @@ export function buildCandidatesRows(
     { header: "Hlasy", width: 10, align: "right" },
     { header: "Mandát", width: 8 },
   ]
-  const [header, underline] = headerRow(columns)
+  const header = tableHeader(columns)
 
   if (registered.length > 0) {
     rows.push(line(`Kandidátní listina (${registered.length})`))
     // The published result lists only elected members, so a dash here means the figure
     // was never published, not that the candidate received nothing.
     rows.push(line("Přednostní hlasy se zveřejňují pouze u zvolených; „–“ znamená neuvedeno.", "muted"))
-    rows.push(line(header, "heading"), line(underline, "muted"))
+    rows.push(...header)
     for (const candidate of registered) {
       rows.push({
+        kind: "data",
         columns,
         cells: [
           cell(String(candidate.ballotNumber), "muted"),
@@ -412,9 +456,10 @@ export function buildCandidatesRows(
   }
 
   rows.push(line("Zvolení zastupitelé (úplná kandidátní listina není načtena)"))
-  rows.push(line(header, "heading"), line(underline, "muted"))
+  rows.push(...header)
   for (const person of elected) {
     rows.push({
+      kind: "data",
       columns,
       cells: [
         cell(String(person.ballotNumber), "muted"),

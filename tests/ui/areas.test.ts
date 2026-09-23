@@ -13,12 +13,15 @@ import { extractArchiveFile } from "../../src/reference/archive.ts"
 import { loadReference, type ReferenceArchives } from "../../src/reference/loader.ts"
 import { ingestCouncil, ingestDistrict } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
+import { type SemanticRow, toTextLines } from "../../src/ui/row.ts"
 import {
+  buildCouncilRows,
   OKRSKY_NOTE,
   renderCandidates,
   renderCouncil,
   renderDistrict,
   renderDistrictList,
+  seatStrip,
 } from "../../src/ui/views/areas.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
@@ -206,5 +209,63 @@ describe("rendering hygiene", () => {
     expect(frame).not.toContain("undefined")
     expect(frame).not.toContain("NaN")
     expect(frame).not.toContain("[object")
+  })
+})
+
+describe("the council summary and seat strip (002 T051, T052, FR-022, FR-023)", () => {
+  beforeEach(seedBrno)
+
+  const cellsOf = (rows: SemanticRow[]) => rows.flatMap((r) => r.cells)
+
+  test("the status is a success badge, and precincts, turnout and seats are label and value chips", () => {
+    const { rows } = buildCouncilRows(db, "551082", 100)
+    const cells = cellsOf(rows)
+    const badge = cells.find((c) => c.text.includes("✓ konečné"))
+    expect(badge?.surface).toBe("success")
+
+    for (const [label, value] of [
+      ["Okrsky", "13 / 13"],
+      ["Účast", "46,21 %"],
+      ["Mandáty", "21"],
+    ]) {
+      const at = cells.findIndex((c) => c.text.trim() === label)
+      expect(`${label} found: ${at >= 0}`).toBe(`${label} found: true`)
+      expect(cells[at]).toMatchObject({ role: "subtle", surface: "element" })
+      // The formatters write no-break spaces inside figures; compare them as spaces.
+      expect(cells[at + 1]?.text.trim().replace(/\s/g, " ")).toBe(value)
+      expect(cells[at + 1]).toMatchObject({ role: "heading", surface: "primary" })
+    }
+  })
+
+  test("the seat strip shows one block per seat, a group per party that won any, and the total", () => {
+    const { rows } = buildCouncilRows(db, "551082", 100)
+    const strip = rows.find((r) => r.cells[0]?.text.startsWith("Rozdělení mandátů"))
+    expect(strip).toBeDefined()
+    expect(toTextLines([strip as SemanticRow])[0]).toBe("Rozdělení mandátů ■■■■■■■■■ ■■■■ ■■ ■■ ■■ ■ ■  21")
+    const groups = (strip?.cells ?? []).filter((c) => c.text.trim().startsWith("■"))
+    expect(groups.map((g) => g.role)).toEqual([
+      "heading",
+      "subtle",
+      "heading",
+      "subtle",
+      "heading",
+      "subtle",
+      "heading",
+    ])
+  })
+
+  test("follows the table's order when it is sorted", () => {
+    const byName = { column: 1, direction: "asc" as const }
+    const { rows, items } = buildCouncilRows(db, "551082", 100, byName)
+    const strip = rows.find((r) => r.cells[0]?.text.startsWith("Rozdělení mandátů"))
+    const expected = items.filter((p) => (p.seatsWon ?? 0) > 0).map((p) => "■".repeat(p.seatsWon ?? 0))
+    const groups = (strip?.cells ?? []).filter((c) => c.text.trim().startsWith("■")).map((c) => c.text.trim())
+    expect(groups).toEqual(expected)
+  })
+
+  test("is left out rather than wrapped or cut when it does not fit", () => {
+    const strip = seatStrip([{ seatsWon: 60 }, { seatsWon: 5 }], 40)
+    expect(strip).toBeNull()
+    expect(seatStrip([{ seatsWon: 3 }, { seatsWon: 2 }], 40)).not.toBeNull()
   })
 })

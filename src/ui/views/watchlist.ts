@@ -15,12 +15,11 @@ import {
   formatInteger,
   formatPercent,
   formatProgress,
-  headerRow,
   rule,
   withChange,
 } from "../format.ts"
-import { blank, cell, line, roleForChange, type SemanticRow, toTextLines } from "../row.ts"
-import { applySort, markSorted, type SortState, UNSORTED } from "../sort.ts"
+import { blank, cell, line, roleForChange, type SemanticRow, tableHeader, toTextLines } from "../row.ts"
+import { applySort, type SortState, UNSORTED } from "../sort.ts"
 
 /**
  * Sortable value per displayed column.
@@ -63,9 +62,8 @@ export function buildWatchlistRows(db: Database, width = 100, sort: SortState = 
     { header: "Mandáty", width: 9, align: "right" },
     { header: "Stav", width: 14 },
   ]
-  const [header, underline] = headerRow(markSorted(columns, sort))
   const firstRow = rows.length + 2
-  rows.push(line(header, "heading"), line(underline, "muted"))
+  rows.push(...tableHeader(columns, sort))
 
   for (const entry of watched) {
     const council = readCouncil(db, entry.kodzastup)
@@ -75,6 +73,7 @@ export function buildWatchlistRows(db: Database, width = 100, sort: SortState = 
       // A watched council with no data yet says so, rather than vanishing from a list
       // the user deliberately curated.
       rows.push({
+        kind: "data",
         columns,
         cells: [cell(label), cell("–"), cell("–"), cell("–"), cell("čeká se", "muted")],
       })
@@ -82,6 +81,7 @@ export function buildWatchlistRows(db: Database, width = 100, sort: SortState = 
     }
 
     rows.push({
+      kind: "data",
       columns,
       cells: [
         cell(label),

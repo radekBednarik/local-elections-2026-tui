@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, test } from "bun:test"
-import { breadcrumbText, SEPARATOR } from "../../src/ui/chrome/breadcrumb.ts"
+import { breadcrumbSegments, breadcrumbText, SEPARATOR } from "../../src/ui/chrome/breadcrumb.ts"
 
 describe("assembly", () => {
   test("joins segments with a chevron", () => {
@@ -55,5 +55,39 @@ describe("truncation (FR-055)", () => {
     for (let width = 8; width <= 60; width += 1) {
       expect([...breadcrumbText(deep, width)].length).toBeLessThanOrEqual(width)
     }
+  })
+})
+
+describe("segments for the styled title bar (002 T026, FR-011)", () => {
+  const deep = ["ČR", "Okresy", "Okres Brno-město", "Brno-Bohunice", "ANO 2011"]
+  /** A styled segment costs its text plus a space either side and the ▌ join. */
+  const cost = (segments: string[]) => segments.reduce((sum, s) => sum + [...s].length + 3, 0)
+
+  test("keeps every segment when they fit", () => {
+    expect(breadcrumbSegments(["ČR", "Okres Brno-město"], 80)).toEqual(["ČR", "Okres Brno-město"])
+  })
+
+  test("drops from the left, marking the gap with its own segment, never the current level", () => {
+    const kept = breadcrumbSegments(deep, 40)
+    expect(kept[0]).toBe("…")
+    expect(kept.at(-1)).toBe("ANO 2011")
+    expect(kept).not.toContain("Okresy")
+    expect(cost(kept)).toBeLessThanOrEqual(40)
+  })
+
+  test("cuts the current level itself only when even it alone does not fit", () => {
+    const kept = breadcrumbSegments(["ČR", "Zastupitelstvo s velmi dlouhým názvem obce"], 20)
+    expect(kept).toHaveLength(1)
+    expect(cost(kept)).toBeLessThanOrEqual(20)
+    expect(kept[0]?.length).toBeGreaterThan(0)
+  })
+
+  test("never exceeds the width, at any depth", () => {
+    for (let width = 8; width <= 60; width += 1)
+      expect(cost(breadcrumbSegments(deep, width))).toBeLessThanOrEqual(width)
+  })
+
+  test("leaves the plain breadcrumb exactly as it was", () => {
+    expect(breadcrumbText(deep, 30)).toBe(`… ${SEPARATOR} Brno-Bohunice ${SEPARATOR} ANO 2011`)
   })
 })

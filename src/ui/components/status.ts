@@ -9,7 +9,9 @@
 import { formatAge } from "../../domain/status.ts"
 import type { Subscription } from "../../sources/scheduler.ts"
 import { pad } from "../format.ts"
+import type { Screen } from "../navigation.ts"
 import { type ActionContext, availableActions } from "../palette/actions.ts"
+import { type Cell, cellsWide, type SemanticRow } from "../row.ts"
 
 export const MIN_COLUMNS = 80
 export const MIN_ROWS = 24
@@ -106,4 +108,64 @@ export function statusBarLine(context: ActionContext, width: number): string {
     if ([...text].length <= width) return pad(text, Math.max(0, width))
   }
   return pad("", Math.max(0, width))
+}
+
+/** The label that opens the status bar, naming where the user is (002 FR-013). */
+export function screenLabel(screen: Screen, paletteOpen: boolean): string {
+  if (paletteOpen) return "PŘÍKAZY"
+  switch (screen.kind) {
+    case "national":
+      return "PŘEHLED"
+    case "districts":
+      return "OKRESY"
+    case "district":
+      return "OKRES"
+    case "council":
+      return "ZASTUPITELSTVO"
+    case "candidates":
+      return "KANDIDÁTI"
+    case "watchlist":
+      return "SLEDOVANÉ"
+    case "search":
+      return "HLEDÁNÍ"
+    case "help":
+      return "NÁPOVĚDA"
+  }
+}
+
+/**
+ * The status bar as styled cells (002 T035, FR-013).
+ *
+ * The screen label as a chip, joined to the bar; each available key as a chip with its
+ * label after it; the theme's name at the right end. The keys are exactly those the
+ * plain bar offers, from the same registry (001 FR-064). A chip costs two columns more
+ * than a plain key, so when they do not all fit, whole hints are dropped from the right
+ * and none is ever cut. The row fills exactly `width`.
+ */
+export function statusBarRow(
+  context: ActionContext,
+  width: number,
+  themeName: string,
+  paletteOpen: boolean,
+): SemanticRow {
+  const lead: Cell[] = [
+    { text: ` ${screenLabel(context.screen, paletteOpen)} `, role: "heading", surface: "primary" },
+    { text: "▌", fgSlot: "primary" },
+    { text: " " },
+  ]
+  const tail: Cell = { text: ` ${themeName} `, role: "muted" }
+  const hint = (h: KeyHint): Cell[] => [
+    { text: ` ${h.key} `, role: "accent", surface: "accent" },
+    { text: ` ${h.label}  `, role: "subtle" },
+  ]
+
+  const room = width - cellsWide(lead) - cellsWide([tail])
+  const hints: Cell[] = []
+  for (const h of contextHints(context)) {
+    const cells = hint(h)
+    if (cellsWide(hints) + cellsWide(cells) > room) break
+    hints.push(...cells)
+  }
+  const gap = Math.max(0, width - cellsWide(lead) - cellsWide(hints) - cellsWide([tail]))
+  return { cells: [...lead, ...hints, { text: " ".repeat(gap) }, tail] }
 }

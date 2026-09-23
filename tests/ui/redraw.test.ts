@@ -22,6 +22,7 @@ import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
 import { applyFrameState, frameState, viewWidthFor } from "../../src/ui/chrome/state.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
+import { cell, type SemanticRow, toTextLines } from "../../src/ui/row.ts"
 import { composeScreen, type ScreenContent } from "../../src/ui/screen.ts"
 import { UNSORTED } from "../../src/ui/sort.ts"
 import { MONOCHROME, type Theme, themeByName } from "../../src/ui/theme/themes.ts"
@@ -55,14 +56,14 @@ async function harness() {
   const nav = new Navigation()
   nav.push({ kind: "districts" })
 
-  const contentWidth = () => (frame.contentWidth > 0 ? frame.contentWidth : WIDTH - 3)
+  const contentWidth = () => (frame.contentWidth > 0 ? frame.contentWidth : WIDTH - 2)
 
   /**
    * `composed` is the screen the key handler composed and passes through, exactly as
    * App.onKey does for a movement key. Omitted, the draw composes its own, as a refresh
    * does.
    */
-  const draw = async (theme: Theme = themeByName("dark"), composed?: ScreenContent) => {
+  const draw = async (theme: Theme = themeByName("tokyonight"), composed?: ScreenContent) => {
     applyFrameState(
       frame,
       frameState({
@@ -74,7 +75,7 @@ async function harness() {
         sort: UNSORTED,
         width: WIDTH,
         contentWidth: contentWidth(),
-        contentHeight: frame.contentHeight > 0 ? frame.contentHeight : HEIGHT - 4,
+        contentHeight: frame.contentHeight > 0 ? frame.contentHeight : HEIGHT - 3,
         warning: null,
         notice: null,
         content: composed,
@@ -196,13 +197,45 @@ describe("a keystroke rewrites only what changed", () => {
   })
 })
 
+describe("a change that alters only a background still repaints (T022)", () => {
+  test("rows whose stripe changes while their text does not are redrawn, and only those", async () => {
+    // The skip compared TEXT alone. A row can change background with its text intact,
+    // when a row above it stops being a table row, and it kept the stale stripe.
+    const columns = [{ header: "Okres", width: 30 }]
+    const header: SemanticRow = { kind: "header", columns, cells: [cell("Okres", "heading")] }
+    const data = (text: string): SemanticRow => ({ kind: "data", columns, cells: [cell(text)] })
+    const screen = (rows: SemanticRow[]): ScreenContent => ({
+      rows,
+      lines: toTextLines(rows),
+      firstRow: rows.length,
+      rowCount: 0,
+      target: () => null,
+      sortableColumns: 0,
+    })
+    const striped = screen([header, data("Benešov"), data("Beroun"), data("Blansko")])
+    // Same text on every line; "Benešov" is no longer a data row, so the two rows below
+    // it swap stripes. "Benešov" itself stays on the base background either way.
+    const shifted = screen([header, { columns, cells: [cell("Benešov")] }, data("Beroun"), data("Blansko")])
+
+    const h = await harness()
+    try {
+      await h.draw(undefined, striped)
+      const before = h.fingerprint()
+      await h.draw(undefined, shifted)
+      expect(h.rewritten(before, h.fingerprint())).toBe(2)
+    } finally {
+      h.destroy()
+    }
+  })
+})
+
 describe("a change that alters no text still repaints", () => {
   test("switching the theme rewrites every row", async () => {
     // The row skip compares TEXT, and a theme changes none. Without the explicit
     // invalidation the screen would keep the old colours until something else moved.
     const h = await harness()
     try {
-      await h.draw(themeByName("dark"))
+      await h.draw(themeByName("tokyonight"))
       const before = h.fingerprint()
       await h.draw(MONOCHROME)
       expect(h.rewritten(before, h.fingerprint())).toBe(before.length)
@@ -214,9 +247,9 @@ describe("a change that alters no text still repaints", () => {
   test("and the screen is still correct afterwards", async () => {
     const h = await harness()
     try {
-      await h.draw(themeByName("dark"))
+      await h.draw(themeByName("tokyonight"))
       await h.draw(MONOCHROME)
-      await h.draw(themeByName("light"))
+      await h.draw(themeByName("catppuccin-latte"))
       // The skip must never leave a stale row behind: every district is still listed.
       const lines = h.frame.rows.map((node) => node.content.chunks.map((c) => c.text).join(""))
       expect(lines.some((l) => l.includes("Brno-město"))).toBe(true)
@@ -256,6 +289,33 @@ describe("moving between screens", () => {
       expect(h.frame.rows.length).toBe(before)
       const lines = h.frame.rows.map((node) => node.content.chunks.map((c) => c.text).join(""))
       expect(lines.some((l) => l.includes("Benešov"))).toBe(true)
+    } finally {
+      h.destroy()
+    }
+  })
+})
+
+describe("the refresh keeps the keystroke budget (002 T065, SC-008)", () => {
+  test("on the longest table, striped, a selection move is two rows and well inside 100 ms", async () => {
+    // The district list is the longest table: 77 rows. The first draw pays for building
+    // them; what is measured is the keystroke after it, which is what the user feels.
+    const h = await harness()
+    try {
+      await h.draw(themeByName("tokyonight"))
+      const timings: number[] = []
+      for (let step = 0; step < 5; step++) {
+        const before = h.fingerprint()
+        const content = h.compose()
+        const start = performance.now()
+        h.nav.move(1, content.rowCount)
+        await h.draw(themeByName("tokyonight"), content)
+        timings.push(performance.now() - start)
+        expect(h.rewritten(before, h.fingerprint())).toBe(2)
+      }
+      // The median, so one slow scheduling slice on a shared machine cannot fail it; the
+      // row count above is the stable guard, this is the budget itself.
+      const median = [...timings].sort((a, b) => a - b)[2] ?? 0
+      expect(median).toBeLessThan(100)
     } finally {
       h.destroy()
     }

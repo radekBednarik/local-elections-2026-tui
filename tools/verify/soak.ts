@@ -60,7 +60,7 @@ frame.attach(setup.renderer.root)
 const nav = new Navigation()
 // The district LIST, not one district: 77 rows rather than three.
 nav.push({ kind: "districts" })
-const theme = themeByName("dark")
+const theme = themeByName("tokyonight")
 
 for (let cycle = 0; cycle < CYCLES; cycle++) {
   // Each cycle the count advances slightly, so snapshots genuinely rotate.

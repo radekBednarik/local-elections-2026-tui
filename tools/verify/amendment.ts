@@ -31,7 +31,8 @@ import { applyFrameState, applyPanel, frameState } from "../../src/ui/chrome/sta
 import type { Screen } from "../../src/ui/navigation.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
 import { ACTIONS, type ActionContext } from "../../src/ui/palette/actions.ts"
-import { entryDescription, entryLabel, filterEntries, paletteEntries } from "../../src/ui/palette/view.ts"
+import { entryRow, filterEntries, paletteEntries } from "../../src/ui/palette/view.ts"
+import { toTextLines } from "../../src/ui/row.ts"
 import { UNSORTED } from "../../src/ui/sort.ts"
 import { MONOCHROME, THEME_NAMES, type Theme, themeByName } from "../../src/ui/theme/themes.ts"
 
@@ -127,16 +128,16 @@ console.log("\n===== V14 - postranní panel (FR-056, FR-057) =====")
 toggleWatchlist(db, "551082")
 toggleWatchlist(db, "551325")
 
-const wide = await paint(COUNCIL, themeByName("dark"), 130, 30, true)
+const wide = await paint(COUNCIL, themeByName("tokyonight"), 130, 30, true)
 console.log(wide.text)
-check("V14", "panel je vidět na širokém terminálu", wide.text.includes("Sledované"))
+check("V14", "panel je vidět na širokém terminálu", wide.text.includes("SLEDOVANÉ"))
 check("V14", "obě sledovaná zastupitelstva jsou v panelu", wide.text.includes("Brno-Bohunice"))
 // Czech percentages are grouped with U+00A0, so the separator is matched as whitespace
 // rather than as a literal space.
 check("V14", "panel ukazuje živé údaje", /\d+,\d+\s%/u.test(wide.text))
 check("V14", "tabulka zůstává čitelná vedle panelu", wide.text.includes("Volební strana"))
 
-const narrow = await paint(COUNCIL, themeByName("dark"), 80, 24, true)
+const narrow = await paint(COUNCIL, themeByName("tokyonight"), 80, 24, true)
 check("V14", "panel se sám skryje na 80 sloupcích", !narrow.text.includes("Sledované"))
 check("V14", "obsah si ponechal šířku", narrow.frame.contentWidth >= 64)
 
@@ -151,7 +152,7 @@ for (const name of THEME_NAMES) {
   check("V15", `motiv ${name} přežije restart`, readTheme(db) === name)
 }
 
-const dark = await paint(COUNCIL, themeByName("dark"), 110, 30)
+const dark = await paint(COUNCIL, themeByName("tokyonight"), 110, 30)
 const mono = await paint(COUNCIL, MONOCHROME, 110, 30)
 check("V15", "bez barev je obrazovka znak po znaku stejná", mono.text === dark.text)
 
@@ -212,16 +213,18 @@ const context: ActionContext = {
   sortableColumns: 5,
 }
 const entries = paletteEntries(context)
-check("V16", "paleta uvádí všechny akce aplikace", entries.length === ACTIONS.length)
+// The palette lists the registry and, after it, one entry per theme (002 FR-005).
+const drawn = (e: (typeof entries)[number]) => toTextLines([entryRow(e, false, 80)])[0] ?? ""
+check("V16", "paleta uvádí všechny akce aplikace", entries.length === ACTIONS.length + THEME_NAMES.length)
 check(
   "V16",
   "u každé akce je uvedena klávesa",
-  entries.every((e) => entryLabel(e).includes(e.action.key)),
+  entries.every((e) => drawn(e).includes(e.action.key)),
 )
 
 for (const entry of entries) {
   const mark = entry.available ? "  " : "× "
-  console.log(`  ${mark}${entryLabel(entry).padEnd(52)} ${entryDescription(entry)}`)
+  console.log(`  ${mark}${drawn(entry)}`)
 }
 
 const districts: ActionContext = { ...context, screen: { kind: "districts" }, depth: 2 }
@@ -242,12 +245,12 @@ check("V16", "hledání podle klávesy funguje", filterEntries(entries, "ctrl+b"
 
 // ---------------------------------------------------------------- V17: bars
 console.log("\n===== V17 - pruhy (FR-070 až FR-074) =====")
-const withBars = await paint(COUNCIL, themeByName("dark"), 120, 30)
+const withBars = await paint(COUNCIL, themeByName("tokyonight"), 120, 30)
 console.log(withBars.text)
 check("V17", "pruhy se kreslí u širokého terminálu", withBars.text.includes("█"))
 check("V17", "u pruhu je vždy zveřejněný údaj", /█.*|.*%/.test(withBars.text) && withBars.text.includes("%"))
 
-const noBars = await paint(COUNCIL, themeByName("dark"), 80, 24)
+const noBars = await paint(COUNCIL, themeByName("tokyonight"), 80, 24)
 check("V17", "na úzkém terminálu pruhy zmizí celé", !/[▏▎▍▌▋▊▉█]/.test(contentOnly(noBars.text)))
 check("V17", "údaje ale zůstanou", noBars.text.includes("%") && noBars.text.includes("ANO 2011"))
 check("V17", "nikde není žádná časová řada", !/[▁▂▃▄▅▆▇]/.test(contentOnly(withBars.text)))

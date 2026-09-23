@@ -48,7 +48,7 @@ async function harness(rows = 12): Promise<Harness> {
   return { frame, clicks, scrolls, setup }
 }
 
-/** The screen row a given content row is drawn on: breadcrumb, then the top border. */
+/** The screen row a given content row is drawn on: breadcrumb, then the padding row. */
 const screenRowFor = (contentRow: number) => contentRow + 2
 
 describe("clicking a row selects it (FR-075, T156)", () => {
@@ -115,7 +115,7 @@ describe("the chrome is NOT clickable (FR-079, T160)", () => {
     }
   })
 
-  test("clicking the border does nothing", async () => {
+  test("clicking the rail does nothing", async () => {
     const h = await harness()
     try {
       await h.setup.mockMouse.click(0, 1)

@@ -62,7 +62,7 @@ function stateFor(screen: Screen, contentWidth: number) {
     nav,
     councilType: "OBEC",
     query: "",
-    theme: themeByName("dark"),
+    theme: themeByName("tokyonight"),
     sort: UNSORTED,
     width: contentWidth + 3,
     contentWidth,

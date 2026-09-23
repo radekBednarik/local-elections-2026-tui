@@ -94,7 +94,7 @@ describe("last good data is kept (FR-027)", () => {
 
     expect(readNationalTotals(db)?.turnoutPct).toBe(before ?? -1)
     const view = renderNationalView(db).join("\n")
-    expect(view).toContain("Účast")
+    expect(view).toMatch(/účast/i)
     expect(view).not.toContain("Výsledky zatím nejsou zveřejněny")
   })
 
@@ -208,7 +208,7 @@ describe("offline start (FR-042)", () => {
         expect(staleWarning(restored.all())).not.toBeNull()
 
         const view = renderNationalView(second).join("\n")
-        expect(view).toContain("Účast")
+        expect(view).toMatch(/účast/i)
       } finally {
         second.close()
       }

@@ -5,11 +5,12 @@ import {
   readColorEnvironment,
   resolveTheme,
 } from "../../src/ui/theme/detect.ts"
-import { ROLE_MEANING, ROLES } from "../../src/ui/theme/roles.ts"
+import { ROLE_MEANING, ROLE_SLOT, ROLES } from "../../src/ui/theme/roles.ts"
 import {
   isThemeName,
   MONOCHROME,
   nextTheme,
+  SLOTS,
   THEME_NAMES,
   type ThemeName,
   themeByName,
@@ -19,24 +20,28 @@ import {
 const env = (overrides: Partial<ColorEnvironment> = {}): ColorEnvironment => ({
   noColor: false,
   ansi256: true,
+  rgb: null,
   reportedScheme: null,
   ...overrides,
 })
 
-describe("roles (FR-059)", () => {
-  test("there are exactly six, each with a distinct meaning", () => {
-    expect(ROLES).toHaveLength(6)
-    expect(new Set(Object.values(ROLE_MEANING)).size).toBe(6)
+describe("roles (FR-059, FR-003)", () => {
+  test("there are eight, each with a distinct meaning", () => {
+    expect(ROLES).toHaveLength(8)
+    expect(new Set(Object.values(ROLE_MEANING)).size).toBe(8)
   })
 
-  test("every theme defines every role, so none can fall back to nothing", () => {
-    for (const name of THEME_NAMES) {
-      const theme = themeByName(name)
-      for (const role of ROLES) {
-        expect(`${name}.${role}`).toBe(`${name}.${role}`)
-        expect(theme.roles[role]).toBeDefined()
-      }
-    }
+  test("each role resolves to one slot, the same in every theme", () => {
+    expect(ROLE_SLOT).toEqual({
+      heading: { slot: "primary", bold: true },
+      selection: { slot: "selectionText", bold: true },
+      warning: { slot: "warning", bold: true },
+      increase: { slot: "success", bold: false },
+      decrease: { slot: "error", bold: false },
+      muted: { slot: "muted", bold: false },
+      accent: { slot: "accent", bold: true },
+      subtle: { slot: "subtle", bold: false },
+    })
   })
 
   test("there is no role for an electoral party (FR-060)", () => {
@@ -44,71 +49,62 @@ describe("roles (FR-059)", () => {
     // and assigning one would imply an affiliation the source never published.
     expect(ROLES).not.toContain("party")
     expect(Object.keys(ROLE_MEANING).join(" ")).not.toMatch(/party|strana/i)
+    expect(SLOTS.join(" ")).not.toMatch(/party|strana/i)
   })
 })
 
-describe("themes (FR-061)", () => {
-  test("the three documented themes exist and are named", () => {
-    expect(THEME_NAMES).toEqual(["dark", "light", "high-contrast"])
-    for (const name of THEME_NAMES) expect(themeLabel(name)).not.toBe("")
+describe("themes (FR-001, FR-005)", () => {
+  test("the six themes exist, in the order the theme key cycles through them", () => {
+    expect(THEME_NAMES).toEqual([
+      "tokyonight",
+      "catppuccin-mocha",
+      "gruvbox",
+      "nord",
+      "catppuccin-latte",
+      "high-contrast",
+    ])
   })
 
-  test("dark and light defer to the terminal's own palette", () => {
-    // Indexed colours inherit the user's scheme. Hardcoded hex would clash with every
-    // solarized or gruvbox setup.
-    for (const name of ["dark", "light"] as const) {
-      const theme = themeByName(name)
-      for (const role of ROLES) {
-        expect(`${name}.${role}=${theme.roles[role].kind}`).toBe(`${name}.${role}=indexed`)
-      }
-    }
+  test("each has its label", () => {
+    expect(THEME_NAMES.map(themeLabel)).toEqual([
+      "Tokyo Night",
+      "Catppuccin Mocha",
+      "Gruvbox Dark",
+      "Nord",
+      "Catppuccin Latte",
+      "Vysoký kontrast",
+    ])
   })
 
-  test("high contrast pins explicit values instead", () => {
-    // An unknown user palette cannot promise brightness separation, so this one cannot
-    // defer to it.
-    const theme = themeByName("high-contrast")
-    for (const role of ROLES) {
-      expect(`${role}=${theme.roles[role].kind}`).toBe(`${role}=hex`)
-    }
-  })
-
-  test("high contrast separates roles by brightness, not hue (FR-062)", () => {
-    const theme = themeByName("high-contrast")
-    expect(theme.contrastByBrightness).toBe(true)
-
-    // Read the grey level of each pinned colour; they must not all collapse together,
-    // or a user who cannot distinguish hues would see one undifferentiated block.
-    const levels = ROLES.map((role) => {
-      const spec = theme.roles[role]
-      if (spec.kind !== "hex") return 0
-      const hex = spec.value.slice(1)
-      const r = Number.parseInt(hex.slice(0, 2), 16)
-      const g = Number.parseInt(hex.slice(2, 4), 16)
-      const b = Number.parseInt(hex.slice(4, 6), 16)
-      return Math.round(0.299 * r + 0.587 * g + 0.114 * b)
-    })
-    expect(new Set(levels).size).toBeGreaterThan(2)
-  })
-
-  test("cycling visits every theme and returns to the start", () => {
-    const seen: ThemeName[] = [THEME_NAMES[0]]
-    let current: ThemeName = THEME_NAMES[0]
+  test("cycling visits every theme in order and wraps to the start", () => {
+    const seen: ThemeName[] = ["tokyonight"]
+    let current: ThemeName = "tokyonight"
     for (let i = 0; i < THEME_NAMES.length - 1; i++) {
       current = nextTheme(current)
       seen.push(current)
     }
-    expect(new Set(seen).size).toBe(THEME_NAMES.length)
-    expect(nextTheme(current)).toBe(THEME_NAMES[0])
+    expect(seen).toEqual([...THEME_NAMES])
+    expect(nextTheme("high-contrast")).toBe("tokyonight")
   })
 
-  test("an unrecognised theme name is rejected", () => {
-    expect(isThemeName("dark")).toBe(true)
+  test("only high contrast relies on brightness, and only it reverses the selection", () => {
+    for (const name of THEME_NAMES) {
+      const theme = themeByName(name)
+      const reversed = name === "high-contrast"
+      expect(`${name}:${theme.contrastByBrightness}`).toBe(`${name}:${reversed}`)
+      expect(`${name}:${theme.selectionText}`).toBe(`${name}:${reversed ? "bg" : "text"}`)
+    }
+  })
+
+  test("the old terminal-palette names are not themes any more", () => {
+    expect(isThemeName("tokyonight")).toBe(true)
+    expect(isThemeName("dark")).toBe(false)
+    expect(isThemeName("light")).toBe(false)
     expect(isThemeName("solarized")).toBe(false)
   })
 })
 
-describe("choosing a theme (T112, FR-063)", () => {
+describe("choosing a theme (FR-004, FR-008)", () => {
   test("NO_COLOR forces monochrome, outranking a stored preference", () => {
     // Honouring a stored theme here would emit escape sequences into a terminal that
     // explicitly asked not to receive them.
@@ -116,28 +112,30 @@ describe("choosing a theme (T112, FR-063)", () => {
   })
 
   test("a terminal without colour support forces monochrome", () => {
-    expect(resolveTheme("dark", env({ ansi256: false }))).toBe(MONOCHROME)
+    expect(resolveTheme("nord", env({ ansi256: false }))).toBe(MONOCHROME)
   })
 
   test("a stored choice is honoured when colour is available", () => {
-    expect(resolveTheme("light", env()).name).toBe("light")
+    expect(resolveTheme("gruvbox", env()).name).toBe("gruvbox")
     expect(resolveTheme("high-contrast", env()).name).toBe("high-contrast")
   })
 
-  test("with no stored choice, the terminal's own report is followed", () => {
-    expect(resolveTheme(null, env({ reportedScheme: "light" })).name).toBe("light")
-    expect(resolveTheme(null, env({ reportedScheme: "dark" })).name).toBe("dark")
-  })
-
-  test("a terminal that reports nothing gets dark, not a guess dressed as detection", () => {
-    expect(resolveTheme(null, env()).name).toBe("dark")
+  test("with no stored choice, Tokyo Night, or Catppuccin Latte on a light terminal", () => {
+    expect(resolveTheme(null, env()).name).toBe("tokyonight")
+    expect(resolveTheme(null, env({ reportedScheme: "dark" })).name).toBe("tokyonight")
+    expect(resolveTheme(null, env({ reportedScheme: "light" })).name).toBe("catppuccin-latte")
   })
 
   test("the monochrome theme really carries no colour", () => {
     expect(isMonochrome(MONOCHROME)).toBe(true)
+    for (const slot of SLOTS) expect(`${slot}=${MONOCHROME.slots[slot]}`).toBe(`${slot}=null`)
     for (const name of THEME_NAMES) {
       expect(`${name}:${isMonochrome(themeByName(name))}`).toBe(`${name}:false`)
     }
+  })
+
+  test("monochrome is not one of the selectable themes", () => {
+    expect(THEME_NAMES.map(themeByName)).not.toContain(MONOCHROME)
   })
 })
 

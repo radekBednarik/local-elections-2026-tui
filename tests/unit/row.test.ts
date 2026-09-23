@@ -1,6 +1,20 @@
 import { describe, expect, test } from "bun:test"
-import { type Column, dataRow } from "../../src/ui/format.ts"
-import { blank, cell, line, row, toChunks, toText, toTextLines } from "../../src/ui/row.ts"
+import { type RGBA, rgbToHex, type StyledText } from "@opentui/core"
+import { type Column, dataRow, headerRow } from "../../src/ui/format.ts"
+import {
+  blank,
+  cell,
+  line,
+  row,
+  type SemanticRow,
+  tableHeader,
+  toChunks,
+  toText,
+  toTextLines,
+} from "../../src/ui/row.ts"
+import { markSorted, type SortState } from "../../src/ui/sort.ts"
+import { styledRow } from "../../src/ui/theme/apply.ts"
+import { MONOCHROME, themeByName } from "../../src/ui/theme/themes.ts"
 
 const COLUMNS: Column[] = [
   { header: "Strana", width: 20 },
@@ -98,8 +112,115 @@ describe("a bar is not a cell property", () => {
   // It was, briefly. A bar has to occupy its own column so that rows align and so that a
   // narrow table can drop it whole, which makes it ordinary text produced by the view -
   // see src/ui/bar.ts. Keeping the field would have left two ways to express one thing.
+  // The optional `bar` flag a view may set (002 T009) carries no value: it only marks the
+  // column so its unfilled part can show the track, and `cell()` never sets it.
   test("a cell carries text and a role, and nothing else", () => {
     expect(Object.keys(cell("ANO 2011", "heading")).sort()).toEqual(["role", "text"])
     expect(Object.keys(cell("ANO 2011"))).toEqual(["text"])
+  })
+})
+
+describe("styled rows carry backgrounds (T004, research R1)", () => {
+  const TOKYO = themeByName("tokyonight")
+  const hex = (colour: RGBA | undefined) => (colour === undefined ? "none" : rgbToHex(colour))
+  const cellsWide = (text: StyledText) => text.chunks.reduce((sum, c) => sum + [...c.text].length, 0)
+
+  test("every chunk, the gutter included, takes the row's background", () => {
+    const styled = styledRow(row("ANO 2011", "16752", "18,80 %"), TOKYO, 40, "  ", COLUMNS, "zebra")
+    for (const chunk of styled.chunks) expect(`${chunk.text}|${hex(chunk.bg)}`).toBe(`${chunk.text}|#1e2030`)
+  })
+
+  test("the row is padded to its full width, because a text background covers glyphs only", () => {
+    const styled = styledRow(row("ANO 2011", "16752", "18,80 %"), TOKYO, 60, "  ", COLUMNS, "bg")
+    expect(cellsWide(styled)).toBe(62)
+    expect(styled.chunks.at(-1)?.text.trim()).toBe("")
+  })
+
+  test("the plain-text form is not padded, since it is also the redraw key", () => {
+    expect(toText(row("ANO 2011", "16752", "18,80 %"), COLUMNS)).toBe(
+      dataRow(COLUMNS, ["ANO 2011", "16752", "18,80 %"]),
+    )
+  })
+
+  test.each(["primary", "accent", "success", "warning"] as const)(
+    "a %s surface reads onAccent on that slot",
+    (surface) => {
+      const styled = styledRow({ cells: [{ text: " Mandáty ", surface }] }, TOKYO, 20, "", undefined, "bg")
+      const chunk = styled.chunks.find((c) => c.text.includes("Mandáty"))
+      expect(hex(chunk?.bg)).toBe(TOKYO.slots[surface] ?? "")
+      expect(hex(chunk?.fg)).toBe(TOKYO.slots.onAccent ?? "")
+    },
+  )
+
+  test("an element surface keeps its role's own foreground", () => {
+    const styled = styledRow(
+      { cells: [{ text: "ÚČAST", role: "muted", surface: "element" }] },
+      TOKYO,
+      20,
+      "",
+      undefined,
+      "bg",
+    )
+    const chunk = styled.chunks.find((c) => c.text.includes("ÚČAST"))
+    expect(hex(chunk?.bg)).toBe(TOKYO.slots.element ?? "")
+    expect(hex(chunk?.fg)).toBe(TOKYO.slots.muted ?? "")
+  })
+
+  test("a surface keeps its padding at the end of a row", () => {
+    const styled = styledRow(
+      { cells: [{ text: "x" }, { text: " 21 ", surface: "primary" }] },
+      TOKYO,
+      10,
+      "",
+      undefined,
+      "bg",
+    )
+    expect(styled.chunks.some((c) => c.text === " 21 ")).toBe(true)
+  })
+
+  test("monochrome emits no colour at all", () => {
+    const styled = styledRow(
+      {
+        cells: [
+          { text: "a", role: "heading" },
+          { text: " b ", surface: "primary" },
+        ],
+      },
+      MONOCHROME,
+      20,
+      "▶ ",
+      undefined,
+      "sel",
+    )
+    for (const chunk of styled.chunks)
+      expect(`${chunk.text}|${hex(chunk.fg)}|${hex(chunk.bg)}`).toBe(`${chunk.text}|none|none`)
+  })
+})
+
+describe("table headers (T013, research R3)", () => {
+  test("are a header row and a rule row, marked as such", () => {
+    const [header, rule] = tableHeader(COLUMNS)
+    expect(header?.kind).toBe("header")
+    expect(rule?.kind).toBe("rule")
+  })
+
+  test("read exactly as headerRow did, so no plain-text assertion moves", () => {
+    const [header, rule] = tableHeader(COLUMNS)
+    const [text, underline] = headerRow(COLUMNS)
+    expect(toText(header as SemanticRow)).toBe(text.trimEnd())
+    expect(toText(rule as SemanticRow)).toBe(underline.trimEnd())
+  })
+
+  test("the header's cells are headings, the sorted one accented and still marked", () => {
+    const sort: SortState = { column: 1, direction: "desc" }
+    const [header] = tableHeader(COLUMNS, sort)
+    expect(header?.cells.map((c) => c.role)).toEqual(["heading", "accent", "heading"])
+    expect(toText(header as SemanticRow)).toBe(headerRow(markSorted(COLUMNS, sort))[0].trimEnd())
+    expect(header?.cells[1]?.text).toContain("▾")
+  })
+
+  test("the rule row carries no role: the frame draws it in the border slot", () => {
+    const [, rule] = tableHeader(COLUMNS)
+    expect(rule?.cells.every((c) => c.role === undefined)).toBe(true)
   })
 })

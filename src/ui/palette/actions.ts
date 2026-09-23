@@ -15,10 +15,13 @@
  */
 
 import type { Screen } from "../navigation.ts"
+import { THEME_NAMES, type ThemeName, themeLabel } from "../theme/themes.ts"
 
 /** What the registry needs to know about the moment, to judge each action. */
 export interface ActionContext {
   screen: Screen
+  /** The theme in use, so the palette can mark its own entry as already chosen. */
+  activeTheme?: ThemeName
   /** Depth of the navigation stack, so "back" knows whether there is anywhere to go. */
   depth: number
   /** Selectable rows on this screen. */
@@ -48,6 +51,10 @@ export type ActionId =
   | "theme"
   | "help"
   | "quit"
+  | `theme:${ThemeName}`
+
+/** The actions in the registry proper, each with a key of its own (FR-078). */
+export type RegistryActionId = Exclude<ActionId, `theme:${string}`>
 
 export interface Action {
   id: ActionId
@@ -218,6 +225,29 @@ export const ACTIONS: Action[] = [
     unavailable: (c) => (c.searchActive ? "během hledání píše „q“ do dotazu" : null),
   },
 ]
+
+/**
+ * One palette entry per theme, so a theme can be chosen by name (002 FR-005).
+ *
+ * Kept OUT of the registry above. The registry also drives the status bar and the help
+ * screen, and six entries all reached by the same key would crowd both for nothing; the
+ * palette is the one place a theme is looked up by name. The key shown is the one that
+ * cycles to it, so the palette still teaches a key (FR-066). The theme in use is listed
+ * but unavailable, with the reason, rather than hidden (FR-069).
+ */
+export const THEME_ACTIONS: Action[] = THEME_NAMES.map((name) => ({
+  id: `theme:${name}` as const,
+  label: `Motiv: ${themeLabel(name)}`,
+  hint: "motiv",
+  key: "Ctrl+T",
+  where: "všude",
+  unavailable: (c: ActionContext) => (c.activeTheme === name ? "tento motiv je aktivní" : null),
+}))
+
+/** The theme an action selects, when it is one of the theme entries. */
+export function themeOfAction(id: ActionId): ThemeName | null {
+  return id.startsWith("theme:") ? (id.slice("theme:".length) as ThemeName) : null
+}
 
 /** Only the actions that do something here (FR-064). */
 export function availableActions(context: ActionContext): Action[] {

@@ -40,12 +40,19 @@ import { applyFrameState, applyPanel, applyPlainLines, frameState, viewWidthFor 
 import { isTooSmall, staleWarning, tooSmallMessage } from "./components/status.ts"
 import { type Intent, intentFor } from "./keymap.ts"
 import { Navigation } from "./navigation.ts"
-import type { ActionContext, ActionId } from "./palette/actions.ts"
+import { type ActionContext, type ActionId, themeOfAction } from "./palette/actions.ts"
 import { Palette } from "./palette/view.ts"
 import { composeScreen, type ScreenContent, sourcesForScreen } from "./screen.ts"
 import { applySearchKey, type KeyEvent } from "./search-input.ts"
 import { nextSort, type SortState, UNSORTED } from "./sort.ts"
-import { type ColorEnvironment, isMonochrome, readColorEnvironment, resolveTheme } from "./theme/detect.ts"
+import { canDim } from "./theme/apply.ts"
+import {
+  type ColorEnvironment,
+  isMonochrome,
+  readColorEnvironment,
+  resolveTheme,
+  withCapabilities,
+} from "./theme/detect.ts"
 import { nextTheme, type Theme, type ThemeName, themeLabel } from "./theme/themes.ts"
 
 /** How close two clicks on one row must be to count as a double click. */
@@ -65,6 +72,8 @@ export class App {
   private renderer: CliRenderer | null = null
   private frame: Frame | null = null
   private palette: Palette | null = null
+  /** The theme the palette was last painted with, so a switch repaints it once. */
+  private paletteTheme: Theme | null = null
   /** Whether the user WANTS the panel. Whether it fits is decided every draw (FR-057). */
   private sidePanelOpen = true
   /** The last row clicked and when, so a second click on it counts as a double (T157). */
@@ -174,8 +183,16 @@ export class App {
     this.colorEnvironment = {
       ...this.colorEnvironment,
       ansi256: renderer.capabilities?.ansi256 ?? null,
+      rgb: renderer.capabilities?.rgb ?? null,
       reportedScheme: renderer.themeMode ?? null,
     }
+    // The terminal's report settles over the first few seconds (research R8). When it
+    // changes what the terminal can show, the theme is resolved again and every region
+    // repainted with it, in one draw (T064).
+    renderer.on("capabilities", () => {
+      this.colorEnvironment = withCapabilities(this.colorEnvironment, renderer.capabilities)
+      this.draw()
+    })
 
     this.subscribeDistricts()
     this.syncSubscriptions()
@@ -307,16 +324,14 @@ export class App {
 
     if (name === "escape") {
       // Esc returns to exactly the screen and selection the user left (FR-068).
-      palette.hide()
-      this.frame?.setContentVisible(true)
+      this.closePalette(palette)
       this.draw()
       return
     }
 
     if (name === "return" || name === "enter") {
       const action = palette.chosen()
-      palette.hide()
-      this.frame?.setContentVisible(true)
+      this.closePalette(palette)
       if (action === null) {
         // The highlighted entry does nothing here. Say so rather than closing silently.
         this.notice = "Tento příkaz zde není dostupný."
@@ -403,13 +418,24 @@ export class App {
       case "quit":
         this.stop()
         break
+      default: {
+        // One palette entry per theme (002 FR-005), all performing the same thing.
+        const theme = themeOfAction(id)
+        if (theme !== null) this.setTheme(theme)
+      }
     }
   }
 
   private openPalette(content: ScreenContent): void {
     if (this.palette === null) return
     this.palette.show(this.actionContext(content))
-    this.frame?.setContentVisible(false)
+    // Where the content cannot be dimmed - no colour, or only 256 - it is withheld instead.
+    if (!canDim(this.theme)) this.frame?.setContentHidden(true)
+  }
+
+  private closePalette(palette: Palette): void {
+    palette.hide()
+    this.frame?.setContentHidden(false)
   }
 
   /**
@@ -435,6 +461,7 @@ export class App {
       councilTypes: availableCouncilTypes(this.deps.db).length,
       searchActive: this.nav.screen.kind === "search",
       sortableColumns: content.sortableColumns,
+      activeTheme: this.themeName ?? this.theme.name,
     }
   }
 
@@ -537,13 +564,16 @@ export class App {
    * who sets a theme over SSH still has it when they come back on a terminal that can.
    */
   private cycleTheme(): void {
-    const next = nextTheme(this.themeName ?? this.theme.name)
-    this.themeName = next
-    writeTheme(this.deps.db, next)
-    const showing = this.theme
-    this.notice = isMonochrome(showing)
-      ? `Motiv: ${themeLabel(next)} (terminál nezobrazuje barvy)`
-      : `Motiv: ${themeLabel(next)}`
+    this.setTheme(nextTheme(this.themeName ?? this.theme.name))
+  }
+
+  /** Applies a theme, remembers it, and says so (FR-005, FR-006). */
+  private setTheme(name: ThemeName): void {
+    this.themeName = name
+    writeTheme(this.deps.db, name)
+    this.notice = isMonochrome(this.theme)
+      ? `Motiv: ${themeLabel(name)} (terminál nezobrazuje barvy)`
+      : `Motiv: ${themeLabel(name)}`
   }
 
   private cycleCouncilType(): void {
@@ -609,6 +639,9 @@ export class App {
       councilType: this.councilType,
       query: this.query,
       sort: this.sort,
+      // The same height the draw passes, for the same reason: the national summary
+      // chooses its form by it, and the two must never disagree.
+      contentHeight: this.frame?.contentHeight,
     })
   }
 
@@ -705,6 +738,14 @@ export class App {
     // content area. The content area never loses columns to keep it open (FR-057).
     applyPanel(frame, this.deps.db, this.theme, this.sidePanelOpen && panelFits(frame.rawContentWidth))
 
+    const theme = this.theme
+    // The palette is painted separately from the frame; both follow a theme switch in the
+    // same draw, so no region is left in the old colours (FR-027).
+    if (this.palette !== null && this.paletteTheme !== theme) {
+      this.palette.applyTheme(theme)
+      this.paletteTheme = theme
+    }
+    const subscriptions = this.deps.scheduler.all()
     applyFrameState(
       frame,
       frameState({
@@ -712,20 +753,31 @@ export class App {
         nav: this.nav,
         councilType: this.councilType,
         query: this.query,
-        theme: this.theme,
+        theme,
         sort: this.sort,
         width,
         contentWidth: this.contentWidth(),
         contentHeight: frame.contentHeight,
-        warning: staleWarning(this.deps.scheduler.all()),
+        warning: staleWarning(subscriptions),
         notice: this.notice,
         // Reuses the screen the key handler already composed, rather than composing the
         // identical screen a second time on every keystroke.
         content,
+        lastSuccessAt: latestSuccess(subscriptions),
+        paletteOpen: this.palette?.open === true,
       }),
-      this.theme,
+      theme,
     )
   }
+}
+
+/** When any source last refreshed successfully, for the title bar clock. */
+function latestSuccess(subscriptions: { lastSuccessAt: string | null }[]): string | null {
+  let latest: string | null = null
+  for (const { lastSuccessAt } of subscriptions) {
+    if (lastSuccessAt !== null && (latest === null || lastSuccessAt > latest)) latest = lastSuccessAt
+  }
+  return latest
 }
 
 /** Routes a fetched body to the right ingest function. */

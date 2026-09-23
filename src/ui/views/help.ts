@@ -13,9 +13,9 @@
  */
 
 import { MIN_COLUMNS, MIN_ROWS } from "../components/status.ts"
-import { type Column, clampLines, headerRow, rule } from "../format.ts"
+import { type Column, clampLines, rule } from "../format.ts"
 import { ACTIONS } from "../palette/actions.ts"
-import { blank, cell, line, type SemanticRow, toTextLines } from "../row.ts"
+import { blank, cell, line, type SemanticRow, tableHeader, toTextLines } from "../row.ts"
 
 interface KeyRow {
   keys: string
@@ -56,11 +56,10 @@ export function buildHelpRows(width = 100): SemanticRow[] {
     { header: "Akce", width: Math.max(28, width - 40) },
     { header: "Kde", width: 24 },
   ]
-  const [header, underline] = headerRow(columns)
-  rows.push(line(header, "heading"), line(underline, "muted"))
+  rows.push(...tableHeader(columns))
 
   for (const key of helpRows()) {
-    rows.push({ columns, cells: [cell(key.keys), cell(key.action), cell(key.where, "muted")] })
+    rows.push({ kind: "data", columns, cells: [cell(key.keys), cell(key.action), cell(key.where, "muted")] })
   }
 
   rows.push(blank())

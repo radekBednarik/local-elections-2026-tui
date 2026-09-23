@@ -34,10 +34,13 @@ not the row you had selected.
 - **Side panel** (`Ctrl+B`) – your watchlist beside the table, with live turnout. It hides
   itself when the terminal is too narrow to show it without squeezing the table, and comes
   back when there is room. Its state survives a restart.
-- **Themes** (`Ctrl+T`) – dark, light and high contrast. Dark and light resolve to your
-  terminal's own palette rather than hard-coded colours, so the interface looks at home in
-  whatever scheme you already use. High contrast pins explicit values and separates roles
-  by brightness rather than hue.
+- **Themes** (`Ctrl+T`, or type `motiv` in the palette) – Tokyo Night (the default),
+  Catppuccin Mocha, Gruvbox Dark, Nord, Catppuccin Latte (light) and high contrast. Each
+  region sits on its own background, table rows are striped, and every text colour meets
+  a readable contrast on the background it is drawn on. High contrast separates states by
+  brightness rather than hue. On a 256-colour terminal each colour is shown as its nearest
+  match; with `NO_COLOR` nothing is coloured at all. A choice of the old "dark" or "light"
+  theme carries over to Tokyo Night or Catppuccin Latte.
 - **Bars** – a proportional bar beside each published share, drawn in eighth-blocks. On a
   narrow terminal the bars go before any figure does.
 - **Mouse, optionally** – click a row to select it, double-click to open it, wheel to

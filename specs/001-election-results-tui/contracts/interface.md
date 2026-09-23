@@ -5,6 +5,10 @@
 What the user sees and can do. This is a contract because changing it changes what people have
 learned; it is not a description of how the rendering works.
 
+> **Amended by `002-tui-visual-refresh`.** Its [interface contract](../../002-tui-visual-refresh/contracts/interface.md)
+> supersedes the sections below on screen regions, the colour-roles theme table, and the look of
+> the command palette. Everything else here still binds.
+
 ---
 
 ## Screen regions (FR-054)
