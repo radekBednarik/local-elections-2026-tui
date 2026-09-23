@@ -35,6 +35,18 @@ import { buildPanelRows, PANEL_WIDTH } from "./panel.ts"
  */
 export const GUTTER = 2
 
+/**
+ * The width a view is composed at, given the columns inside the border.
+ *
+ * The ONE place the gutter is taken off. The key handler and the draw used to work this
+ * out separately and got different answers: a movement key composed the screen two
+ * columns wider than a background refresh did, so every keystroke shifted the table right
+ * and the next refresh shifted it back, rewriting every row both times.
+ */
+export function viewWidthFor(contentWidth: number): number {
+  return Math.max(20, contentWidth - GUTTER)
+}
+
 export interface FrameInputs {
   db: Database
   nav: Navigation
@@ -107,7 +119,7 @@ export function frameState(inputs: FrameInputs): FrameState {
 
   // The gutter is not the view's to spend, so the view is composed narrower by exactly
   // that much and the marker is written beside it.
-  const viewWidth = Math.max(20, inputs.contentWidth - GUTTER)
+  const viewWidth = viewWidthFor(inputs.contentWidth)
 
   const content =
     inputs.content ??

@@ -43,8 +43,13 @@ function toTextChunk(chunk: StyledChunk, theme: Theme): TextChunk {
 /**
  * Renders one row for the terminal, clamped to `width` exactly as the text form is.
  *
- * `lead` is the selection gutter, written as its own unstyled chunk so it occupies the
- * same two columns whether or not the row is selected.
+ * `width` is the width of the BODY, the width the row was laid out for, not of the whole
+ * line. `lead` is the selection gutter, written as its own unstyled chunk BESIDE the
+ * body so it occupies the same two columns whether or not the row is selected.
+ *
+ * The caller takes the gutter off before composing the view. Taking it off a second time
+ * here cut every full-width table two columns short, and the last column lost its final
+ * characters to an ellipsis: "Mand…" in the council table, a lone "…" after Stav.
  */
 export function styledRow(
   row: SemanticRow,
@@ -53,7 +58,7 @@ export function styledRow(
   lead = "",
   columns?: Column[],
 ): StyledText {
-  const body = clampChunks(toChunks(row, columns), Math.max(0, width - [...lead].length))
+  const body = clampChunks(toChunks(row, columns), Math.max(0, width))
   const chunks: TextChunk[] = []
   if (lead !== "") chunks.push({ __isChunk: true, text: lead })
   for (const chunk of body) chunks.push(toTextChunk(chunk, theme))

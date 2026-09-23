@@ -20,8 +20,9 @@ import { loadReference, type ReferenceArchives } from "../../src/reference/loade
 import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
-import { applyFrameState, frameState } from "../../src/ui/chrome/state.ts"
+import { applyFrameState, frameState, viewWidthFor } from "../../src/ui/chrome/state.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
+import { composeScreen, type ScreenContent } from "../../src/ui/screen.ts"
 import { UNSORTED } from "../../src/ui/sort.ts"
 import { MONOCHROME, type Theme, themeByName } from "../../src/ui/theme/themes.ts"
 
@@ -54,7 +55,14 @@ async function harness() {
   const nav = new Navigation()
   nav.push({ kind: "districts" })
 
-  const draw = async (theme: Theme = themeByName("dark")) => {
+  const contentWidth = () => (frame.contentWidth > 0 ? frame.contentWidth : WIDTH - 3)
+
+  /**
+   * `composed` is the screen the key handler composed and passes through, exactly as
+   * App.onKey does for a movement key. Omitted, the draw composes its own, as a refresh
+   * does.
+   */
+  const draw = async (theme: Theme = themeByName("dark"), composed?: ScreenContent) => {
     applyFrameState(
       frame,
       frameState({
@@ -65,15 +73,25 @@ async function harness() {
         theme,
         sort: UNSORTED,
         width: WIDTH,
-        contentWidth: frame.contentWidth > 0 ? frame.contentWidth : WIDTH - 3,
+        contentWidth: contentWidth(),
         contentHeight: frame.contentHeight > 0 ? frame.contentHeight : HEIGHT - 4,
         warning: null,
         notice: null,
+        content: composed,
       }),
       theme,
     )
     await setup.renderOnce()
   }
+
+  /** What App.currentContent composes: the screen at the view width. */
+  const compose = () =>
+    composeScreen(db, nav.screen, {
+      width: viewWidthFor(contentWidth()),
+      councilType: "OBEC",
+      query: "",
+      sort: UNSORTED,
+    })
 
   /** The identity of each row's content, so a rewrite can be told from a skip. */
   const fingerprint = () => frame.rows.map((node) => node.content)
@@ -81,8 +99,42 @@ async function harness() {
   const rewritten = (before: unknown[], after: unknown[]) =>
     after.filter((content, index) => content !== before[index]).length
 
-  return { frame, nav, draw, fingerprint, rewritten, destroy: () => setup.renderer.destroy() }
+  return { frame, nav, draw, compose, fingerprint, rewritten, destroy: () => setup.renderer.destroy() }
 }
+
+describe("a keystroke and a refresh draw the same layout", () => {
+  test("a movement key, drawn with the screen it composed, touches two rows", async () => {
+    const h = await harness()
+    try {
+      await h.draw()
+      const before = h.fingerprint()
+      const content = h.compose()
+      h.nav.move(1, content.rowCount)
+      await h.draw(undefined, content)
+      // Composed two columns wider, every row's text changed and all 81 were rewritten.
+      expect(h.rewritten(before, h.fingerprint())).toBe(2)
+    } finally {
+      h.destroy()
+    }
+  })
+
+  test("the refresh after a keystroke touches nothing", async () => {
+    const h = await harness()
+    try {
+      await h.draw()
+      const content = h.compose()
+      h.nav.move(1, content.rowCount)
+      await h.draw(undefined, content)
+      const before = h.fingerprint()
+      // The refresh loop redraws about once a second. With nothing changed it must not
+      // shift the table back, which is the jitter that was reported.
+      await h.draw()
+      expect(h.rewritten(before, h.fingerprint())).toBe(0)
+    } finally {
+      h.destroy()
+    }
+  })
+})
 
 describe("a keystroke rewrites only what changed", () => {
   test("moving the selection one row touches two rows, not the whole list", async () => {

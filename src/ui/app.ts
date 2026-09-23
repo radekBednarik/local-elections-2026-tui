@@ -36,7 +36,7 @@ import {
 import { toggleWatchlist, watchedCodes } from "../storage/queries/watchlist.ts"
 import { Frame } from "./chrome/frame.ts"
 import { panelFits } from "./chrome/panel.ts"
-import { applyFrameState, applyPanel, applyPlainLines, frameState } from "./chrome/state.ts"
+import { applyFrameState, applyPanel, applyPlainLines, frameState, viewWidthFor } from "./chrome/state.ts"
 import { isTooSmall, staleWarning, tooSmallMessage } from "./components/status.ts"
 import { type Intent, intentFor } from "./keymap.ts"
 import { Navigation } from "./navigation.ts"
@@ -603,7 +603,9 @@ export class App {
 
   private currentContent(): ScreenContent {
     return composeScreen(this.deps.db, this.nav.screen, {
-      width: this.contentWidth(),
+      // The width frameState composes at. A screen composed here and drawn there used to
+      // be laid out two columns wider than one a refresh composed, so the table jumped.
+      width: viewWidthFor(this.contentWidth()),
       councilType: this.councilType,
       query: this.query,
       sort: this.sort,

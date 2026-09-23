@@ -105,11 +105,15 @@ export interface StyledChunk {
  * Padding is applied here rather than left to the renderer so that a styled row and a
  * plain row occupy exactly the same columns. A layout that drifted between the two
  * would make the test assertions meaningless.
+ *
+ * Trailing blanks are trimmed, as `toText` trims them. Left in place, the padding of the
+ * last column is what the clamp cut first: a row whose text fitted was still given an
+ * ellipsis, because its invisible padding did not.
  */
 export function toChunks(r: SemanticRow, columns?: Column[], gap = 1): StyledChunk[] {
   const layout = r.columns ?? columns
   if (layout === undefined || layout.length === 0) {
-    return r.cells.map((c) => ({ text: c.text, role: c.role ?? r.role }))
+    return trimTrailing(r.cells.map((c) => ({ text: c.text, role: c.role ?? r.role })))
   }
 
   const chunks: StyledChunk[] = []
@@ -124,7 +128,22 @@ export function toChunks(r: SemanticRow, columns?: Column[], gap = 1): StyledChu
     })
   })
 
-  return chunks
+  return trimTrailing(chunks)
+}
+
+/** Drops the blanks at the end of a row, across as many chunks as they span. */
+function trimTrailing(chunks: StyledChunk[]): StyledChunk[] {
+  const out = [...chunks]
+  while (out.length > 0) {
+    const last = out[out.length - 1] as StyledChunk
+    const trimmed = last.text.trimEnd()
+    if (trimmed !== "") {
+      out[out.length - 1] = { ...last, text: trimmed }
+      break
+    }
+    out.pop()
+  }
+  return out
 }
 
 /**
