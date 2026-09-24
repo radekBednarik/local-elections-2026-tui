@@ -26,10 +26,15 @@ import { withTempDataDir } from "../helpers/tmpdir.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
 const NATIONAL = readFileSync(join(FIXTURES, "vysledky.xml"), "utf8")
+/** The same document with one council type still being counted, so it is not final. */
+const COUNTING = NATIONAL.replace(
+  'OKRSKY_CELKEM="2132" OKRSKY_ZPRAC="2132"',
+  'OKRSKY_CELKEM="2132" OKRSKY_ZPRAC="2131"',
+)
 const MALFORMED = readFileSync(join(import.meta.dir, "../../fixtures/edge-cases/malformed.xml"), "utf8")
 
 /** Flipped by tests to make the server behave badly. */
-let mode: "ok" | "down" | "garbage" = "ok"
+let mode: "ok" | "counting" | "down" | "garbage" = "ok"
 let server: Server<undefined>
 let url = ""
 
@@ -39,6 +44,7 @@ beforeAll(() => {
     fetch() {
       if (mode === "down") return new Response("unavailable", { status: 503 })
       if (mode === "garbage") return new Response(MALFORMED)
+      if (mode === "counting") return new Response(COUNTING)
       return new Response(NATIONAL)
     },
   })
@@ -62,21 +68,13 @@ async function pass(scheduler: Scheduler, now = new Date()): Promise<string> {
     validators: { etag: sub?.etag, lastModified: sub?.lastModified },
   })
 
-  if (outcome.kind === "ok") {
-    const result = ingestNational(db, outcome.body)
-    if (result.ok) {
-      scheduler.recordSuccess("national", { etag: outcome.etag }, now)
-      return "ok"
-    }
-    scheduler.recordFailure("national", result.reason, now)
-    return "rejected"
-  }
-  if (outcome.kind === "not-modified") {
-    scheduler.recordSuccess("national", {}, now)
-    return "not-modified"
-  }
-  scheduler.recordFailure("national", outcome.kind === "failed" ? outcome.reason : "nenalezeno", now)
-  return "failed"
+  // The application's own recording, not a copy of it, so these tests cannot drift from
+  // what tick() does. It reads the source as final here, but pass() fetches regardless
+  // of due times, as a manual refresh would.
+  recordFetch(db, scheduler, "national", outcome, createNullLogger(), now)
+
+  if (outcome.kind === "ok") return scheduler.get("national")?.lastError === null ? "ok" : "rejected"
+  return outcome.kind === "not-modified" ? "not-modified" : "failed"
 }
 
 function newScheduler(): Scheduler {
@@ -113,6 +111,7 @@ describe("last good data is kept (FR-027)", () => {
 
   test("a rejected document is recorded as a failure, so the user is warned", async () => {
     const scheduler = newScheduler()
+    mode = "counting"
     await pass(scheduler)
     mode = "garbage"
     await pass(scheduler)
@@ -125,6 +124,7 @@ describe("last good data is kept (FR-027)", () => {
 describe("the staleness warning (FR-044)", () => {
   test("appears on failure, names the reason, and clears on recovery", async () => {
     const scheduler = newScheduler()
+    mode = "counting"
     await pass(scheduler)
     expect(staleWarning(scheduler.all())).toBeNull()
 
@@ -135,8 +135,19 @@ describe("the staleness warning (FR-044)", () => {
     expect(warning).toContain("503")
 
     // Recovery is unattended: the next successful pass clears it with no restart.
-    mode = "ok"
+    mode = "counting"
     await pass(scheduler, new Date(Date.now() + 120_000))
+    expect(staleWarning(scheduler.all())).toBeNull()
+  })
+
+  test("does not appear when a refresh of final results fails, since they are not stale (FR-009)", async () => {
+    const scheduler = newScheduler()
+    await pass(scheduler)
+    expect(scheduler.get("national")?.final).toBe(true)
+
+    mode = "down"
+    await pass(scheduler)
+    expect(scheduler.get("national")?.consecutiveFailures).toBe(1)
     expect(staleWarning(scheduler.all())).toBeNull()
   })
 })
@@ -296,6 +307,15 @@ describe("recording a fetch outcome", () => {
     recordFetch(db, scheduler, "national", { kind: "not-modified" }, log)
     expect(scheduler.get("national")?.final).toBe(true)
     expect(scheduler.get("national")?.consecutiveFailures).toBe(0)
+  })
+
+  test("records the attempt at the time it is given, so a loop can be replayed on a fixed clock", () => {
+    const scheduler = subscribed()
+    const later = new Date(T0.getTime() + 600_000)
+    recordFetch(db, scheduler, "national", { kind: "failed", reason: "Server odpověděl 503" }, log, later)
+    expect(scheduler.get("national")?.lastAttemptAt).toBe(later.toISOString())
+    recordFetch(db, scheduler, "national", { kind: "not-modified" }, log, later)
+    expect(scheduler.get("national")?.lastSuccessAt).toBe(later.toISOString())
   })
 
   test("a missing document and a failed request are recorded as failures with their reasons", () => {

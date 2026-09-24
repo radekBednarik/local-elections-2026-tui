@@ -775,6 +775,7 @@ export function recordFetch(
   key: SourceKey,
   outcome: FetchOutcome,
   log: Logger,
+  now = new Date(),
 ): void {
   if (outcome.kind === "ok") {
     const result = ingestFor(db, key, outcome.body)
@@ -782,21 +783,21 @@ export function recordFetch(
       scheduler.recordSuccess(
         key,
         { etag: outcome.etag, lastModified: outcome.lastModified },
-        undefined,
+        now,
         result.final,
       )
     } else {
       // A document failing validation is a failure of the source, not of the
       // application: the previous snapshot stays on screen (FR-025, FR-027).
-      scheduler.recordFailure(key, result.reason)
+      scheduler.recordFailure(key, result.reason, now)
       log.warn("Dokument odmítnut", { source: key, reason: result.reason })
     }
   } else if (outcome.kind === "not-modified") {
-    scheduler.recordSuccess(key)
+    scheduler.recordSuccess(key, {}, now)
   } else if (outcome.kind === "not-found") {
-    scheduler.recordFailure(key, "Data zatím nejsou zveřejněna")
+    scheduler.recordFailure(key, "Data zatím nejsou zveřejněna", now)
   } else {
-    scheduler.recordFailure(key, outcome.reason)
+    scheduler.recordFailure(key, outcome.reason, now)
     log.warn("Stahování selhalo", { source: key, reason: outcome.reason })
   }
 }

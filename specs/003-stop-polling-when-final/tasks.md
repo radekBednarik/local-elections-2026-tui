@@ -314,3 +314,11 @@ serialised.
 - Commit after each task or logical group, with the attribution lines the repository uses.
 - Never use an em dash in code, comments, commit messages or file names (organisation rule). Use a
   plain hyphen in code.
+
+---
+
+## Phase 7: Convergence
+
+- [X] T033 CRITICAL: remove the duplicated outcome handling in `tests/integration/resilience.test.ts`. Give `recordFetch` in `src/ui/app.ts` an optional `now = new Date()` parameter and pass it to `recordSuccess` and `recordFailure`. Rewrite `pass()` to call `recordFetch(db, scheduler, "national", outcome, createNullLogger(), now)`, then return its label (`ok`, `rejected`, `not-modified`, `failed`) from `outcome.kind` and the recorded failure. Then re-run the 13 resilience tests: any test that relied on the copy never marking `national` final must now state the real behaviour, not the copy's. Write the reproducing test first, per Constitution I (contradicts)
+  - (Done 2026-09-24. Red first: a test that `recordFetch` records the attempt at the time it is given failed, then passed once `now` was threaded through. `pass()` now calls `recordFetch` and only derives its label. As predicted, two tests had relied on the copy never marking `national` final: they expected a stale warning after the final fixture was read and a request then failed. The real code gives none (FR-009). They now start from a "counting" server mode, which serves the fixture with one council type unfinished, and a new test states the final case: a failed refresh of final results raises no warning. That test passed at once, as a guard of behaviour already built. 908 pass, typecheck and lint clean. Review: `tick()` calls `recordFetch` without `now`, so it keeps the wall clock as before. Findings: none.)
+- [ ] T034 Run quickstart § 2 in a real terminal (`bun run replay -- --duration 120`, then `bun run dev -- --base-url http://localhost:8787 --reset`) and confirm the national screen's title bar changes from `● živě` to `■ konečné · obnova ručně` once the count completes, and that no `ZASTARALÉ` badge appears. Repeat with `NO_COLOR=1`. Record the result in T027's note, per SC-005 and US3/AC1 (partial)
