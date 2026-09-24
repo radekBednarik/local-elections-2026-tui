@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { formatAge } from "../../src/domain/status.ts"
 import type { Subscription } from "../../src/sources/scheduler.ts"
 import {
   allFinal,
@@ -7,7 +8,7 @@ import {
   MIN_COLUMNS,
   MIN_ROWS,
   NATIONAL_HINTS,
-  staleWarning,
+  sourceStatus,
   tooSmallMessage,
 } from "../../src/ui/components/status.ts"
 
@@ -29,52 +30,110 @@ function sub(overrides: Partial<Subscription> = {}): Subscription {
   }
 }
 
-describe("staleWarning (FR-044)", () => {
+describe("sourceStatus (004 FR-001–FR-004)", () => {
+  const NOW = new Date("2026-10-09T21:10:00.000Z")
+  const AWAITING = "○ Výsledky zatím nejsou zveřejněny, aplikace je průběžně kontroluje. · l záznamy"
+  const stale = (age: string) => `! ZASTARALÁ DATA: zobrazena data ${age}. Obnovení se nedaří. · l záznamy`
+  const PARSER =
+    "vysledky.xml: XML není well-formed: Expected closing tag 'VOLEBNI_STRANA' " +
+    "(opened in line 6, col 1) instead of closing tag 'VYSLEDEK'. (řádek 7)"
+
   test("is absent while everything is current", () => {
-    expect(staleWarning([sub(), sub({ sourceKey: "district:CZ0100" })])).toBeNull()
+    expect(sourceStatus([sub(), sub({ sourceKey: "district:CZ0100" })], NOW)).toBeNull()
   })
 
-  test("states the reason and the age of the data", () => {
-    const warning = staleWarning(
-      [sub({ consecutiveFailures: 3, lastError: "Spojení odmítnuto" })],
-      new Date("2026-10-09T21:10:00.000Z"),
+  test("ignores a final source that failed, since final figures are not stale (003 FR-009)", () => {
+    expect(sourceStatus([sub({ final: true, consecutiveFailures: 1, lastError: "timeout" })], NOW)).toBeNull()
+  })
+
+  test("a source that never loaded is awaiting publication, never stale (FR-001, FR-002)", () => {
+    const status = sourceStatus(
+      [sub({ consecutiveFailures: 2, lastSuccessAt: null, lastError: "Data zatím nejsou zveřejněna" })],
+      NOW,
     )
-    expect(warning).not.toBeNull()
-    expect(warning).toContain("Spojení odmítnuto")
-    expect(warning).toContain("10 min")
+    expect(status?.kind).toBe("awaiting")
+    expect(status?.text).toBe(AWAITING)
+    expect(status?.text).not.toContain("ZASTARALÁ")
+    expect(status?.text).not.toContain("Data zatím nejsou zveřejněna")
   })
 
-  test("is unmissable in plain text, not signalled by colour alone (FR-040)", () => {
-    const warning = staleWarning([sub({ consecutiveFailures: 1, lastError: "timeout" })]) ?? ""
-    expect(warning).toContain("ZASTARALÁ DATA")
-    expect(warning.startsWith("!")).toBe(true)
+  test("a document rejected before it ever loaded is awaiting too (spec scenario 1.2)", () => {
+    const status = sourceStatus(
+      [sub({ consecutiveFailures: 1, lastSuccessAt: null, lastError: PARSER })],
+      NOW,
+    )
+    expect(status?.kind).toBe("awaiting")
+    expect(status?.text).toBe(AWAITING)
   })
 
-  test("reports the worst failure rather than burying it in a list", () => {
-    const warning = staleWarning([
-      sub({ sourceKey: "district:CZ0100", consecutiveFailures: 1, lastError: "prvni" }),
-      sub({ sourceKey: "district:CZ0642", consecutiveFailures: 7, lastError: "nejhorsi" }),
-    ])
-    expect(warning).toContain("nejhorsi")
-    expect(warning).toContain("2 zdrojů")
+  test("a source that loaded before and now fails is stale, with the age of its data (FR-003)", () => {
+    const status = sourceStatus(
+      [
+        sub({
+          sourceKey: "district:CZ0642",
+          consecutiveFailures: 3,
+          lastError: "Spojení odmítnuto",
+          lastSuccessAt: "2026-10-09T21:06:00.000Z",
+        }),
+      ],
+      NOW,
+    )
+    expect(status?.kind).toBe("stale")
+    expect(status?.text).toBe(stale(formatAge(240)))
+    expect(status?.text).toBe(stale("před 4 min"))
+    expect(status?.text).not.toContain("Spojení odmítnuto")
+    expect(status?.text).not.toContain("CZ0642")
   })
 
-  test("handles a source that has never succeeded", () => {
-    const warning = staleWarning([sub({ consecutiveFailures: 2, lastSuccessAt: null, lastError: "404" })])
-    expect(warning).toContain("bez úspěšného načtení")
+  test("stale wins when never-loaded and previously loaded sources fail together", () => {
+    const status = sourceStatus(
+      [
+        sub({ sourceKey: "national", consecutiveFailures: 1, lastSuccessAt: null, lastError: "404" }),
+        sub({ sourceKey: "district:CZ0100", consecutiveFailures: 1, lastError: "503" }),
+      ],
+      NOW,
+    )
+    expect(status?.kind).toBe("stale")
   })
 
-  test("ignores a final source that failed, since final figures are not stale (FR-009)", () => {
-    expect(staleWarning([sub({ final: true, consecutiveFailures: 1, lastError: "timeout" })])).toBeNull()
+  test("with several stale sources the oldest data's age is reported (research R2)", () => {
+    const status = sourceStatus(
+      [
+        sub({
+          sourceKey: "district:CZ0100",
+          consecutiveFailures: 1,
+          lastSuccessAt: "2026-10-09T21:08:00.000Z",
+        }),
+        sub({
+          sourceKey: "district:CZ0642",
+          consecutiveFailures: 9,
+          lastSuccessAt: "2026-10-09T21:00:00.000Z",
+        }),
+      ],
+      NOW,
+    )
+    expect(status?.text).toBe(stale(formatAge(600)))
   })
 
-  test("still warns about a source in progress beside a failing final one", () => {
-    const warning = staleWarning([
-      sub({ sourceKey: "national", final: true, consecutiveFailures: 4, lastError: "konecny" }),
-      sub({ sourceKey: "district:CZ0100", consecutiveFailures: 1, lastError: "probihajici" }),
-    ])
-    expect(warning).toContain("probihajici")
-    expect(warning).toContain("(district:CZ0100)")
+  test("a success timestamp ahead of the local clock reports zero, not a negative age", () => {
+    // Possible under clock skew. "před -900 s" is worse than useless to a reader.
+    const status = sourceStatus(
+      [sub({ consecutiveFailures: 1, lastError: "503", lastSuccessAt: "2026-10-09T22:00:00.000Z" })],
+      new Date("2026-10-09T21:45:00.000Z"),
+    )
+    expect(status?.text).toBe(stale("před 0 s"))
+  })
+
+  test("no error text reaches the line, whatever the reason says (FR-004)", () => {
+    for (const lastError of [PARSER, "řádek 1\nřádek 2", "503 Service Unavailable"]) {
+      for (const lastSuccessAt of [null, "2026-10-09T21:00:00.000Z"]) {
+        const text =
+          sourceStatus([sub({ consecutiveFailures: 1, lastError, lastSuccessAt })], NOW)?.text ?? ""
+        expect(text).not.toContain(lastError)
+        expect(text).not.toContain("\n")
+        expect(text).toContain("l záznamy")
+      }
+    }
   })
 })
 
@@ -109,35 +168,6 @@ describe("key hints (FR-005)", () => {
 
   test("the line never exceeds the terminal width", () => {
     expect([...keyHintLine(NATIONAL_HINTS, 40)]).toHaveLength(40)
-  })
-})
-
-describe("warning robustness", () => {
-  test("a success timestamp ahead of the local clock reports zero, not a negative age", () => {
-    // Possible under clock skew. "před -900 s" is worse than useless to a reader.
-    const warning = staleWarning(
-      [
-        sub({
-          consecutiveFailures: 1,
-          lastError: "503",
-          lastSuccessAt: "2026-10-09T22:00:00.000Z",
-        }),
-      ],
-      new Date("2026-10-09T21:45:00.000Z"),
-    )
-    expect(warning).not.toContain("-")
-    expect(warning).toContain("před 0 s")
-  })
-
-  test("a long parser message is truncated, so the warning stays one line", () => {
-    const long =
-      "vysledky.xml: XML není well-formed: Expected closing tag 'VOLEBNI_STRANA' " +
-      "(opened in line 6, col 1) instead of closing tag 'VYSLEDEK'. (řádek 7)"
-    const warning = staleWarning([sub({ consecutiveFailures: 1, lastError: long })]) ?? ""
-    expect(warning.length).toBeLessThan(140)
-    expect(warning).toContain("…")
-    // The gist must survive the truncation.
-    expect(warning).toContain("well-formed")
   })
 })
 

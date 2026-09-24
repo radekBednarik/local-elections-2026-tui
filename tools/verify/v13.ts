@@ -54,7 +54,7 @@ async function draw(): Promise<string> {
       width: WIDTH,
       contentWidth: frame.contentWidth > 0 ? frame.contentWidth : WIDTH - 2,
       contentHeight: frame.contentHeight > 0 ? frame.contentHeight : HEIGHT - 4,
-      warning: null,
+      sourceStatus: null,
       notice: null,
     }),
   )

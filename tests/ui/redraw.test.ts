@@ -76,7 +76,7 @@ async function harness() {
         width: WIDTH,
         contentWidth: contentWidth(),
         contentHeight: frame.contentHeight > 0 ? frame.contentHeight : HEIGHT - 3,
-        warning: null,
+        sourceStatus: null,
         notice: null,
         content: composed,
       }),

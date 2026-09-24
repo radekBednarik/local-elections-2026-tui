@@ -20,7 +20,7 @@ import { Scheduler } from "../../src/sources/scheduler.ts"
 import { openDatabase, openMemoryDatabase } from "../../src/storage/db.ts"
 import { readNationalTotals } from "../../src/storage/queries/national.ts"
 import { recordFetch } from "../../src/ui/app.ts"
-import { staleWarning } from "../../src/ui/components/status.ts"
+import { sourceStatus } from "../../src/ui/components/status.ts"
 import { renderNationalView } from "../../src/ui/views/national.ts"
 import { withTempDataDir } from "../helpers/tmpdir.ts"
 
@@ -117,27 +117,37 @@ describe("last good data is kept (FR-027)", () => {
     await pass(scheduler)
 
     expect(scheduler.get("national")?.consecutiveFailures).toBe(1)
-    expect(staleWarning(scheduler.all())).not.toBeNull()
+    expect(sourceStatus(scheduler.all())?.kind).toBe("stale")
   })
 })
 
 describe("the staleness warning (FR-044)", () => {
-  test("appears on failure, names the reason, and clears on recovery", async () => {
+  test("appears on failure and clears on recovery", async () => {
     const scheduler = newScheduler()
     mode = "counting"
     await pass(scheduler)
-    expect(staleWarning(scheduler.all())).toBeNull()
+    expect(sourceStatus(scheduler.all())).toBeNull()
 
     mode = "down"
     await pass(scheduler)
-    const warning = staleWarning(scheduler.all())
-    expect(warning).not.toBeNull()
-    expect(warning).toContain("503")
+    const status = sourceStatus(scheduler.all())
+    // The counting pass succeeded first, so these figures really are out of date.
+    expect(status?.kind).toBe("stale")
+    // The reason lives only in the log now (004 FR-004).
+    expect(status?.text).not.toContain("503")
 
     // Recovery is unattended: the next successful pass clears it with no restart.
     mode = "counting"
     await pass(scheduler, new Date(Date.now() + 120_000))
-    expect(staleWarning(scheduler.all())).toBeNull()
+    expect(sourceStatus(scheduler.all())).toBeNull()
+  })
+
+  test("reads as awaiting publication, not stale, when nothing has ever loaded (004 FR-001)", async () => {
+    const scheduler = newScheduler()
+    mode = "down"
+    await pass(scheduler)
+    expect(scheduler.get("national")?.consecutiveFailures).toBe(1)
+    expect(sourceStatus(scheduler.all())?.kind).toBe("awaiting")
   })
 
   test("does not appear when a refresh of final results fails, since they are not stale (FR-009)", async () => {
@@ -148,7 +158,7 @@ describe("the staleness warning (FR-044)", () => {
     mode = "down"
     await pass(scheduler)
     expect(scheduler.get("national")?.consecutiveFailures).toBe(1)
-    expect(staleWarning(scheduler.all())).toBeNull()
+    expect(sourceStatus(scheduler.all())).toBeNull()
   })
 })
 
@@ -207,6 +217,9 @@ describe("offline start (FR-042)", () => {
       const outcome = await fetchDocument(url)
       if (outcome.kind !== "ok") throw new Error("fixture server did not serve")
       ingestNational(first, outcome.body)
+      // As the real fetch path does: a stored copy means a recorded success, which is
+      // what makes the cached figures stale rather than awaiting (004 research R1).
+      scheduler.recordSuccess("national", {}, new Date(), false)
       scheduler.recordFailure("national", "Spojení odmítnuto")
       first.close()
 
@@ -218,7 +231,7 @@ describe("offline start (FR-042)", () => {
         expect(totals?.turnoutPct).toBe(46.07)
 
         const restored = new Scheduler(second, { intervalSeconds: 60 })
-        expect(staleWarning(restored.all())).not.toBeNull()
+        expect(sourceStatus(restored.all())?.kind).toBe("stale")
 
         const view = renderNationalView(second).join("\n")
         expect(view).toMatch(/účast/i)

@@ -37,7 +37,7 @@ import { toggleWatchlist, watchedCodes } from "../storage/queries/watchlist.ts"
 import { Frame } from "./chrome/frame.ts"
 import { panelFits } from "./chrome/panel.ts"
 import { applyFrameState, applyPanel, applyPlainLines, frameState, viewWidthFor } from "./chrome/state.ts"
-import { allFinal, isTooSmall, staleWarning, tooSmallMessage } from "./components/status.ts"
+import { allFinal, isTooSmall, sourceStatus, tooSmallMessage } from "./components/status.ts"
 import { type Intent, intentFor } from "./keymap.ts"
 import { Navigation } from "./navigation.ts"
 import { type ActionContext, type ActionId, themeOfAction } from "./palette/actions.ts"
@@ -737,7 +737,7 @@ export class App {
         width,
         contentWidth: this.contentWidth(),
         contentHeight: frame.contentHeight,
-        warning: staleWarning(subscriptions),
+        sourceStatus: sourceStatus(subscriptions),
         final: allFinal(
           subscriptions,
           shownSources(this.nav.screen, watchedCodes(this.deps.db), this.districts),

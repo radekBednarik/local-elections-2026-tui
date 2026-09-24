@@ -67,7 +67,7 @@ function stateFor(screen: Screen, contentWidth: number) {
     width: contentWidth + 3,
     contentWidth,
     contentHeight: 40,
-    warning: null,
+    sourceStatus: null,
     notice: null,
   })
 }

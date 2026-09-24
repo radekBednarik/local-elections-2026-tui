@@ -117,7 +117,7 @@ Contract § 1 and § 2, research R1 to R3.
 
 ### Tests (write first, observe failing)
 
-- [ ] T007 [P] [US1] In `tests/unit/status-bar.test.ts`, replace `describe("staleWarning (FR-044)")` and `describe("warning robustness")` with `describe("sourceStatus (004 FR-001–FR-004)")`. It uses the existing `sub()` helper and passes `now` explicitly. Cases:
+- [X] T007 [P] [US1] In `tests/unit/status-bar.test.ts`, replace `describe("staleWarning (FR-044)")` and `describe("warning robustness")` with `describe("sourceStatus (004 FR-001–FR-004)")`. It uses the existing `sub()` helper and passes `now` explicitly. Cases:
   - `null` when nothing is failing, and `null` when the only failing source is `final: true`.
   - **Awaiting cases:**
     - `{ consecutiveFailures: 2, lastSuccessAt: null, lastError: "Data zatím nejsou zveřejněna" }` gives `kind: "awaiting"`.
@@ -132,17 +132,17 @@ Contract § 1 and § 2, research R1 to R3.
   - Two stale failing sources whose `lastSuccessAt` are 2 and 10 minutes before `now` give an age of `formatAge(600)`. The oldest data on screen is reported, not the freshest (research R2).
   - A `lastSuccessAt` ahead of `now` is clamped to zero age. This moves the clock-skew case over from the old tests.
   - Neither text contains `lastError` for any of the old robustness inputs: the long reason, and the reason with newlines.
-- [ ] T008 [P] [US1] Update `describe("finality indicator (FR-008)")` in `tests/unit/status-bar.test.ts`, or its `titleBarRow` counterpart in `tests/ui/frame.test.ts` if the indicator is asserted there, and add:
+- [X] T008 [P] [US1] Update `describe("finality indicator (FR-008)")` in `tests/unit/status-bar.test.ts`, or its `titleBarRow` counterpart in `tests/ui/frame.test.ts` if the indicator is asserted there, and add:
   - `titleBarRow(trail, "awaiting", …)` contains ` ○ čeká na výsledky ` with the `muted` role;
   - `"stale"` still gives ` ● ZASTARALÉ `.
-- [ ] T009 [P] [US1] In `tests/ui/frame.test.ts`, update the tests around lines 249–270 and 356 to pass `sourceStatus` instead of a warning string, and add:
+- [X] T009 [P] [US1] In `tests/ui/frame.test.ts`, update the tests around lines 249–270 and 356 to pass `sourceStatus` instead of a warning string, and add:
   - `sourceStatus` awaiting:
     - the title bar shows `čeká na výsledky`;
     - no row contains `ZASTARALÁ` or `ZASTARALÉ`;
     - the status row shows the awaiting text on the `element` surface.
   - `sourceStatus` stale: `● ZASTARALÉ`, and the stale text on the `warning` surface.
   - **Precedence (research R3):** with both a `notice` and a stale `sourceStatus`, the row shows the notice. The title bar still shows `● ZASTARALÉ`.
-- [ ] T010 [P] [US1] In `tests/integration/resilience.test.ts`, change `describe("the staleness warning (FR-044)")` to use `sourceStatus`.
+- [X] T010 [P] [US1] In `tests/integration/resilience.test.ts`, change `describe("the staleness warning (FR-044)")` to use `sourceStatus`.
   - The first test becomes "appears on failure and clears on recovery". The `mode = "down"` step expects `kind: "stale"`, because the counting pass succeeded first. Replace `toContain("503")` with `not.toContain("503")`: the reason now lives only in the log (FR-004).
   - Add a test: with no successful pass (`mode = "down"` from the start), `sourceStatus(scheduler.all())?.kind === "awaiting"`.
   - The final-results test keeps expecting `null`.
@@ -150,20 +150,20 @@ Contract § 1 and § 2, research R1 to R3.
     - Add `scheduler.recordSuccess("national", {}, new Date(), false)` after the ingest and before `recordFailure`, as the real fetch path (`recordFetch`) does.
     - Change the assertion to `expect(sourceStatus(restored.all())?.kind).toBe("stale")`.
     - Update the import from `staleWarning` to `sourceStatus`.
-- [ ] T011 [P] [US1] In `tests/ui/colour.test.ts` (around lines 520–561) and `tests/ui/stability.test.ts` (around line 228), replace the old warning strings with `sourceStatus` values. Keep what each test asserts:
+- [X] T011 [P] [US1] In `tests/ui/colour.test.ts` (around lines 520–561) and `tests/ui/stability.test.ts` (around line 228), replace the old warning strings with `sourceStatus` values. Keep what each test asserts:
   - the colour tests: the stale row and chip colours, via `● ZASTARALÉ` and `ZASTARALÁ DATA`;
   - the stability test: the row appears without moving the content.
 
 ### Implementation
 
-- [ ] T012 [US1] In `src/ui/components/status.ts`:
+- [X] T012 [US1] In `src/ui/components/status.ts`:
   - Replace `staleWarning` and `MAX_REASON` with `export type SourceStatus = { kind: "stale" | "awaiting"; text: string } | null` and `export function sourceStatus(subscriptions: Subscription[], now = new Date()): SourceStatus`, following data-model.md § SourceStatus.
     - Rule: failing means `consecutiveFailures > 0 && !final`; stale if any failing one has `lastSuccessAt !== null`; otherwise awaiting.
     - For stale, the age is taken from the OLDEST `lastSuccessAt` among the failing sources that have one, which gives the largest age, clamped at zero. This is the conservative figure: the user is told how old the oldest data on screen may be (research R2).
   - Put the two texts in named constants. The doc comment cites FR-001 to FR-004 and research R1/R2.
   - Remove `staleWarning`. Do not keep it as an alias.
   - Makes T007 pass.
-- [ ] T013 [US1] In `src/ui/chrome/state.ts`:
+- [X] T013 [US1] In `src/ui/chrome/state.ts`:
   - **Indicator:**
     - Add `"awaiting"` to `LiveIndicator`.
     - Add `awaiting: { text: " ○ čeká na výsledky ", role: "muted" }` to `INDICATOR_CELLS`.
@@ -176,15 +176,16 @@ Contract § 1 and § 2, research R1 to R3.
     - The row shows `inputs.notice` when it is not null, otherwise `inputs.sourceStatus?.text`.
     - Replace the comment "A real staleness warning always wins the row" with the new rule and its reason.
   - Makes T008 and T009 pass.
-- [ ] T014 [US1] In `src/ui/app.ts`, in `draw()`, pass `sourceStatus: sourceStatus(subscriptions)` instead of `warning: staleWarning(subscriptions)`, and update the import.
+- [X] T014 [US1] In `src/ui/app.ts`, in `draw()`, pass `sourceStatus: sourceStatus(subscriptions)` instead of `warning: staleWarning(subscriptions)`, and update the import.
   - Update every other `frameState({...})` call site that still passes `warning:` (at least `tests/ui/right-edge.test.ts`, `tests/ui/redraw.test.ts` and `tests/ui/panel.test.ts`) to `sourceStatus: null`.
   - `bun run typecheck` must pass. Makes T010 and T011 pass.
-- [ ] T015 [US1] REVIEW Phase 3 against Principles I–III and contract § 1–2. Check that:
+- [X] T015 [US1] REVIEW Phase 3 against Principles I–III and contract § 1–2. Check that:
   - `lastError` is not read anywhere in `src/ui/`, apart from the scheduler record;
   - a grep for `staleWarning` finds nothing;
   - the notice precedence change is commented with its reason.
 
   Run `bun test`, `bun run typecheck` and `bun run check`. Fix every finding before continuing.
+  - (Done 2026-09-24. Red first: the suites failed on the missing `sourceStatus` export and on 6 frame/colour assertions. 922 pass, 0 fail; typecheck and biome clean. Deviations recorded: (1) T009's `frameState`-level assertions (awaiting surface, notice precedence) live in `tests/ui/colour.test.ts`, whose `paintRows` builds a real frame from a database. `tests/ui/frame.test.ts` drives the `Frame` renderable with plain strings, which is still valid and was left alone. (2) Typecheck found `FrameInputs.warning` and `staleWarning` in five `tools/verify/*` scripts too, now updated. (3) One more `staleWarning` use in resilience's rejected-document test now expects `stale`, because that test counts successfully first. Findings: none open. `lastError` is not read anywhere in `src/ui/`.)
 
 **Checkpoint**: the first screen before publication is honest. The status row names `l`,
 which US2 makes work. Ship US1 and US2 together (see Implementation Strategy).

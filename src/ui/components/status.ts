@@ -17,32 +17,41 @@ import { type Cell, cellsWide, type SemanticRow } from "../row.ts"
 export const MIN_COLUMNS = 80
 export const MIN_ROWS = 24
 
-/** Longest failure reason shown inline; the full text goes to the log. */
-const MAX_REASON = 60
+/** Before publication: nothing has ever loaded, so nothing on screen can be out of date. */
+const AWAITING_TEXT = "○ Výsledky zatím nejsou zveřejněny, aplikace je průběžně kontroluje. · l záznamy"
 
-/** The persistent staleness warning, or null when everything is current (FR-044). */
-export function staleWarning(subscriptions: Subscription[], now = new Date()): string | null {
+/** Figures that were current once and can no longer be refreshed. */
+const staleText = (age: string) => `! ZASTARALÁ DATA: zobrazena data ${age}. Obnovení se nedaří. · l záznamy`
+
+/** What the status row says about the sources, or null when nothing is wrong (004 FR-001–FR-004). */
+export type SourceStatus = { kind: "stale" | "awaiting"; text: string } | null
+
+/**
+ * Tells "not yet published" from "stale" (004 research R1, R2).
+ *
+ * A failing source that has never loaded successfully - in this session or an earlier
+ * one, since `lastSuccessAt` is persisted - has no figures that could be out of date.
+ * Before publication that covers both a 404 and a document rejected for lacking the
+ * expected shape, without having to tell them apart. Once any failing source HAS loaded
+ * before, the user is looking at out-of-date figures somewhere, which matters more.
+ *
+ * The text never carries the failure reason or the source: that was a truncated parser
+ * message on a shared screen, meaningless to most readers. The log has it in full.
+ */
+export function sourceStatus(subscriptions: Subscription[], now = new Date()): SourceStatus {
   // Final figures are not stale, and a failed manual refresh of one would never clear,
-  // since nothing retries it automatically (FR-009, research R6). The log has it.
+  // since nothing retries it automatically (003 FR-009, research R6). The log has it.
   const failing = subscriptions.filter((s) => s.consecutiveFailures > 0 && !s.final)
   if (failing.length === 0) return null
 
-  // Report the longest-standing failure: it is the one the user most needs to know
-  // about, and listing every source would bury it.
-  const worst = failing.reduce((a, b) => (a.consecutiveFailures >= b.consecutiveFailures ? a : b))
-  const since = worst.lastSuccessAt
-  // Clamped at zero: a success timestamp ahead of the local clock is possible under
-  // clock skew, and "před -900 s" is worse than useless to a reader.
-  const age = since === null ? null : Math.max(0, Math.floor((now.getTime() - Date.parse(since)) / 1000))
+  const loadedBefore = failing.flatMap((s) => (s.lastSuccessAt === null ? [] : [Date.parse(s.lastSuccessAt)]))
+  if (loadedBefore.length === 0) return { kind: "awaiting", text: AWAITING_TEXT }
 
-  const scope = failing.length === 1 ? worst.sourceKey : `${failing.length} zdrojů`
-  // A schema rejection can carry a paragraph of parser detail. The warning is one line
-  // on a shared screen, so it gets the gist; the log keeps the whole message.
-  const full = worst.lastError ?? "neznámá chyba"
-  const reason = full.length > MAX_REASON ? `${full.slice(0, MAX_REASON - 1)}…` : full
-  const staleness = age === null ? "bez úspěšného načtení" : `data ${formatAge(age)}`
-
-  return `! ZASTARALÁ DATA (${scope}): ${reason} Zobrazena poslední známá ${staleness}.`
+  // The OLDEST data on screen: understating how old the figures may be would mislead in
+  // the direction that matters. Clamped at zero, since a success timestamp ahead of the
+  // local clock is possible under clock skew, and "před -900 s" is worse than useless.
+  const age = Math.max(0, Math.floor((now.getTime() - Math.min(...loadedBefore)) / 1000))
+  return { kind: "stale", text: staleText(formatAge(age)) }
 }
 
 /**

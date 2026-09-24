@@ -19,6 +19,7 @@ import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { addToWatchlist } from "../../src/storage/queries/watchlist.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
 import { applyFrameState, type FrameState, frameState } from "../../src/ui/chrome/state.ts"
+import type { SourceStatus } from "../../src/ui/components/status.ts"
 import type { Column } from "../../src/ui/format.ts"
 import type { Screen } from "../../src/ui/navigation.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
@@ -72,7 +73,7 @@ async function paint(screen: Screen, theme: Theme, width = 110, height = 34): Pr
         width,
         contentWidth: frame.contentWidth > 0 ? frame.contentWidth : width - 2,
         contentHeight: frame.contentHeight > 0 ? frame.contentHeight : height - 3,
-        warning: null,
+        sourceStatus: null,
         notice: null,
       }),
     )
@@ -213,8 +214,18 @@ interface PaintOptions {
   sort?: SortState
   selected?: number
   content?: ScreenContent
-  warning?: string | null
+  sourceStatus?: SourceStatus
+  notice?: string | null
   lastSuccessAt?: string | null
+}
+
+const STALE: SourceStatus = {
+  kind: "stale",
+  text: "! ZASTARALÁ DATA: zobrazena data před 4 min. Obnovení se nedaří. · l záznamy",
+}
+const AWAITING: SourceStatus = {
+  kind: "awaiting",
+  text: "○ Výsledky zatím nejsou zveřejněny, aplikace je průběžně kontroluje. · l záznamy",
 }
 
 const hexOf = (colour: RGBA): string => (colour.a === 0 ? "none" : rgbToHex(colour))
@@ -242,8 +253,8 @@ async function paintRows(screen: Screen, theme: Theme, options: PaintOptions = {
       width,
       contentWidth: frame.contentWidth,
       contentHeight: frame.contentHeight,
-      warning: options.warning ?? null,
-      notice: null,
+      sourceStatus: options.sourceStatus ?? null,
+      notice: options.notice ?? null,
       content: options.content,
       lastSuccessAt: options.lastSuccessAt ?? null,
     })
@@ -251,7 +262,7 @@ async function paintRows(screen: Screen, theme: Theme, options: PaintOptions = {
     await setup.renderOnce()
     // A warning row takes a line from the content; draw again after the layout, as the
     // application does on its next tick.
-    if (options.warning) {
+    if (options.sourceStatus || options.notice) {
       applyFrameState(frame, state, theme)
       await setup.renderOnce()
     }
@@ -525,11 +536,21 @@ describe("the title bar (T027, FR-011, FR-012)", () => {
   test("turns the indicator into a warning badge while data is stale (acceptance 2.5)", async () => {
     const { grid } = await paintRows(council, TOKYO, {
       lastSuccessAt: LAST_SUCCESS,
-      warning: "! ZASTARALÁ DATA (CZ0642): spojení selhalo.",
+      sourceStatus: STALE,
     })
     const text = (grid[0] ?? []).map((c) => c.ch).join("")
     expect(text).not.toContain("živě")
     expectRun(cellsAt(grid[0], "● ZASTARALÉ"), slot(TOKYO, "onAccent"), slot(TOKYO, "warning"), true)
+  })
+
+  test("says it is waiting for results, never stale, before anything has loaded (004 FR-001)", async () => {
+    const { grid, text } = await paintRows(council, TOKYO, { sourceStatus: AWAITING })
+    const title = (grid[0] ?? []).map((c) => c.ch).join("")
+    expect(title).toContain("○ čeká na výsledky")
+    expect(title).not.toContain("živě")
+    expectRun(cellsAt(grid[0], "○ čeká na výsledky"), slot(TOKYO, "muted"), slot(TOKYO, "panel"))
+    expect(text).not.toContain("ZASTARALÁ")
+    expect(text).not.toContain("ZASTARALÉ")
   })
 })
 
@@ -547,9 +568,36 @@ describe("the status bar (T028, FR-013)", () => {
 })
 
 describe("the warning row (T029, FR-014)", () => {
+  const rowWith = (grid: PaintedCell[][], needle: string) =>
+    grid.find((line) =>
+      line
+        .map((c) => c.ch)
+        .join("")
+        .includes(needle),
+    )
+
+  test("the awaiting line sits on element in muted text, with no error in it (004 FR-002, FR-004)", async () => {
+    const { grid } = await paintRows({ kind: "districts" }, TOKYO, { sourceStatus: AWAITING })
+    const row = rowWith(grid, "Výsledky zatím nejsou zveřejněny")
+    expect(row).toBeDefined()
+    expectRun(row ?? [], null, slot(TOKYO, "element"))
+    expectRun(cellsAt(row, "Výsledky zatím nejsou zveřejněny"), slot(TOKYO, "muted"), slot(TOKYO, "element"))
+  })
+
+  test("a notice takes the row for its keystroke, and the title bar keeps the stale badge (004 R3)", async () => {
+    const { grid, state } = await paintRows({ kind: "districts" }, TOKYO, {
+      sourceStatus: STALE,
+      notice: "Tento příkaz zde není dostupný.",
+    })
+    expect(state.warning).toBe("Tento příkaz zde není dostupný.")
+    expect(state.warningKind).toBe("notice")
+    expect(rowWith(grid, "Tento příkaz zde není dostupný.")).toBeDefined()
+    expect(rowWith(grid, "ZASTARALÁ DATA")).toBeUndefined()
+    expect((grid[0] ?? []).map((c) => c.ch).join("")).toContain("● ZASTARALÉ")
+  })
+
   test("is the warning colour across the full width, its text in onAccent", async () => {
-    const warning = "! ZASTARALÁ DATA (CZ0642): spojení selhalo."
-    const { grid } = await paintRows({ kind: "districts" }, TOKYO, { warning })
+    const { grid } = await paintRows({ kind: "districts" }, TOKYO, { sourceStatus: STALE })
     const row = grid.find((line) =>
       line
         .map((c) => c.ch)
@@ -636,7 +684,7 @@ describe("a theme switch repaints everything at once (T043, FR-027, acceptance 3
           width,
           contentWidth: frame.contentWidth,
           contentHeight: frame.contentHeight,
-          warning: null,
+          sourceStatus: null,
           notice: null,
         }
         applyFrameState(frame, frameState(inputs), theme)

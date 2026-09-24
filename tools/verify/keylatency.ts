@@ -57,7 +57,7 @@ const inputs = () => ({
   width: WIDTH,
   contentWidth: frame.contentWidth > 0 ? frame.contentWidth : WIDTH - 3,
   contentHeight: frame.contentHeight > 0 ? frame.contentHeight : HEIGHT - 4,
-  warning: null,
+  sourceStatus: null,
   notice: null,
 })
 

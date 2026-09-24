@@ -113,7 +113,7 @@ describe("the content area always wins (FR-057, T152)", () => {
           width: 80,
           contentWidth: frame.contentWidth,
           contentHeight: frame.contentHeight,
-          warning: null,
+          sourceStatus: null,
           notice: null,
         }),
       )
@@ -151,7 +151,7 @@ describe("the content area always wins (FR-057, T152)", () => {
             width: 130,
             contentWidth: frame.contentWidth > 0 ? frame.contentWidth : 128,
             contentHeight: frame.contentHeight > 0 ? frame.contentHeight : 27,
-            warning: null,
+            sourceStatus: null,
             notice: null,
           }),
         )

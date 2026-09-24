@@ -106,7 +106,7 @@ for (let cycle = 0; cycle < CYCLES; cycle++) {
       width: 120,
       contentWidth: frame.contentWidth > 0 ? frame.contentWidth : 117,
       contentHeight: frame.contentHeight > 0 ? frame.contentHeight : 30,
-      warning: null,
+      sourceStatus: null,
       notice: null,
     }),
     theme,
