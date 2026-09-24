@@ -64,6 +64,8 @@ export interface FrameInputs {
   contentHeight: number
   /** The persistent staleness warning, when there is one (FR-044). */
   warning: string | null
+  /** Every source the screen shows is final, so the title bar says polling has stopped (FR-008). */
+  final?: boolean
   /** A one-off confirmation, shown only when nothing is wrong. */
   notice: string | null
   /**
@@ -174,7 +176,8 @@ export function frameState(inputs: FrameInputs): FrameState {
     warningKind,
     titleRow: titleBarRow(
       segmentsFor(db, nav.screens),
-      inputs.warning !== null,
+      // A failing source wins over finality: the stale badge stays global (contract § 2).
+      inputs.warning !== null ? "stale" : inputs.final === true ? "final" : "live",
       inputs.lastSuccessAt ?? null,
       inputs.width,
     ),
@@ -225,26 +228,39 @@ function clockOf(iso: string | null): string | null {
 }
 
 /**
+ * What the title bar says about the data on screen.
+ *
+ * `final` replaces the live claim once every source on screen is final and no longer
+ * polled on its own (feature 003, FR-008). Its text carries the whole meaning, so it
+ * reads the same without colour.
+ */
+export type LiveIndicator = "live" | "final" | "stale"
+
+const INDICATOR_CELLS: Record<LiveIndicator, Cell> = {
+  live: { text: " ● živě ", fgSlot: "success" },
+  final: { text: " ■ konečné · obnova ručně ", role: "muted" },
+  stale: { text: " ● ZASTARALÉ ", role: "warning", surface: "warning" },
+}
+
+/**
  * The title bar as styled cells (002 T034, FR-011, FR-012).
  *
  * The application badge, then the trail as joined segments: earlier levels on
  * `element`, the current one on `primary`. Each join is a `▌` in the colour of the
  * segment to its left over the background of the one to its right, so the segments read
- * as one shape with no special font. At the right end, the live indicator - or, while
- * data is stale, a warning badge in its place - and the time of the last successful
- * refresh. Nothing is fetched to show them (spec Assumptions).
+ * as one shape with no special font. At the right end, the indicator (live, final, or
+ * a warning badge while data is stale) and the time of the last successful refresh.
+ * Nothing is fetched to show them (spec Assumptions).
  */
 export function titleBarRow(
   trail: string[],
-  stale: boolean,
+  indicator: LiveIndicator,
   lastSuccessAt: string | null,
   width: number,
 ): SemanticRow {
   const clock = clockOf(lastSuccessAt)
   const right: Cell[] = [
-    stale
-      ? { text: " ● ZASTARALÉ ", role: "warning", surface: "warning" }
-      : { text: " ● živě ", fgSlot: "success" },
+    INDICATOR_CELLS[indicator],
     ...(clock === null ? [] : [{ text: ` ${clock} `, role: "muted" } satisfies Cell]),
   ]
 

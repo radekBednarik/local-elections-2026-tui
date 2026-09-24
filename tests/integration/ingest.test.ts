@@ -220,3 +220,50 @@ describe("council ingest (FR-009)", () => {
     expect(snap.voters_registered).toBe(10180)
   })
 })
+
+/** Whether a document was read as final, or null when it was rejected. */
+function finalityOf(result: ReturnType<typeof ingestNational>): boolean | null {
+  return result.ok ? result.final : null
+}
+
+describe("finality of a whole document (research R3)", () => {
+  test("a national document is final when every council type is final", () => {
+    expect(finalityOf(ingestNational(db, read(FIXTURES, "vysledky.xml")))).toBe(true)
+  })
+
+  test("a national document is not final while one council type is still being counted", () => {
+    // Only the MCMO block is lowered, so this proves "every block", not "any block".
+    const body = read(FIXTURES, "vysledky.xml").replace(
+      'OKRSKY_CELKEM="2132" OKRSKY_ZPRAC="2132"',
+      'OKRSKY_CELKEM="2132" OKRSKY_ZPRAC="2131"',
+    )
+    expect(finalityOf(ingestNational(db, body))).toBe(false)
+  })
+
+  test("a district document is final when every council in it is final", () => {
+    const body = read(FIXTURES, "vysledky_obce_okres_CZ0642.xml")
+    expect(finalityOf(ingestDistrict(db, "CZ0642", body))).toBe(true)
+  })
+
+  test("a district document is not final while one council in it is still being counted", () => {
+    const body = read(FIXTURES, "vysledky_obce_okres_CZ0642.xml").replace(
+      'JE_SPOCTENO="true"',
+      'JE_SPOCTENO="false"',
+    )
+    expect(finalityOf(ingestDistrict(db, "CZ0642", body))).toBe(false)
+  })
+
+  test("a district document whose only council has no result is not final", () => {
+    const full = read(FIXTURES, "vysledky_obce_okres_CZ0642.xml")
+    const header = full.slice(0, full.indexOf("<OBEC "))
+    const body = `${header}<OBEC KODZASTUP="582786" NAZEVZAST="Brno" OZNAC_TYPU="OBEC" VOLENO_ZASTUP="55" POCET_OBVODU="1" JE_SPOCTENO="true"></OBEC></VYSLEDKY_OBCE_OKRES>`
+    const result = ingestDistrict(db, "CZ0642", body)
+    expect(result.ok).toBe(true)
+    expect(finalityOf(result)).toBe(false)
+  })
+
+  test("a council document follows its council's count", () => {
+    expect(finalityOf(ingestCouncil(db, "551082", read(EDGE, "provisional.xml")))).toBe(false)
+    expect(finalityOf(ingestCouncil(db, "551082", read(EDGE, "final.xml")))).toBe(true)
+  })
+})

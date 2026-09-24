@@ -16,6 +16,7 @@ import { join } from "node:path"
 import { extractArchiveFile } from "../../src/reference/archive.ts"
 import { isReferenceLoaded, loadReference, type ReferenceArchives } from "../../src/reference/loader.ts"
 import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
+import { Scheduler } from "../../src/sources/scheduler.ts"
 import {
   adoptDataset,
   type DatasetIdentity,
@@ -63,6 +64,16 @@ function populate(identity: DatasetIdentity): void {
   loadReference(db, archives)
   ingestNational(db, read("vysledky.xml"))
   ingestDistrict(db, "CZ0642", read("vysledky_obce_okres_CZ0642.xml"))
+}
+
+const T0 = new Date("2026-10-09T20:00:00.000Z")
+
+/** Subscribes to the national source and records it read as final at T0. */
+function finalNational(target: Database): Scheduler {
+  const scheduler = new Scheduler(target, { intervalSeconds: 60 })
+  scheduler.subscribeAll([{ key: "national", areaKind: "national", areaId: "" }], T0)
+  scheduler.recordSuccess("national", {}, T0, true)
+  return scheduler
 }
 
 const resultCount = () => (db.query("SELECT COUNT(*) AS n FROM result_snapshot").get() as { n: number }).n
@@ -157,6 +168,15 @@ describe("what survives", () => {
     expect(watched.n).toBe(1)
   })
 
+  test("and forgets which sources were final, so each is polled again (FR-007)", () => {
+    populate(LIVE)
+    const scheduler = finalNational(db)
+    resetData(db, LIVE)
+    expect(scheduler.get("national")).toBeNull()
+    scheduler.subscribeAll([{ key: "national", areaKind: "national", areaId: "" }], T0)
+    expect(scheduler.get("national")?.final).toBe(false)
+  })
+
   test("but not a change of election, where a code means something else", () => {
     populate(LIVE)
     toggleWatchlist(db, "582786")
@@ -242,5 +262,36 @@ describe("across a real restart", () => {
         second.close()
       }
     })
+  })
+})
+
+describe("finality of a source (FR-006, FR-007)", () => {
+  test("survives closing and reopening the database, so a final source stays unpolled", async () => {
+    await withTempDataDir((dir) => {
+      const path = dir.file("volby.sqlite")
+
+      const first = openDatabase(path)
+      finalNational(first)
+      first.close()
+
+      const second = openDatabase(path)
+      try {
+        const scheduler = new Scheduler(second, { intervalSeconds: 60 })
+        // As main.ts does on every start: an existing subscription keeps its state.
+        scheduler.subscribeAll([{ key: "national", areaKind: "national", areaId: "" }], T0)
+        expect(scheduler.get("national")?.final).toBe(true)
+        expect(scheduler.get("national")?.nextDueAt).toBeNull()
+        expect(scheduler.due(new Date(T0.getTime() + 3_600_000))).toEqual([])
+      } finally {
+        second.close()
+      }
+    })
+  })
+
+  test("is forgotten when the application is pointed at another source", () => {
+    populate(MIRROR)
+    const scheduler = finalNational(db)
+    adoptDataset(db, LIVE)
+    expect(scheduler.get("national")).toBeNull()
   })
 })

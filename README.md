@@ -120,8 +120,12 @@ cache granularity, so a faster poll returns identical bytes while adding load on
 busiest night of the year. A shorter `--interval` is clamped, not rejected.
 
 The nationwide result and all 78 district files are refreshed continuously, spread across
-the interval rather than fired together. Individual councils are fetched when you open
-them and stay subscribed only while on screen or on your watchlist.
+the interval rather than fired together, until each one is final. A source whose count is
+complete is not requested again, not even after a restart. The title bar then says
+`konečné · obnova ručně`, and `r` still fetches it on demand, subject to the same
+60-second floor. Individual councils are fetched when you open them and stay subscribed
+only while on screen or on your watchlist. A final council is remembered after you leave
+it, so opening it again requests nothing.
 
 ## Data source
 

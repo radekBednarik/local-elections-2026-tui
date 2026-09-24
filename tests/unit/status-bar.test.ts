@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Subscription } from "../../src/sources/scheduler.ts"
 import {
+  allFinal,
   isTooSmall,
   keyHintLine,
   MIN_COLUMNS,
@@ -23,6 +24,7 @@ function sub(overrides: Partial<Subscription> = {}): Subscription {
     etag: null,
     lastModified: null,
     pinned: false,
+    final: false,
     ...overrides,
   }
 }
@@ -60,6 +62,19 @@ describe("staleWarning (FR-044)", () => {
   test("handles a source that has never succeeded", () => {
     const warning = staleWarning([sub({ consecutiveFailures: 2, lastSuccessAt: null, lastError: "404" })])
     expect(warning).toContain("bez úspěšného načtení")
+  })
+
+  test("ignores a final source that failed, since final figures are not stale (FR-009)", () => {
+    expect(staleWarning([sub({ final: true, consecutiveFailures: 1, lastError: "timeout" })])).toBeNull()
+  })
+
+  test("still warns about a source in progress beside a failing final one", () => {
+    const warning = staleWarning([
+      sub({ sourceKey: "national", final: true, consecutiveFailures: 4, lastError: "konecny" }),
+      sub({ sourceKey: "district:CZ0100", consecutiveFailures: 1, lastError: "probihajici" }),
+    ])
+    expect(warning).toContain("probihajici")
+    expect(warning).toContain("(district:CZ0100)")
   })
 })
 
@@ -123,5 +138,29 @@ describe("warning robustness", () => {
     expect(warning).toContain("…")
     // The gist must survive the truncation.
     expect(warning).toContain("well-formed")
+  })
+})
+
+describe("finality indicator (FR-008)", () => {
+  const final = (sourceKey: Subscription["sourceKey"]) => sub({ sourceKey, final: true })
+
+  test("is on when every source shown is final", () => {
+    expect(allFinal([final("national"), final("district:CZ0100")], ["national", "district:CZ0100"])).toBe(
+      true,
+    )
+  })
+
+  test("is off while any source shown is still in progress", () => {
+    expect(
+      allFinal([final("national"), sub({ sourceKey: "district:CZ0100" })], ["national", "district:CZ0100"]),
+    ).toBe(false)
+  })
+
+  test("is off while a source shown is not subscribed yet", () => {
+    expect(allFinal([final("national")], ["national", "district:CZ0100"])).toBe(false)
+  })
+
+  test("is off when nothing is shown", () => {
+    expect(allFinal([final("national")], [])).toBe(false)
   })
 })

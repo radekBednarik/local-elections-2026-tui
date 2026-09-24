@@ -11,6 +11,7 @@
  */
 
 import type { Database } from "bun:sqlite"
+import type { SourceKey } from "../sources/urls.ts"
 import { availableCouncilTypes } from "../storage/queries/national.ts"
 import { clampLines } from "./format.ts"
 import type { Screen } from "./navigation.ts"
@@ -240,5 +241,27 @@ export function sourcesForScreen(screen: Screen): { key: string; areaKind: strin
       return [{ key: `council:${screen.kodzastup}`, areaKind: "council", areaId: screen.kodzastup }]
     default:
       return []
+  }
+}
+
+/**
+ * Which sources a screen's figures come from, to say whether they are all final
+ * (feature 003, contract § 2).
+ *
+ * Wider than `sourcesForScreen`, which lists only what a screen must subscribe to: the
+ * national and district list screens show sources that are always subscribed anyway.
+ */
+export function shownSources(screen: Screen, watched: string[], districts: string[]): SourceKey[] {
+  switch (screen.kind) {
+    case "districts":
+      return districts.map((nuts) => `district:${nuts}` as const)
+    case "district":
+    case "council":
+    case "candidates":
+      return sourcesForScreen(screen).map((s) => s.key as SourceKey)
+    case "watchlist":
+      return watched.length === 0 ? ["national"] : watched.map((code) => `council:${code}` as const)
+    default:
+      return ["national"]
   }
 }

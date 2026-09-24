@@ -22,7 +22,7 @@ import { reportForScreen } from "../export/report.ts"
 import { csvForScreen } from "../export/tables.ts"
 import { suggestFilename, writeExport } from "../export/writer.ts"
 import type { Logger } from "../logging/logger.ts"
-import { fetchDocument } from "../sources/client.ts"
+import { type FetchOutcome, fetchDocument } from "../sources/client.ts"
 import { ingestCouncil, ingestDistrict, ingestNational } from "../sources/ingest.ts"
 import type { Scheduler } from "../sources/scheduler.ts"
 import { type SourceKey, type SourceLocation, urlForKey } from "../sources/urls.ts"
@@ -37,12 +37,12 @@ import { toggleWatchlist, watchedCodes } from "../storage/queries/watchlist.ts"
 import { Frame } from "./chrome/frame.ts"
 import { panelFits } from "./chrome/panel.ts"
 import { applyFrameState, applyPanel, applyPlainLines, frameState, viewWidthFor } from "./chrome/state.ts"
-import { isTooSmall, staleWarning, tooSmallMessage } from "./components/status.ts"
+import { allFinal, isTooSmall, staleWarning, tooSmallMessage } from "./components/status.ts"
 import { type Intent, intentFor } from "./keymap.ts"
 import { Navigation } from "./navigation.ts"
 import { type ActionContext, type ActionId, themeOfAction } from "./palette/actions.ts"
 import { Palette } from "./palette/view.ts"
-import { composeScreen, type ScreenContent, sourcesForScreen } from "./screen.ts"
+import { composeScreen, type ScreenContent, shownSources, sourcesForScreen } from "./screen.ts"
 import { applySearchKey, type KeyEvent } from "./search-input.ts"
 import { nextSort, type SortState, UNSORTED } from "./sort.ts"
 import { canDim } from "./theme/apply.ts"
@@ -92,6 +92,8 @@ export class App {
    * table, so carrying one across a navigation would sort by something arbitrary.
    */
   private sort: SortState = UNSORTED
+  /** Every district code, loaded once at start, for what the district list shows. */
+  private districts: string[] = []
   private stopped = false
   /**
    * The chosen theme, or null when none was stored and detection should decide.
@@ -226,12 +228,13 @@ export class App {
     const districts = this.deps.db.query("SELECT nuts FROM district ORDER BY nuts").all() as {
       nuts: string
     }[]
+    this.districts = districts.map((d) => d.nuts)
     if (districts.length === 0) return
     this.deps.scheduler.subscribeAll(
-      districts.map((d) => ({
-        key: `district:${d.nuts}` as SourceKey,
+      this.districts.map((nuts) => ({
+        key: `district:${nuts}` as SourceKey,
         areaKind: "district",
-        areaId: d.nuts,
+        areaId: nuts,
       })),
     )
     this.deps.log.info("Okresy přihlášeny k odběru", { count: districts.length })
@@ -240,12 +243,12 @@ export class App {
   /**
    * Subscribes to what the current screen needs and drops what it no longer does.
    *
-   * A council left behind is unsubscribed unless it is pinned to the watchlist, which
-   * is what keeps the polling set bounded (FR-018a).
+   * A council left behind is unsubscribed unless it is pinned to the watchlist or final,
+   * which is what keeps the polling set bounded (FR-018a, research R5).
    */
   private syncSubscriptions(): void {
     const { scheduler, db } = this.deps
-    const needed = new Set(sourcesForScreen(this.nav.screen).map((s) => s.key))
+    const needed = new Set(sourcesForScreen(this.nav.screen).map((s) => s.key as SourceKey))
 
     for (const source of sourcesForScreen(this.nav.screen)) {
       scheduler.subscribeAll([
@@ -262,10 +265,7 @@ export class App {
       scheduler.setPinned(key, true)
     }
 
-    for (const sub of scheduler.all()) {
-      if (sub.areaKind !== "council") continue
-      if (!needed.has(sub.sourceKey) && !sub.pinned) scheduler.unsubscribe(sub.sourceKey)
-    }
+    scheduler.releaseCouncils(needed)
   }
 
   private async onKey(key: KeyEvent): Promise<void> {
@@ -669,7 +669,7 @@ export class App {
       // unhandled rejection opened OpenTUI's console overlay over the interface, which
       // then held the keyboard. Every failure becomes a recorded failure on that one
       // subscription (FR-046).
-      let outcome: Awaited<ReturnType<typeof fetchDocument>>
+      let outcome: FetchOutcome
       try {
         outcome = await fetchDocument(urlForKey(this.location, sub.sourceKey), {
           validators: { etag: sub.etag, lastModified: sub.lastModified },
@@ -689,28 +689,7 @@ export class App {
         continue
       }
 
-      if (outcome.kind === "ok") {
-        const result = ingestFor(db, sub.sourceKey, outcome.body)
-        if (result.ok) {
-          scheduler.recordSuccess(sub.sourceKey, {
-            etag: outcome.etag,
-            lastModified: outcome.lastModified,
-          })
-        } else {
-          // A document failing validation is a failure of the source, not of the
-          // application: the previous snapshot stays on screen (FR-025, FR-027).
-          scheduler.recordFailure(sub.sourceKey, result.reason)
-          log.warn("Dokument odmítnut", { source: sub.sourceKey, reason: result.reason })
-        }
-      } else if (outcome.kind === "not-modified") {
-        scheduler.recordSuccess(sub.sourceKey)
-      } else if (outcome.kind === "not-found") {
-        scheduler.recordFailure(sub.sourceKey, "Data zatím nejsou zveřejněna")
-      } else {
-        scheduler.recordFailure(sub.sourceKey, outcome.reason)
-        log.warn("Stahování selhalo", { source: sub.sourceKey, reason: outcome.reason })
-      }
-
+      recordFetch(db, scheduler, sub.sourceKey, outcome, log)
       this.draw()
       // Yield, so a burst of due sources cannot monopolise the event loop and delay a
       // keystroke past the 100 ms budget in SC-010.
@@ -759,6 +738,10 @@ export class App {
         contentWidth: this.contentWidth(),
         contentHeight: frame.contentHeight,
         warning: staleWarning(subscriptions),
+        final: allFinal(
+          subscriptions,
+          shownSources(this.nav.screen, watchedCodes(this.deps.db), this.districts),
+        ),
         notice: this.notice,
         // Reuses the screen the key handler already composed, rather than composing the
         // identical screen a second time on every keystroke.
@@ -778,6 +761,45 @@ function latestSuccess(subscriptions: { lastSuccessAt: string | null }[]): strin
     if (lastSuccessAt !== null && (latest === null || lastSuccessAt > latest)) latest = lastSuccessAt
   }
   return latest
+}
+
+/**
+ * Stores one fetch's outcome and records it against the source's subscription.
+ *
+ * A successful ingest passes the document's finality on, which is what takes a final
+ * source out of automatic polling (feature 003, FR-001).
+ */
+export function recordFetch(
+  db: Database,
+  scheduler: Scheduler,
+  key: SourceKey,
+  outcome: FetchOutcome,
+  log: Logger,
+  now = new Date(),
+): void {
+  if (outcome.kind === "ok") {
+    const result = ingestFor(db, key, outcome.body)
+    if (result.ok) {
+      scheduler.recordSuccess(
+        key,
+        { etag: outcome.etag, lastModified: outcome.lastModified },
+        now,
+        result.final,
+      )
+    } else {
+      // A document failing validation is a failure of the source, not of the
+      // application: the previous snapshot stays on screen (FR-025, FR-027).
+      scheduler.recordFailure(key, result.reason, now)
+      log.warn("Dokument odmítnut", { source: key, reason: result.reason })
+    }
+  } else if (outcome.kind === "not-modified") {
+    scheduler.recordSuccess(key, {}, now)
+  } else if (outcome.kind === "not-found") {
+    scheduler.recordFailure(key, "Data zatím nejsou zveřejněna", now)
+  } else {
+    scheduler.recordFailure(key, outcome.reason, now)
+    log.warn("Stahování selhalo", { source: key, reason: outcome.reason })
+  }
 }
 
 /** Routes a fetched body to the right ingest function. */
