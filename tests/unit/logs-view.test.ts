@@ -269,6 +269,19 @@ describe("the application only calls these, never reimplements them", () => {
     expect(source).not.toMatch(/nav\.push\(\{ kind: "logs" \}\)/)
   })
 
+  test("an unhandled error is drawn at once, so an open logs view shows it (FR-012, T048)", () => {
+    // Nothing else redraws while no source is due, e.g. once every source is final.
+    for (const event of ["unhandledRejection", "uncaughtException"]) {
+      expect(source).toMatch(
+        new RegExp(`process\\.on\\("${event}", \\([a-z]+\\) => \\{\\s*this\\.logUnhandled\\(`),
+      )
+    }
+    const body = source.slice(source.indexOf("private logUnhandled("))
+    expect(body.slice(0, body.indexOf("\n  }\n"))).toMatch(
+      /this\.deps\.log\.error\([^)]*\)[\s\S]*this\.draw\(\)/,
+    )
+  })
+
   test("copying goes through performCopy, which picks the text itself", () => {
     expect(source).toContain("performCopy(")
     expect(source).not.toContain("copyText(")

@@ -174,10 +174,10 @@ export class App {
     // unhandled rejection must leave a trace in the log rather than vanishing, since the
     // console overlay that used to show it is deliberately gone.
     process.on("unhandledRejection", (reason) => {
-      this.deps.log.error("Neošetřené odmítnutí příslibu", reason)
+      this.logUnhandled("Neošetřené odmítnutí příslibu", reason)
     })
     process.on("uncaughtException", (error) => {
-      this.deps.log.error("Neošetřená výjimka", error)
+      this.logUnhandled("Neošetřená výjimka", error)
     })
 
     const shutdown = () => {
@@ -445,6 +445,21 @@ export class App {
         const theme = themeOfAction(id)
         if (theme !== null) this.setTheme(theme)
       }
+    }
+  }
+
+  /**
+   * Logs an error nothing else caught, and draws, so an open logs view shows it at once:
+   * while no source is due - once every source is final, say - nothing else would redraw
+   * until a key press (004 FR-012). A draw that throws is swallowed here, since throwing
+   * from these handlers would take the process down with it.
+   */
+  private logUnhandled(message: string, detail: unknown): void {
+    this.deps.log.error(message, detail)
+    try {
+      this.draw()
+    } catch {
+      // Already logged; drawing again is what failed, so there is nothing more to do.
     }
   }
 
