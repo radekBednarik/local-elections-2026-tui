@@ -39,10 +39,11 @@ the contract wins, and the task is corrected in the same change.
 
 **Purpose**: Establish a green baseline, so every later failure is known to be new.
 
-- [ ] T001 Create the branch `004-logs-view` from `main` and switch to it (`git switch -c 004-logs-view`).
+- [X] T001 Create the branch `004-logs-view` from `main` and switch to it (`git switch -c 004-logs-view`).
   - Commit the planning documents in `specs/004-logs-view/` and `.specify/feature.json` as the first commit.
   - Then run `bun test`, `bun run typecheck` and `bun run check` from the repository root, and record the pass counts in this task's notes.
   - Stop and report if anything fails before a change has been made.
+  - (Done 2026-09-24. Branch created and planning docs committed as f45e77b. Baseline: 908 pass, 0 fail across 50 files; typecheck clean; biome clean, 132 files.)
 
 ---
 
@@ -56,7 +57,7 @@ depend on it and may run alongside.
 
 ### Tests (write first, observe failing)
 
-- [ ] T002 [P] Add `describe("in-memory record (004 research R4)")` to `tests/unit/logger.test.ts`, with these tests:
+- [X] T002 [P] Add `describe("in-memory record (004 research R4)")` to `tests/unit/logger.test.ts`, with these tests:
   - A new logger has `entries()` equal to `[]` and `dropped === 0`.
   - After `warn("Dokument odmítnut", { source: "district:CZ0642", reason: "x" })`, there is one entry with:
     - `seq === 0`, `level === "warn"`, `message === "Dokument odmítnut"`, `source === "district:CZ0642"`;
@@ -71,12 +72,12 @@ depend on it and may run alongside.
     - `entries()[0].seq === 5`;
     - every entry satisfies `entries()[i].seq === dropped + i`.
   - `LOG_VIEW_LIMIT` is exported and equals `1000`.
-- [ ] T003 [P] Add a test to `describe("resilience")` in `tests/unit/logger.test.ts`. When the log path cannot be written, entries are still recorded, with the same `line` text a successful write would have produced. Force the failure the way the existing resilience test does.
-- [ ] T004 [P] Add to `describe("null logger")` in `tests/unit/logger.test.ts`: `createNullLogger()` has `entries()` equal to `[]` and `dropped === 0`, and neither changes after calls to `error`, `warn`, `info` or `debug`.
+- [X] T003 [P] Add a test to `describe("resilience")` in `tests/unit/logger.test.ts`. When the log path cannot be written, entries are still recorded, with the same `line` text a successful write would have produced. Force the failure the way the existing resilience test does.
+- [X] T004 [P] Add to `describe("null logger")` in `tests/unit/logger.test.ts`: `createNullLogger()` has `entries()` equal to `[]` and `dropped === 0`, and neither changes after calls to `error`, `warn`, `info` or `debug`.
 
 ### Implementation
 
-- [ ] T005 In `src/logging/logger.ts`:
+- [X] T005 In `src/logging/logger.ts`:
   - Export `LOG_VIEW_LIMIT = 1000`.
   - Export `interface LogEntry { seq: number; at: string; level: LogLevel; message: string; detail: string | null; source: string | null; line: string }`, with a doc comment for each field taken from data-model.md.
   - `detail` is the serialised detail text the formatter puts after ` | `: the `Error` form, the JSON, or the `[detail could not be serialised]` fallback. It is `null` when there is no detail. Split `format` into one private `detailText(detail): string | null` plus the line assembly, so `detail` and `line` come from the same serialisation (Principle I).
@@ -90,12 +91,13 @@ depend on it and may run alongside.
   - `source` is `detail.source` when `detail` is a non-null, non-`Error` object whose `source` is a string, otherwise `null`.
   - `createNullLogger` returns `entries: () => []` and `dropped: 0`.
   - Makes T002 to T004 pass.
-- [ ] T006 REVIEW Phase 2 against Principles I–III and data-model.md. Check that:
+- [X] T006 REVIEW Phase 2 against Principles I–III and data-model.md. Check that:
   - there is exactly one formatter;
   - a recorded entry exists exactly when the threshold passes;
   - nothing in the logger can write to stdout or stderr.
 
   Run `bun test`, `bun run typecheck` and `bun run check`. Fix every finding before continuing.
+  - (Done 2026-09-24. Red first: the suite failed on the missing `LOG_VIEW_LIMIT` export. 917 pass, 0 fail. Findings: one formatting issue, fixed with biome. One formatter (`format`), with `detailText` shared by line and entry. Recording happens after the threshold check and before the `writable` check. No stdout/stderr writes.)
 
 **Checkpoint**: the logger holds the session's last 1000 entries. Nothing visible changes yet.
 
