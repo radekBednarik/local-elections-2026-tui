@@ -40,7 +40,7 @@ import { applyFrameState, applyPanel, applyPlainLines, frameState, viewWidthFor 
 import { allFinal, isTooSmall, sourceStatus, tooSmallMessage } from "./components/status.ts"
 import { type Intent, intentFor } from "./keymap.ts"
 import { Navigation } from "./navigation.ts"
-import { type ActionContext, type ActionId, themeOfAction } from "./palette/actions.ts"
+import { type ActionContext, type ActionId, NOT_AVAILABLE_HERE, themeOfAction } from "./palette/actions.ts"
 import { Palette } from "./palette/view.ts"
 import { composeScreen, type ScreenContent, shownSources, sourcesForScreen } from "./screen.ts"
 import { applySearchKey, type KeyEvent } from "./search-input.ts"
@@ -342,7 +342,7 @@ export class App {
       this.closePalette(palette)
       if (action === null) {
         // The highlighted entry does nothing here. Say so rather than closing silently.
-        this.notice = "Tento příkaz zde není dostupný."
+        this.notice = NOT_AVAILABLE_HERE
       } else {
         await this.perform(action.id, this.currentContent())
       }

@@ -15,6 +15,7 @@ import type { LogLevel } from "../../config/args.ts"
 import type { LogEntry } from "../../logging/logger.ts"
 import { type Column, plural, rule } from "../format.ts"
 import type { Navigation, Screen } from "../navigation.ts"
+import { NOT_AVAILABLE_HERE } from "../palette/actions.ts"
 import { blank, cell, line, type Role, type SemanticRow, tableHeader } from "../row.ts"
 
 /** The level as a Czech word, so severity reads without colour (FR-005). */
@@ -37,6 +38,9 @@ const LEVEL_WIDTH = Math.max(...Object.values(LEVEL_LABEL).map((label) => [...la
 /** Wide enough for `district:CZ0642` and `council:582786`, the longest source keys. */
 const SOURCE_WIDTH = 16
 const TIME_WIDTH = 8
+
+/** A line break in any of its three spellings: CRLF, a bare CR, or LF. */
+const LINE_BREAK = /\r\n?|\n/g
 
 /** `HH:MM:SS` in local time. */
 function clock(iso: string): string {
@@ -76,7 +80,7 @@ export function buildLogListRows(
     const full = entry.detail === null ? entry.message : `${entry.message} | ${entry.detail}`
     // An Error's message is kept verbatim and may span lines; a raw newline in a cell
     // would break the one-line row the selection depends on. The detail shows the lines.
-    const message = full.replace(/\r?\n/g, " ↵ ")
+    const message = full.replace(LINE_BREAK, " ↵ ")
     rows.push({
       kind: "data",
       columns,
@@ -101,7 +105,7 @@ export function buildLogEntryRows(entries: readonly LogEntry[], seq: number, wid
     return rows
   }
   const room = Math.max(1, width)
-  for (const physical of entry.line.split(/\r?\n/)) {
+  for (const physical of entry.line.split(LINE_BREAK)) {
     const chars = [...physical]
     for (let start = 0; start < Math.max(1, chars.length); start += room) {
       rows.push(line(chars.slice(start, start + room).join(""), LEVEL_ROLE[entry.level]))
@@ -177,7 +181,7 @@ export function performCopy(
 ): string {
   // The key map sends c and C here from every screen; only the palette checks where an
   // action applies. Anywhere else the "selected" row is not a log entry at all.
-  if (!onLogsScreen(screen)) return "Tento příkaz zde není dostupný."
+  if (!onLogsScreen(screen)) return NOT_AVAILABLE_HERE
   const seq = screen.kind === "log-entry" ? screen.seq : (entries[selected]?.seq ?? null)
   const text = copyText(entries, scope, seq)
   if (text === null) return copyNotice(0, false)

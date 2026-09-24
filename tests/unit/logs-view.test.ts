@@ -83,11 +83,11 @@ describe("the list (FR-009, FR-010, FR-014)", () => {
   })
 
   test("a newline in the message cannot break the one-line row", () => {
-    const multi = entry(8, { message: "Neošetřená výjimka", detail: "Error: prvni\r\ndruhy" })
+    const multi = entry(8, { message: "Neošetřená výjimka", detail: "Error: prvni\r\ndruhy\rtreti\nctvrty" })
     const { rows, firstRow } = buildLogListRows([multi], 120)
     const text = rows[firstRow]?.cells[3]?.text ?? ""
     expect(text).not.toMatch(/[\r\n]/)
-    expect(text).toBe("Neošetřená výjimka | Error: prvni ↵ druhy")
+    expect(text).toBe("Neošetřená výjimka | Error: prvni ↵ druhy ↵ treti ↵ ctvrty")
   })
 
   test("an entry without a source leaves the source cell empty", () => {
@@ -152,6 +152,12 @@ describe("the detail (FR-011)", () => {
     const pieces = rows.slice(3).map((r) => r.cells.map((c) => c.text).join(""))
     for (const piece of pieces) expect(piece).not.toMatch(/[\r\n]/)
     expect(pieces).toHaveLength(5)
+    const bare = entry(7, { detail: "Error: a\rb" })
+    expect(
+      buildLogEntryRows([bare], 7, 200)
+        .slice(3)
+        .map((r) => r.cells[0]?.text),
+    ).toHaveLength(2)
     expect(pieces.join("\n")).toBe(multi.line)
   })
 

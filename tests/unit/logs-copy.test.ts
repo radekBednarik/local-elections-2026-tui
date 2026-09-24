@@ -8,6 +8,7 @@
 
 import { describe, expect, test } from "bun:test"
 import type { LogEntry } from "../../src/logging/logger.ts"
+import { NOT_AVAILABLE_HERE } from "../../src/ui/palette/actions.ts"
 import { copyNotice, copyText, performCopy } from "../../src/ui/views/logs.ts"
 
 const entries: LogEntry[] = [0, 1, 2].map((seq) => ({
@@ -95,10 +96,11 @@ describe("performing a copy (FR-016–FR-019)", () => {
     // availability. On the national overview row 3 must not copy the 4th log line.
     const { sent, copy } = recorder()
     for (const screen of [{ kind: "national" }, { kind: "council", kodzastup: "582786" }] as const) {
-      expect(performCopy("one", screen, 1, entries, copy)).toBe("Tento příkaz zde není dostupný.")
-      expect(performCopy("all", screen, 0, entries, copy)).toBe("Tento příkaz zde není dostupný.")
+      expect(performCopy("one", screen, 1, entries, copy)).toBe(NOT_AVAILABLE_HERE)
+      expect(performCopy("all", screen, 0, entries, copy)).toBe(NOT_AVAILABLE_HERE)
     }
     expect(sent).toEqual([])
+    expect(NOT_AVAILABLE_HERE).toBe("Tento příkaz zde není dostupný.")
   })
 
   test("a refusing terminal is reported", () => {

@@ -466,7 +466,26 @@ separate severities without colour. Contract § 3, FR-020, SC-005.
   - (Done 2026-09-24. `staleWarning` and `MAX_REASON` are gone from `src`, `tests` and `tools`. The one leftover old-format string was in `tests/ui/frame.test.ts`, fed straight to `Frame.setWarning`; it now uses the new wording. `FrameState.warning` in `state.ts` is the row's text, which is legitimate, not the removed input.)
 - [X] T045 Run quickstart § 6: fill past 1000 entries with `--log-level debug`. Confirm the view opens and scrolls with no visible delay, and that the selection stays on its entry as old entries drop out. Record the result in this task's notes.
   - (Done 2026-09-24, by measurement. The task's `--log-level debug` premise was wrong: nothing logs at debug, so a live run cannot fill 1000 entries in reasonable time, and quickstart § 6 was corrected. The timing script fills a real logger to 1000 entries with 250 dropped and builds the logs `frameState` at 120 columns: median 2.8 ms, p95 4.7 ms, max 5.2 ms, about 20× inside the 100 ms budget. With entry `seq` 750 selected, 37 more evictions followed by `syncLogSelection` kept `seq` 750 selected.)
-- [ ] T046 FINAL REVIEW of the whole branch against Principles I–III, spec FR-001 to FR-022 and SC-001 to SC-006. Every FR must trace to a test named in this file. Run `bun test`, `bun run typecheck` and `bun run check`, and record the counts. Fix every finding.
+- [X] T046 FINAL REVIEW of the whole branch against Principles I–III, spec FR-001 to FR-022 and SC-001 to SC-006. Every FR must trace to a test named in this file. Run `bun test`, `bun run typecheck` and `bun run check`, and record the counts. Fix every finding.
+  - (Done 2026-09-24. An independent reviewer read the whole diff against `main`.
+
+    **Three important findings, all confirmed and fixed**, each with a test written first and seen failing:
+    1. `c` / `C` copied an unrelated log line from any screen. Keys reach `perform()` without the palette's availability check, and `performCopy` did not check the screen. It now returns the "not available" notice off the logs screens without touching the clipboard.
+    2. `l` on the logs screens stacked another list, and reset the dropped count so pending eviction corrections were lost. `openLogs` now refuses there and returns false, and `App` resets the count only on true.
+    3. A source still unpublished after a restart was never logged, because the persisted `lastError` already matched. This contradicted T031's "by design" note, which was wrong. `recordFetch` now also compares with what this session has logged (`isNewReason`, a `WeakMap` keyed by the logger). Verified live: session 1 logged it; session 2 did not poll before its persisted backoff; session 3, polled after the due time, logged it once.
+
+    **One below-threshold finding, also fixed:** a multi-line `Error` message put a raw newline into a list row. It is shown as ` ↵ `, and the detail splits on it. `CRLF`, bare `CR` and `LF` are all handled.
+
+    **Re-review of the fixes:** all correct. It raised one DRY slip: the "Tento příkaz zde není dostupný." literal was in two places. It is now `NOT_AVAILABLE_HERE` in `palette/actions.ts`.
+
+    **Accepted, not changed:**
+    - "Awaiting" is also shown on a first run that cannot reach a server that has published. FR-002 is judged on "never loaded", and the app cannot tell the cause.
+    - A notice stays until the next key press, so on an unattended screen it can hide the stale row. The title bar badge still shows `ZASTARALÉ` (R3), and the comment now says "until the next key press".
+    - `this.sort = UNSORTED` still runs when opening is refused. It is harmless, since the logs screens have no sortable columns.
+
+    **Requirement trace:** every FR has a test. FR-013 (movement) and FR-022 (too small) are covered by the shared pipeline: `rowCount` equals the number of entries, and the size check runs before any screen is composed. They have no dedicated logs test, as accepted in the analysis (G2).
+
+    Final: 996 pass, 0 fail across 52 files; typecheck clean; biome clean, 135 files.)
 
 ---
 

@@ -89,6 +89,9 @@ const TABLE_SCREENS: Screen["kind"][] = ["national", "district", "council", "can
 const REPORT_SCREENS: Screen["kind"][] = ["district", "council", "candidates"]
 const LOGS_SCREENS: Screen["kind"][] = ["logs", "log-entry"]
 
+/** What the user is told when an action is asked for where it does not apply. */
+export const NOT_AVAILABLE_HERE = "Tento příkaz zde není dostupný."
+
 /** Always applicable. */
 const always = () => null
 
