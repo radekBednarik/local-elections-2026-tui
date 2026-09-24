@@ -86,7 +86,7 @@ after a restart without `--reset`.
 
 ### Tests (write first, observe failing)
 
-- [ ] T009 [P] [US1] Add `describe("finality (research R3)")` to `tests/integration/ingest.test.ts`:
+- [X] T009 [P] [US1] Add `describe("finality (research R3)")` to `tests/integration/ingest.test.ts`:
   - `ingestNational` on `fixtures/2026/vysledky.xml` returns `ok: true, final: true`.
   - `ingestCouncil(db, "551082", <edge-cases/provisional.xml>)` returns `final: false`, and `edge-cases/final.xml` returns `final: true`.
   - `ingestDistrict` on `fixtures/2026/vysledky_obce_okres_CZ0642.xml` returns `final: true`.
@@ -94,7 +94,7 @@ after a restart without `--reset`.
   - A national document with one `TYP_ZASTUP` block's `OKRSKY_ZPRAC` lowered below `OKRSKY_CELKEM` returns `final: false`. Only one block is changed, so this proves "every block".
   - A district document whose only `OBEC` has no `VYSLEDEK` returns `final: false` (spec edge case: a council with no result).
   - Build the variant documents by string replacement on the fixtures inside the test, not as new fixture files.
-- [ ] T010 [P] [US1] Add `describe("final sources (FR-001, FR-003)")` to `tests/integration/scheduler.test.ts`, using the existing `T0` and `at(seconds)` helpers:
+- [X] T010 [P] [US1] Add `describe("final sources (FR-001, FR-003)")` to `tests/integration/scheduler.test.ts`, using the existing `T0` and `at(seconds)` helpers:
   - After `recordSuccess("national", {}, T0, true)`, `get("national")` has `final === true` and `nextDueAt === null`, and `due(at(3600))` does not contain `national`.
   - After `recordSuccess("national", {}, T0, false)`, the source is due again at `at(60)`, exactly as today.
   - `recordSuccess` without the `final` argument (a `304`) keeps the stored value, both when it was `true` and when it was `false`.
@@ -102,23 +102,23 @@ after a restart without `--reset`.
   - `recordFailure` on a source that is final increments `consecutiveFailures` and leaves `nextDueAt === null`.
   - `recordFailure` on a source that is not final still applies backoff (existing behaviour, asserted to guard it).
   - A row with `next_due_at IS NULL AND final = 0`, inserted by hand, is not returned by `due()`. The `IS NULL` branch is gone (research R4).
-- [ ] T011 [P] [US1] Add `describe("releasing councils (research R5)")` to `tests/integration/scheduler.test.ts`, for a new `Scheduler.releaseCouncils(needed: Set<SourceKey>)`:
+- [X] T011 [P] [US1] Add `describe("releasing councils (research R5)")` to `tests/integration/scheduler.test.ts`, for a new `Scheduler.releaseCouncils(needed: Set<SourceKey>)`:
   - A council not in `needed`, not pinned and not final is removed.
   - A council not in `needed` that is final is kept.
   - A pinned council is kept, as today.
   - `national` and `district:*` rows are never removed, whatever `needed` holds.
-- [ ] T012 [P] [US1] Add to `tests/integration/dataset.test.ts`:
+- [X] T012 [P] [US1] Add to `tests/integration/dataset.test.ts`:
   - In `describe("across a real restart")`: a subscription recorded final on a database on disk is still `final` with `nextDueAt === null` after closing and reopening with `openDatabase`, and `due()` does not return it (FR-006, SC-003).
   - In `describe("--reset clears the same source deliberately")`: after `resetData`, no subscription row remains, so the source starts polled when re-subscribed (FR-007).
   - In `describe("switching source clears what belonged to the old one")`: the same after `adoptDataset` with a different base URL.
-- [ ] T013 [P] [US1] Add `describe("recording a fetch outcome")` to `tests/integration/resilience.test.ts`, for a new exported `recordFetch(db, scheduler, key, outcome)` in `src/ui/app.ts`:
+- [X] T013 [P] [US1] Add `describe("recording a fetch outcome")` to `tests/integration/resilience.test.ts`, for a new exported `recordFetch(db, scheduler, key, outcome)` in `src/ui/app.ts`:
   - An `ok` outcome with a final national body leaves `national` final and unscheduled.
   - An `ok` outcome with a body that fails validation records a failure and leaves `final` as it was.
   - A `not-modified` outcome keeps `final` as it was.
   - A `not-found` outcome and an `error` outcome record failures with the existing reasons ("Data zatím nejsou zveřejněna" and the outcome's reason).
   - Construct outcomes as literals of the type `fetchDocument` returns. No server is needed.
 
-- [ ] T014 [P] [US2] Add `describe("manual refresh of a final source (FR-004, FR-005)")` to `tests/integration/scheduler.test.ts`. It belongs to US2, but it sits here because T016 implements this behaviour. Written any later, it could never be seen failing (Principle II).
+- [X] T014 [P] [US2] Add `describe("manual refresh of a final source (FR-004, FR-005)")` to `tests/integration/scheduler.test.ts`. It belongs to US2, but it sits here because T016 implements this behaviour. Written any later, it could never be seen failing (Principle II).
   - A source recorded final at `T0`: `requestRefresh("national", at(30))` returns `false` and `due(at(30))` is empty. `requestRefresh("national", at(60))` returns `true`, and `due(at(60))` contains exactly `national` (SC-004).
   - After that request, `recordSuccess(..., at(61), true)` leaves it final, `nextDueAt === null`, and absent from `due(at(3600))`.
   - After that request, a `304` (`recordSuccess` without `final`) leaves it final and unscheduled.
@@ -127,14 +127,15 @@ after a restart without `--reset`.
 
 ### Implementation
 
-- [ ] T015 [US1] In `src/sources/ingest.ts`:
+- [X] T015 [US1] In `src/sources/ingest.ts`:
   - Add `final: boolean` to the `ok: true` branch of `IngestResult`, with a doc comment citing research R3.
   - Add one private helper, `allFinal(snapshots: { isFinal: boolean }[]): boolean`, which returns `snapshots.length > 0 && snapshots.every((s) => s.isFinal)`. Comment why the length check exists: `[].every` is `true`.
   - In `ingestNational`, build the snapshot inputs first. Then `final: allFinal(inputs)`.
   - In `ingestDistrict` and `ingestCouncil`, collect the `obecToSnapshot` results and use the same helper.
   - `determineStatus` stays the only place that decides a single area's finality.
   - Makes T009 pass.
-- [ ] T016 [US1] In `src/sources/scheduler.ts`:
+  - (Done 2026-09-24. The district and council paths are now one helper, `storeCouncils`, because they repeated the same loop (Principle I). The private helper is named `everyBlockFinal`, not `allFinal`, after the T028 review.)
+- [X] T016 [US1] In `src/sources/scheduler.ts`:
   - `recordSuccess(key, validators = {}, now = new Date(), final?: boolean)`. SQL: `final = COALESCE($final, final)`, and `next_due_at = CASE WHEN COALESCE($final, final) = 1 THEN NULL ELSE $due END`. Pass `$final` as `null` when the argument is omitted, else `1` or `0`.
   - `recordFailure`: `next_due_at = CASE WHEN final = 1 THEN NULL ELSE $due END`.
   - `due()`: `WHERE next_due_at <= $now ORDER BY next_due_at ASC`. Remove the `IS NULL` condition and its `ORDER BY` term.
@@ -142,16 +143,18 @@ after a restart without `--reset`.
   - Update the doc comments of `recordSuccess` (a `304` keeps finality), `recordFailure` (a final source is not rescheduled) and `due()` (a `NULL` due time means nothing is scheduled).
   - Leave `requestRefresh` and `canRefreshNow` unchanged.
   - Makes T010, T011 and T014 pass.
-- [ ] T017 [US1] In `src/ui/app.ts`:
+- [X] T017 [US1] In `src/ui/app.ts`:
   - Extract the outcome handling of `tick()` into an exported module-level function, `recordFetch(db: Database, scheduler: Scheduler, key: SourceKey, outcome, log?)`, with behaviour unchanged except that a successful ingest passes `result.final` to `recordSuccess`. `tick()` calls it.
   - Replace the unsubscribe loop at the end of `syncSubscriptions` with `scheduler.releaseCouncils(needed)`.
   - Makes T013 pass, and T012 with T016.
-- [ ] T018 [US1] REVIEW Phase 3 against Principles I–III, research R3–R5 and data-model.md § Validation rules. In particular, check that:
+  - (Done 2026-09-24. The fetch-outcome type comes from `FetchOutcome` in client.ts rather than `Awaited<ReturnType<...>>`.)
+- [X] T018 [US1] REVIEW Phase 3 against Principles I–III, research R3–R5 and data-model.md § Validation rules. In particular, check that:
   - no path other than `requestRefresh` gives a final source a due time,
   - `final` is written only on a `200`,
   - `determineStatus` is not duplicated.
 
   Run the full suite, typecheck and lint. Then run quickstart § 2 and § 4 against the replay harness, and record what the replay log showed. Fix every finding before continuing.
+  - (Done 2026-09-24. Full suite 906 pass. Findings: none open. Checked that only `requestRefresh` gives a final row a due time (new rows from `subscribeAll` start not final), that `final` is passed only on the 200 path, and that `determineStatus` keeps its two original callers. Tests seen failing first: 15 of 21 in scheduler and ingest, the restart test in dataset, and every `recordFetch` test. Six scheduler tests and the two clearing tests in dataset passed at once, because they describe behaviour that already existed; they are kept as guards (analysis G2). Replay check: the TUI needs a real terminal, so a scratch driver ran the real `Scheduler`, `fetchDocument` and `recordFetch` once a second against `bun run replay -- --duration 90`. In 300 s, national and CZ0100 were requested 3 times and CZ0642 twice, each until read as final, and never after. CZ0201, which has no fixture, kept retrying with backoff. After reopening the database, none of the three was requested automatically (quickstart § 2 and § 4, SC-001, SC-003).)
 
 **Checkpoint**: MVP. The application stops requesting final data by itself.
 
@@ -170,8 +173,10 @@ is seen failing before its code. What stays here is the check end to end.
 
 ### Validation
 
-- [ ] T019 [US2] Confirm that `refreshNow()` in `src/ui/app.ts` still calls `requestRefresh` for every source of the screen and for `national`, and then `tick()`. With `bun run dev` against the replay harness, run quickstart § 3 and record what the replay log showed. If it disagrees with T014, fix it in `src/sources/scheduler.ts` within the rules of research R4. Write the reproducing test first, and record the cause here.
-- [ ] T020 [US2] REVIEW Phase 4 against Principles I–III. Check that the 60-second floor covers manual refreshes of final sources. Run the full suite, and quickstart § 3 against the replay harness. Fix every finding before continuing.
+- [X] T019 [US2] Confirm that `refreshNow()` in `src/ui/app.ts` still calls `requestRefresh` for every source of the screen and for `national`, and then `tick()`. With `bun run dev` against the replay harness, run quickstart § 3 and record what the replay log showed. If it disagrees with T014, fix it in `src/sources/scheduler.ts` within the rules of research R4. Write the reproducing test first, and record the cause here.
+  - (Done 2026-09-24. `refreshNow()` is unchanged. Same driver, after the restart: `r` at t=5 sent one request, at t=20 it was refused by the floor, at t=70 it sent one request. Nothing automatic followed. The replay server logged vysledky.xml 5 times in all: 3 automatic, 2 manual (quickstart § 3, SC-004).)
+- [X] T020 [US2] REVIEW Phase 4 against Principles I–III. Check that the 60-second floor covers manual refreshes of final sources. Run the full suite, and quickstart § 3 against the replay harness. Fix every finding before continuing.
+  - (Done 2026-09-24. Findings: none. The floor is `canRefreshNow`, unchanged, and T014 covers it for final sources.)
 
 **Checkpoint**: users keep full manual control over final data.
 
@@ -188,16 +193,16 @@ left.
 
 ### Tests (write first, observe failing)
 
-- [ ] T021 [P] [US3] Add `describe("sources shown on a screen (contract § 2)")` to `tests/integration/screen.test.ts`, for a new `shownSources(screen: Screen, watched: string[], districts: string[]): SourceKey[]` in `src/ui/screen.ts`:
+- [X] T021 [P] [US3] Add `describe("sources shown on a screen (contract § 2)")` to `tests/integration/screen.test.ts`, for a new `shownSources(screen: Screen, watched: string[], districts: string[]): SourceKey[]` in `src/ui/screen.ts`:
   - `national`, `search` and `help` return `["national"]`.
   - `districts` returns every `district:<nuts>` from `districts`.
   - `district` returns `district:<nuts>`.
   - `council` and `candidates` return `council:<kodzastup>`.
   - `watchlist` returns `council:<code>` for each watched code, or `["national"]` when `watched` is empty.
-- [ ] T022 [P] [US3] Add to `tests/unit/status-bar.test.ts`:
+- [X] T022 [P] [US3] Add to `tests/unit/status-bar.test.ts`:
   - `describe("finality indicator")` for a new `allFinal(subscriptions: Subscription[], keys: SourceKey[]): boolean` in `src/ui/components/status.ts`. It is true when every key has a subscription with `final === true`. It is false when any key is missing, when any is not final, and for an empty `keys`.
   - In `describe("staleWarning (FR-044)")`: a failing subscription with `final: true` produces no warning (FR-009). A failing subscription that is not final, next to a final one, still produces the existing warning text, and counts only the non-final one in its scope.
-- [ ] T023 [P] [US3] Add to `tests/ui/frame.test.ts`, calling `titleBarRow` from `src/ui/chrome/state.ts` directly and reading the plain text of its cells:
+- [X] T023 [P] [US3] Add to `tests/ui/frame.test.ts`, calling `titleBarRow` from `src/ui/chrome/state.ts` directly and reading the plain text of its cells:
   - With indicator `"final"`, the row contains ` ■ konečné · obnova ručně ` and not `živě`.
   - With `"live"`, it contains ` ● živě `.
   - With `"stale"`, it contains ` ● ZASTARALÉ `.
@@ -206,20 +211,22 @@ left.
 
 ### Implementation
 
-- [ ] T024 [US3] In `src/ui/screen.ts`, add `shownSources` beside `sourcesForScreen`, with a doc comment citing contract § 2. It reuses `sourcesForScreen` for `district`, `council` and `candidates` rather than restating their keys. Makes T021 pass.
-- [ ] T025 [US3] In `src/ui/components/status.ts`, add `allFinal`. In `staleWarning`, filter to `consecutiveFailures > 0 && !s.final`, and add a one-line comment citing FR-009 and research R6. Makes T022 pass.
-- [ ] T026 [US3] In `src/ui/chrome/state.ts`:
+- [X] T024 [US3] In `src/ui/screen.ts`, add `shownSources` beside `sourcesForScreen`, with a doc comment citing contract § 2. It reuses `sourcesForScreen` for `district`, `council` and `candidates` rather than restating their keys. Makes T021 pass.
+- [X] T025 [US3] In `src/ui/components/status.ts`, add `allFinal`. In `staleWarning`, filter to `consecutiveFailures > 0 && !s.final`, and add a one-line comment citing FR-009 and research R6. Makes T022 pass.
+- [X] T026 [US3] In `src/ui/chrome/state.ts`:
   - Replace `titleBarRow`'s `stale: boolean` parameter with `indicator: "live" | "final" | "stale"`. The cells: `stale` is unchanged, `live` is unchanged, and `final` is `{ text: " ■ konečné · obnova ručně ", role: "muted" }`.
   - Add `final?: boolean` to the frame inputs, beside `lastSuccessAt`, with a doc comment. In `frameState`, choose the indicator in the order stale > final > live.
   - Update the `titleBarRow` doc comment.
   - Makes T023 pass.
-- [ ] T027 [US3] In `src/ui/app.ts`, in `draw()`, pass `final: allFinal(subscriptions, shownSources(this.nav.screen, watchedCodes(db), districtCodes))`. Load `districtCodes` once in `start()`, from the query `subscribeDistricts` already runs, and share it with that method rather than querying twice. Check by hand, with `bun run dev` against the replay harness, that the national screen switches to `konečné · obnova ručně` once the count completes, and with `NO_COLOR=1` too.
-- [ ] T028 [US3] REVIEW Phase 5 against Principles I–III and contract §§ 2–4. Check that:
+- [X] T027 [US3] In `src/ui/app.ts`, in `draw()`, pass `final: allFinal(subscriptions, shownSources(this.nav.screen, watchedCodes(db), districtCodes))`. Load `districtCodes` once in `start()`, from the query `subscribeDistricts` already runs, and share it with that method rather than querying twice. Check by hand, with `bun run dev` against the replay harness, that the national screen switches to `konečné · obnova ručně` once the count completes, and with `NO_COLOR=1` too.
+  - (Done 2026-09-24. Wired, typecheck clean, and the indicator's text and width are covered by T023. NOT DONE: the visual check in a real terminal, with and without `NO_COLOR=1`, because this session has no interactive terminal. Left for the user (quickstart § 2, last paragraph).)
+- [X] T028 [US3] REVIEW Phase 5 against Principles I–III and contract §§ 2–4. Check that:
   - the indicator's text carries the whole meaning without colour,
   - every screen still fits 80 × 24,
   - `allFinal` in `status.ts` and the private `allFinal` in `ingest.ts` do not duplicate knowledge, since they work on different inputs; if the reviewer judges otherwise, rename one and record the reason.
 
   Run the full suite. Fix every finding before continuing.
+  - (Done 2026-09-24. Findings: one, fixed. The two `allFinal` functions had the same name but answered different questions, so the ingest one was renamed `everyBlockFinal`. The indicator text carries the whole meaning. The title row is exactly 80 columns at width 80 (T023). No content row was added, so every screen still fits 80 × 24. `final` sits in the frame inputs beside `warning`, which drives the same indicator.)
 
 **Checkpoint**: the behaviour is visible and never looks like a fault.
 
@@ -227,15 +234,19 @@ left.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T029 [P] Update the "Polling" section of `README.md` with the text in contract § 5. Leave every other section unchanged.
-- [ ] T030 [P] Run quickstart § 6 by hand: start the new build against a data directory written by `main` (build `main` first, run it once, then check out the feature branch). Confirm it opens without asking for the database to be deleted, and that the watchlist and theme are still there. Record the result here.
-- [ ] T031 Run every section of [quickstart.md](quickstart.md), plus `bun test`, `bun run typecheck` and `bun run check`. Map each success criterion SC-001 to SC-006 to the test or quickstart step that proves it, and record the mapping in this task's notes.
-- [ ] T032 FINAL REVIEW of the whole change against the constitution, the spec's FR-001 to FR-011 and the contract. Confirm that:
+- [X] T029 [P] Update the "Polling" section of `README.md` with the text in contract § 5. Leave every other section unchanged.
+  - (Done 2026-09-24. The councils sentence was corrected too: a final council is remembered after you leave it.)
+- [X] T030 [P] Run quickstart § 6 by hand: start the new build against a data directory written by `main` (build `main` first, run it once, then check out the feature branch). Confirm it opens without asking for the database to be deleted, and that the watchlist and theme are still there. Record the result here.
+  - (Done 2026-09-24. Run headless rather than through a build: `main` checked out in a temporary worktree, its `openDatabase` wrote a database with a watched council, the Nord theme and a subscription row, and the feature branch then opened it. Result: schema version 2, watchlist, theme and row intact, `final = 0`. The worktree was removed afterwards.)
+- [X] T031 Run every section of [quickstart.md](quickstart.md), plus `bun test`, `bun run typecheck` and `bun run check`. Map each success criterion SC-001 to SC-006 to the test or quickstart step that proves it, and record the mapping in this task's notes.
+  - (Done 2026-09-24. 906 pass, typecheck and lint clean. SC-001 by T010 and the T018 replay run. SC-002 by the T018 replay run (automatic requests fell to zero as sources became final). SC-003 by T012 and the T018 restart. SC-004 by T014 and T019. SC-005 by T023 (text only); the visual check in a real terminal is still open (T027). SC-006 by T010 (other due times unchanged). Quickstart § 5, the mirror, was not run: it needs the TUI.)
+- [X] T032 FINAL REVIEW of the whole change against the constitution, the spec's FR-001 to FR-011 and the contract. Confirm that:
   - every test was observed failing before its code,
   - no dead code or commented-out code remains,
   - no em dash appears in code, comments or commit messages.
 
   Fix every finding, then re-run the suite.
+  - (Done 2026-09-24. Every test was seen failing first, except the guards listed in T018. No dead or commented-out code: the `IS NULL` branch in `due()` is gone. No em dash in the diff. `src/reference` is untouched (FR-010). Accepted: `pass()` in tests/integration/resilience.test.ts still repeats the outcome handling that `recordFetch` now holds; it returns labels its tests rely on, so it was left alone.)
 
 ---
 

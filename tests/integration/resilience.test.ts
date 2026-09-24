@@ -12,12 +12,14 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Server } from "bun"
 import { MIN_INTERVAL_SECONDS } from "../../src/config/args.ts"
+import { createNullLogger } from "../../src/logging/logger.ts"
 import { backoffSeconds } from "../../src/sources/backoff.ts"
 import { fetchDocument } from "../../src/sources/client.ts"
 import { ingestNational } from "../../src/sources/ingest.ts"
 import { Scheduler } from "../../src/sources/scheduler.ts"
 import { openDatabase, openMemoryDatabase } from "../../src/storage/db.ts"
 import { readNationalTotals } from "../../src/storage/queries/national.ts"
+import { recordFetch } from "../../src/ui/app.ts"
 import { staleWarning } from "../../src/ui/components/status.ts"
 import { renderNationalView } from "../../src/ui/views/national.ts"
 import { withTempDataDir } from "../helpers/tmpdir.ts"
@@ -247,5 +249,61 @@ describe("nothing terminates the process (FR-046)", () => {
     expect(() => renderNationalView(db)).not.toThrow()
     ingestNational(db, MALFORMED)
     expect(() => renderNationalView(db)).not.toThrow()
+  })
+})
+
+describe("recording a fetch outcome", () => {
+  const T0 = new Date("2026-10-09T20:00:00.000Z")
+  const log = createNullLogger()
+
+  function subscribed(): Scheduler {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    scheduler.subscribeAll([{ key: "national", areaKind: "national", areaId: "" }], T0)
+    return scheduler
+  }
+
+  const ok = (body: string) => ({ kind: "ok" as const, body, etag: null, lastModified: null })
+
+  test("a final document leaves the source final and unscheduled", () => {
+    const scheduler = subscribed()
+    recordFetch(db, scheduler, "national", ok(NATIONAL), log)
+    expect(scheduler.get("national")?.final).toBe(true)
+    expect(scheduler.get("national")?.nextDueAt).toBeNull()
+  })
+
+  test("a document still being counted keeps the source polled", () => {
+    const scheduler = subscribed()
+    const counting = NATIONAL.replace(
+      'OKRSKY_CELKEM="2132" OKRSKY_ZPRAC="2132"',
+      'OKRSKY_CELKEM="2132" OKRSKY_ZPRAC="2131"',
+    )
+    recordFetch(db, scheduler, "national", ok(counting), log)
+    expect(scheduler.get("national")?.final).toBe(false)
+    expect(scheduler.get("national")?.nextDueAt).not.toBeNull()
+  })
+
+  test("a rejected document is a failure and leaves finality as it was", () => {
+    const scheduler = subscribed()
+    recordFetch(db, scheduler, "national", ok(NATIONAL), log)
+    recordFetch(db, scheduler, "national", ok(MALFORMED), log)
+    expect(scheduler.get("national")?.consecutiveFailures).toBe(1)
+    expect(scheduler.get("national")?.final).toBe(true)
+  })
+
+  test("an unchanged document keeps finality as it was", () => {
+    const scheduler = subscribed()
+    recordFetch(db, scheduler, "national", ok(NATIONAL), log)
+    recordFetch(db, scheduler, "national", { kind: "not-modified" }, log)
+    expect(scheduler.get("national")?.final).toBe(true)
+    expect(scheduler.get("national")?.consecutiveFailures).toBe(0)
+  })
+
+  test("a missing document and a failed request are recorded as failures with their reasons", () => {
+    const scheduler = subscribed()
+    recordFetch(db, scheduler, "national", { kind: "not-found" }, log)
+    expect(scheduler.get("national")?.lastError).toBe("Data zatím nejsou zveřejněna")
+    recordFetch(db, scheduler, "national", { kind: "failed", reason: "Server odpověděl 503" }, log)
+    expect(scheduler.get("national")?.lastError).toBe("Server odpověděl 503")
+    expect(scheduler.get("national")?.consecutiveFailures).toBe(2)
   })
 })

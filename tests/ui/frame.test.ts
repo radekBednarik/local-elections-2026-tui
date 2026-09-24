@@ -15,6 +15,8 @@ import { describe, expect, test } from "bun:test"
 import { type RGBA, rgbToHex } from "@opentui/core"
 import { createTestRenderer } from "@opentui/core/testing"
 import { Frame } from "../../src/ui/chrome/frame.ts"
+import { titleBarRow } from "../../src/ui/chrome/state.ts"
+import { cellsWide } from "../../src/ui/row.ts"
 import { MONOCHROME, type Theme, themeByName } from "../../src/ui/theme/themes.ts"
 
 interface Rendered {
@@ -334,5 +336,35 @@ describe("the scroll bar stays on the right edge", () => {
     } finally {
       test.renderer.destroy()
     }
+  })
+})
+
+describe("title bar indicator (contract § 2)", () => {
+  const trail = ["ČR", "Okres Brno-město", "Brno", "Kandidáti"]
+  const text = (indicator: "live" | "final" | "stale") =>
+    titleBarRow(trail, indicator, "2026-10-09T21:15:00.000Z", 120)
+      .cells.map((c) => c.text)
+      .join("")
+
+  test("says the results are final and refresh is manual, without the live claim", () => {
+    expect(text("final")).toContain(" ■ konečné · obnova ručně ")
+    expect(text("final")).not.toContain("živě")
+  })
+
+  test("still says live while counting, and stale while failing", () => {
+    expect(text("live")).toContain(" ● živě ")
+    expect(text("stale")).toContain(" ● ZASTARALÉ ")
+  })
+
+  test("fits 80 columns exactly with the final indicator intact", () => {
+    const row = titleBarRow(trail, "final", "2026-10-09T21:15:00.000Z", 80)
+    expect(cellsWide(row.cells)).toBe(80)
+    expect(row.cells.map((c) => c.text).join("")).toContain(" ■ konečné · obnova ručně ")
+  })
+
+  test("draws the final indicator as muted text on no surface of its own", () => {
+    const cell = titleBarRow(trail, "final", null, 120).cells.find((c) => c.text.includes("konečné"))
+    expect(cell?.role).toBe("muted")
+    expect(cell?.surface).toBeUndefined()
   })
 })

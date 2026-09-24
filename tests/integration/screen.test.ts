@@ -12,7 +12,7 @@ import { loadReference, type ReferenceArchives } from "../../src/reference/loade
 import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
-import { composeScreen, sourcesForScreen } from "../../src/ui/screen.ts"
+import { composeScreen, shownSources, sourcesForScreen } from "../../src/ui/screen.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
 const read = (name: string) => readFileSync(join(FIXTURES, name), "utf8")
@@ -169,5 +169,38 @@ describe("first data row", () => {
     expect(row).toBeDefined()
     expect(row ?? "").not.toMatch(/^─+/)
     expect((row ?? "").trim()).not.toBe("")
+  })
+})
+
+describe("sources shown on a screen (contract § 2)", () => {
+  const districts = ["CZ0100", "CZ0642"]
+
+  test("the national, search and help screens show the national source", () => {
+    for (const kind of ["national", "search", "help"] as const) {
+      expect(shownSources({ kind }, [], districts)).toEqual(["national"])
+    }
+  })
+
+  test("the district list shows every district", () => {
+    expect(shownSources({ kind: "districts" }, [], districts)).toEqual(["district:CZ0100", "district:CZ0642"])
+  })
+
+  test("a district screen shows its own district", () => {
+    expect(shownSources({ kind: "district", nuts: "CZ0642" }, [], districts)).toEqual(["district:CZ0642"])
+  })
+
+  test("a council and its candidates show that council", () => {
+    expect(shownSources({ kind: "council", kodzastup: "551082" }, [], districts)).toEqual(["council:551082"])
+    expect(
+      shownSources({ kind: "candidates", kodzastup: "551082", vstrana: "1", ballotOrder: 1 }, [], districts),
+    ).toEqual(["council:551082"])
+  })
+
+  test("the watchlist shows every watched council, or the national source when empty", () => {
+    expect(shownSources({ kind: "watchlist" }, ["551082", "582786"], districts)).toEqual([
+      "council:551082",
+      "council:582786",
+    ])
+    expect(shownSources({ kind: "watchlist" }, [], districts)).toEqual(["national"])
   })
 })

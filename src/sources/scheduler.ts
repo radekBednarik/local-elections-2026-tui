@@ -106,13 +106,33 @@ export class Scheduler {
     this.db.query("DELETE FROM source_subscription WHERE source_key = $k").run({ k: key })
   }
 
-  /** Sources whose next due time has arrived, oldest first. */
+  /**
+   * Drops the councils no screen or watchlist needs any more (FR-018a).
+   *
+   * A pinned council stays, as the watchlist requires. A final one stays too: it costs no
+   * requests, and dropping it would make reopening the council fetch it again, with no
+   * 60-second history to hold that back (research R5). National and district
+   * subscriptions are never dropped here.
+   */
+  releaseCouncils(needed: Set<SourceKey>): void {
+    for (const sub of this.all()) {
+      if (sub.areaKind !== "council" || sub.pinned || sub.final) continue
+      if (!needed.has(sub.sourceKey)) this.unsubscribe(sub.sourceKey)
+    }
+  }
+
+  /**
+   * Sources whose next due time has arrived, oldest first.
+   *
+   * A source with no due time has nothing scheduled: it is final, and only a manual
+   * refresh gives it a due time again (feature 003, research R4).
+   */
   due(now = new Date(), limit = 10): Subscription[] {
     const rows = this.db
       .query(
         `SELECT * FROM source_subscription
-          WHERE next_due_at IS NULL OR next_due_at <= $now
-          ORDER BY next_due_at IS NULL DESC, next_due_at ASC
+          WHERE next_due_at <= $now
+          ORDER BY next_due_at ASC
           LIMIT $limit`,
       )
       .all({ now: now.toISOString(), limit }) as Record<string, unknown>[]
@@ -133,30 +153,43 @@ export class Scheduler {
    * Used for a `304` as well as a `200`: unchanged content still proves the source is
    * reachable, so it must not count as a failure or the backoff would grow during a
    * perfectly healthy quiet period.
+   *
+   * `final` is whether a `200`'s document was final. A `304` passes nothing, because
+   * unchanged bytes have unchanged finality. A final source gets no due time, so it is
+   * not polled again until the user asks (feature 003, research R4).
    */
   recordSuccess(
     key: SourceKey,
     validators: { etag?: string | null; lastModified?: string | null } = {},
     now = new Date(),
+    final?: boolean,
   ): void {
     this.db
       .query(
         `UPDATE source_subscription
             SET last_success_at = $now, last_attempt_at = $now, last_error = NULL,
-                consecutive_failures = 0, next_due_at = $due,
+                consecutive_failures = 0,
+                next_due_at = CASE WHEN COALESCE($final, final) = 1 THEN NULL ELSE $due END,
+                final = COALESCE($final, final),
                 etag = COALESCE($etag, etag), last_modified = COALESCE($lm, last_modified)
           WHERE source_key = $k`,
       )
       .run({
         now: now.toISOString(),
         due: nextDueAt(now, this.interval, 0).toISOString(),
+        final: final === undefined ? null : final ? 1 : 0,
         etag: validators.etag ?? null,
         lm: validators.lastModified ?? null,
         k: key,
       })
   }
 
-  /** Records a failed attempt and applies backoff (FR-043). */
+  /**
+   * Records a failed attempt and applies backoff (FR-043).
+   *
+   * A final source is not rescheduled: only a manual refresh reaches it, and a failed
+   * one must not restart automatic polling of data that is already final.
+   */
   recordFailure(key: SourceKey, reason: string, now = new Date()): void {
     const current = this.get(key)
     const failures = (current?.consecutiveFailures ?? 0) + 1
@@ -164,7 +197,8 @@ export class Scheduler {
       .query(
         `UPDATE source_subscription
             SET last_attempt_at = $now, last_error = $reason,
-                consecutive_failures = $failures, next_due_at = $due
+                consecutive_failures = $failures,
+                next_due_at = CASE WHEN final = 1 THEN NULL ELSE $due END
           WHERE source_key = $k`,
       )
       .run({

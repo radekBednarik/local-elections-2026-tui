@@ -241,3 +241,169 @@ describe("subscription lifecycle (FR-018a)", () => {
     expect(scheduler.all().filter((s) => s.areaKind === "council")).toHaveLength(0)
   })
 })
+
+/** Keys of every source due at `when`, with no limit. */
+function dueKeys(scheduler: Scheduler, when: Date): string[] {
+  return scheduler.due(when, 1000).map((s) => s.sourceKey)
+}
+
+describe("final sources (FR-001, FR-003)", () => {
+  test("a source read as final is never due again", () => {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    scheduler.subscribeAll(liveSources(1), T0)
+    scheduler.recordSuccess("national", {}, T0, true)
+
+    const sub = scheduler.get("national")
+    expect(sub?.final).toBe(true)
+    expect(sub?.nextDueAt).toBeNull()
+    expect(dueKeys(scheduler, at(3600))).not.toContain("national")
+  })
+
+  test("a source read as not final is due again after one interval, as before", () => {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    scheduler.subscribeAll(liveSources(1), T0)
+    scheduler.recordSuccess("national", {}, T0, false)
+
+    expect(scheduler.get("national")?.final).toBe(false)
+    expect(dueKeys(scheduler, at(59))).not.toContain("national")
+    expect(dueKeys(scheduler, at(60))).toContain("national")
+  })
+
+  test("a 304 keeps whatever finality was stored", () => {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    scheduler.subscribeAll(liveSources(2), T0)
+    const district = liveSources(2)[1]?.key as SourceKey
+    scheduler.recordSuccess("national", {}, T0, true)
+    scheduler.recordSuccess(district, {}, T0, false)
+
+    // No finality supplied, as with a 304.
+    scheduler.recordSuccess("national", {}, at(60))
+    scheduler.recordSuccess(district, {}, at(60))
+
+    expect(scheduler.get("national")?.final).toBe(true)
+    expect(scheduler.get("national")?.nextDueAt).toBeNull()
+    expect(scheduler.get(district)?.final).toBe(false)
+    expect(dueKeys(scheduler, at(120))).toContain(district)
+  })
+
+  test("a source becoming final leaves every other source's schedule untouched", () => {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    scheduler.subscribeAll(liveSources(79), T0)
+    const before = new Map(scheduler.all().map((s) => [s.sourceKey, s.nextDueAt]))
+
+    scheduler.recordSuccess("national", {}, at(5), true)
+
+    for (const sub of scheduler.all()) {
+      if (sub.sourceKey === "national") continue
+      expect(sub.nextDueAt).toBe(before.get(sub.sourceKey) ?? null)
+    }
+  })
+
+  test("a failure on a final source is counted but schedules no retry", () => {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    scheduler.subscribeAll(liveSources(1), T0)
+    scheduler.recordSuccess("national", {}, T0, true)
+    scheduler.recordFailure("national", "Server odpověděl 503", at(60))
+
+    const sub = scheduler.get("national")
+    expect(sub?.consecutiveFailures).toBe(1)
+    expect(sub?.final).toBe(true)
+    expect(sub?.nextDueAt).toBeNull()
+  })
+
+  test("a failure on a source still in progress still backs off", () => {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    scheduler.subscribeAll(liveSources(1), T0)
+    scheduler.recordFailure("national", "Server odpověděl 503", T0)
+    expect(scheduler.get("national")?.nextDueAt).toBe(at(backoffSeconds(60, 1)).toISOString())
+  })
+
+  test("a subscription with no due time is not due, whatever its finality", () => {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    db.run(
+      "INSERT INTO source_subscription (source_key, area_kind, area_id, next_due_at, final) VALUES ('national', 'national', '', NULL, 0)",
+    )
+    expect(dueKeys(scheduler, at(3600))).toEqual([])
+  })
+})
+
+describe("releasing councils (research R5)", () => {
+  const council = (code: string) => ({
+    key: `council:${code}` as SourceKey,
+    areaKind: "council",
+    areaId: code,
+  })
+
+  test("a council left behind is released unless it is pinned or final", () => {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    scheduler.subscribeAll([council("1"), council("2"), council("3"), council("4")], T0)
+    scheduler.setPinned("council:2", true)
+    scheduler.recordSuccess("council:3", {}, T0, true)
+
+    scheduler.releaseCouncils(new Set<SourceKey>(["council:4"]))
+
+    expect(scheduler.get("council:1")).toBeNull()
+    expect(scheduler.get("council:2")).not.toBeNull()
+    expect(scheduler.get("council:3")).not.toBeNull()
+    expect(scheduler.get("council:4")).not.toBeNull()
+  })
+
+  test("national and district subscriptions are never released", () => {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    scheduler.subscribeAll(liveSources(3), T0)
+    scheduler.releaseCouncils(new Set<SourceKey>())
+    expect(scheduler.all()).toHaveLength(3)
+  })
+})
+
+describe("manual refresh of a final source (FR-004, FR-005)", () => {
+  /** A scheduler holding national, read as final at T0, then refreshed by hand at 60 s. */
+  function refreshedFinal(): Scheduler {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    scheduler.subscribeAll(liveSources(1), T0)
+    scheduler.recordSuccess("national", {}, T0, true)
+    expect(scheduler.requestRefresh("national", at(60))).toBe(true)
+    return scheduler
+  }
+
+  test("is subject to the 60-second floor, then due exactly once", () => {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    scheduler.subscribeAll(liveSources(1), T0)
+    scheduler.recordSuccess("national", {}, T0, true)
+
+    expect(scheduler.requestRefresh("national", at(30))).toBe(false)
+    expect(dueKeys(scheduler, at(30))).toEqual([])
+    expect(scheduler.requestRefresh("national", at(60))).toBe(true)
+    expect(dueKeys(scheduler, at(60))).toEqual(["national"])
+  })
+
+  test("a result still final leaves it unscheduled", () => {
+    const scheduler = refreshedFinal()
+    scheduler.recordSuccess("national", {}, at(61), true)
+    expect(scheduler.get("national")?.final).toBe(true)
+    expect(scheduler.get("national")?.nextDueAt).toBeNull()
+    expect(dueKeys(scheduler, at(3600))).toEqual([])
+  })
+
+  test("a 304 leaves it final and unscheduled", () => {
+    const scheduler = refreshedFinal()
+    scheduler.recordSuccess("national", {}, at(61))
+    expect(scheduler.get("national")?.final).toBe(true)
+    expect(dueKeys(scheduler, at(3600))).toEqual([])
+  })
+
+  test("a failure leaves it final and unscheduled", () => {
+    const scheduler = refreshedFinal()
+    scheduler.recordFailure("national", "Server odpověděl 503", at(61))
+    expect(scheduler.get("national")?.final).toBe(true)
+    expect(dueKeys(scheduler, at(3600))).toEqual([])
+  })
+
+  test("a result no longer final puts it back into automatic polling", () => {
+    const scheduler = refreshedFinal()
+    scheduler.recordSuccess("national", {}, at(61), false)
+    expect(scheduler.get("national")?.final).toBe(false)
+    expect(dueKeys(scheduler, at(120))).toEqual([])
+    expect(dueKeys(scheduler, at(121))).toEqual(["national"])
+  })
+})

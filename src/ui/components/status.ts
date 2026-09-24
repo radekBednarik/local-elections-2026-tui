@@ -8,6 +8,7 @@
 
 import { formatAge } from "../../domain/status.ts"
 import type { Subscription } from "../../sources/scheduler.ts"
+import type { SourceKey } from "../../sources/urls.ts"
 import { pad } from "../format.ts"
 import type { Screen } from "../navigation.ts"
 import { type ActionContext, availableActions } from "../palette/actions.ts"
@@ -21,7 +22,9 @@ const MAX_REASON = 60
 
 /** The persistent staleness warning, or null when everything is current (FR-044). */
 export function staleWarning(subscriptions: Subscription[], now = new Date()): string | null {
-  const failing = subscriptions.filter((s) => s.consecutiveFailures > 0)
+  // Final figures are not stale, and a failed manual refresh of one would never clear,
+  // since nothing retries it automatically (FR-009, research R6). The log has it.
+  const failing = subscriptions.filter((s) => s.consecutiveFailures > 0 && !s.final)
   if (failing.length === 0) return null
 
   // Report the longest-standing failure: it is the one the user most needs to know
@@ -40,6 +43,17 @@ export function staleWarning(subscriptions: Subscription[], now = new Date()): s
   const staleness = age === null ? "bez úspěšného načtení" : `data ${formatAge(age)}`
 
   return `! ZASTARALÁ DATA (${scope}): ${reason} Zobrazena poslední známá ${staleness}.`
+}
+
+/**
+ * Whether every source a screen shows is final, so the title bar can say that automatic
+ * refresh has stopped (FR-008). A source not subscribed yet counts as not final, and so
+ * does a screen that shows none.
+ */
+export function allFinal(subscriptions: Subscription[], keys: SourceKey[]): boolean {
+  if (keys.length === 0) return false
+  const final = new Set(subscriptions.filter((s) => s.final).map((s) => s.sourceKey))
+  return keys.every((key) => final.has(key))
 }
 
 /** One-line summary of the terminal being too small (FR-041). */

@@ -22,7 +22,16 @@ import {
 } from "../storage/snapshots.ts"
 
 export type IngestResult =
-  | { ok: true; outcomes: WriteOutcome[]; publishedAt: string }
+  | {
+      ok: true
+      outcomes: WriteOutcome[]
+      publishedAt: string
+      /**
+       * Every result block in the document is final, so the source need not be polled
+       * again (feature 003, research R3). A document with no blocks is not final.
+       */
+      final: boolean
+    }
   | { ok: false; reason: string }
 
 /** Maps the published party block onto stored party results, unchanged. */
@@ -58,6 +67,17 @@ function toCandidateResults(parties: VolebniStrana[]): CandidateResultInput[] {
     }
   }
   return out
+}
+
+/**
+ * Whether a whole document is final: it holds at least one block, and every block is.
+ *
+ * The length check matters because `[].every(...)` is true, and a document with nothing
+ * in it has not finished counting anything. Each block's own finality is decided by
+ * `determineStatus`, never here.
+ */
+function everyBlockFinal(snapshots: { isFinal: boolean }[]): boolean {
+  return snapshots.length > 0 && snapshots.every((s) => s.isFinal)
 }
 
 /**
@@ -113,7 +133,7 @@ export function ingestNational(db: Database, body: string, fetchedAt = new Date(
   const publishedAt = doc.DATUM_CAS_GENEROVANI
   const stamp = fetchedAt.toISOString()
 
-  const outcomes = doc.TYP_ZASTUP.map((block) => {
+  const snapshots = doc.TYP_ZASTUP.map((block): SnapshotInput => {
     const status = determineStatus({
       districtsTotal: block.UCAST.OKRSKY_CELKEM,
       districtsCounted: block.UCAST.OKRSKY_ZPRAC,
@@ -122,7 +142,7 @@ export function ingestNational(db: Database, body: string, fetchedAt = new Date(
       sourceSaysCounted: block.UCAST.OKRSKY_ZPRAC >= block.UCAST.OKRSKY_CELKEM,
     })
 
-    return writeSnapshot(db, {
+    return {
       areaKind: "national",
       areaId: "",
       oznacTypu: block.OZNAC_TYPU,
@@ -139,10 +159,11 @@ export function ingestNational(db: Database, body: string, fetchedAt = new Date(
       seatsTotal: block.ZASTUPIT_INFO.ZASTUPITELE_ZVOLENI,
       isFinal: status.isFinal,
       parties: toPartyResults(block.VOLEBNI_STRANA),
-    })
+    }
   })
 
-  return { ok: true, outcomes, publishedAt }
+  const outcomes = snapshots.map((snapshot) => writeSnapshot(db, snapshot))
+  return { ok: true, outcomes, publishedAt, final: everyBlockFinal(snapshots) }
 }
 
 /**
@@ -162,16 +183,7 @@ export function ingestDistrict(
   if (!parsed.ok) return { ok: false, reason: parsed.message }
 
   const doc = parsed.value.VYSLEDKY_OBCE_OKRES
-  const publishedAt = doc.DATUM_CAS_GENEROVANI
-  const stamp = fetchedAt.toISOString()
-
-  const outcomes: WriteOutcome[] = []
-  for (const obec of doc.OBEC) {
-    upsertCouncil(db, obec, nuts)
-    outcomes.push(writeSnapshot(db, obecToSnapshot(obec, publishedAt, stamp)))
-  }
-
-  return { ok: true, outcomes, publishedAt }
+  return storeCouncils(db, doc.OBEC, nuts, doc.DATUM_CAS_GENEROVANI, fetchedAt)
 }
 
 /**
@@ -217,12 +229,30 @@ export function ingestCouncil(
   if (!parsed.ok) return { ok: false, reason: parsed.message }
 
   const doc = parsed.value.VYSLEDKY_OBEC
-  const publishedAt = doc.DATUM_CAS_GENEROVANI
-  const stamp = fetchedAt.toISOString()
+  return storeCouncils(db, doc.OBEC, null, doc.DATUM_CAS_GENEROVANI, fetchedAt)
+}
 
-  const outcomes = doc.OBEC.map((obec) => {
-    upsertCouncil(db, obec, null)
-    return writeSnapshot(db, obecToSnapshot(obec, publishedAt, stamp))
-  })
-  return { ok: true, outcomes, publishedAt }
+/**
+ * Stores the council blocks of a district or council document, which are identical.
+ *
+ * `districtNuts` is the district the document belongs to, or null for a single-council
+ * document, which does not say.
+ */
+function storeCouncils(
+  db: Database,
+  obce: Obec[],
+  districtNuts: string | null,
+  publishedAt: string,
+  fetchedAt: Date,
+): IngestResult {
+  const stamp = fetchedAt.toISOString()
+  const snapshots: SnapshotInput[] = []
+  const outcomes: WriteOutcome[] = []
+  for (const obec of obce) {
+    upsertCouncil(db, obec, districtNuts)
+    const snapshot = obecToSnapshot(obec, publishedAt, stamp)
+    snapshots.push(snapshot)
+    outcomes.push(writeSnapshot(db, snapshot))
+  }
+  return { ok: true, outcomes, publishedAt, final: everyBlockFinal(snapshots) }
 }
