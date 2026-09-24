@@ -429,7 +429,7 @@ separate severities without colour. Contract § 3, FR-020, SC-005.
 
 ### Tests (write first, observe failing)
 
-- [ ] T040 [P] [US4] In `tests/ui/colour.test.ts`, add `describe("the logs view follows the theme (004 FR-020)")`. It uses the helpers the file already has for other screens (`slot`, `cellsAt`, `expectRun`):
+- [X] T040 [P] [US4] In `tests/ui/colour.test.ts`, add `describe("the logs view follows the theme (004 FR-020)")`. It uses the helpers the file already has for other screens (`slot`, `cellsAt`, `expectRun`):
   - For every theme in `THEME_NAMES`, drawing `logs` with one `warn`, one `info` and one `debug` entry gives:
     - the `VAROVÁNÍ` row text on the theme's `warning` slot;
     - the `LADĚNÍ` row on `muted`;
@@ -439,11 +439,19 @@ separate severities without colour. Contract § 3, FR-020, SC-005.
   - With the monochrome theme, each label (`VAROVÁNÍ`, `INFO`, `LADĚNÍ`) is still present in the text, and the selection marker `▶` is on the selected row.
 
   If these pass at once because Phase 4 already built them right, record that in the task notes. They stay as guards.
+  - (Done 2026-09-24. All 8 passed at once, as anticipated: Phase 4 already built this right. To prove they can fail, `debug` was mapped to no role in `views/logs.ts`: 6 of 8 failed. The monochrome and theme-switch tests do not depend on that colour, so they kept passing. The code was then restored exactly (empty diff). The theme-switch test is the existing T043 test run on the logs screen.)
 
 ### Implementation
 
-- [ ] T041 [US4] Fix whatever T040 finds in `src/ui/views/logs.ts` or `src/ui/chrome/state.ts`. No new theme slot or role (research R6). If nothing fails, mark the task done with "no change needed".
-- [ ] T042 [US4] REVIEW Phase 6 against Principles I–III. Run quickstart § 5 by hand in at least Tokyo Night, Catppuccin Latte, high contrast and `NO_COLOR=1`. Fix every finding before continuing.
+- [X] T041 [US4] Fix whatever T040 finds in `src/ui/views/logs.ts` or `src/ui/chrome/state.ts`. No new theme slot or role (research R6). If nothing fails, mark the task done with "no change needed".
+  - (No change needed.)
+- [X] T042 [US4] REVIEW Phase 6 against Principles I–III. Run quickstart § 5 by hand in at least Tokyo Night, Catppuccin Latte, high contrast and `NO_COLOR=1`. Fix every finding before continuing.
+  - (Done 2026-09-24. Ran in a pseudo-terminal with the logs view open, cycling all six themes with `Ctrl+T`:
+    - `VAROVÁNÍ` took each theme's warning colour on its background, e.g. Tokyo Night `e0af68/1a1b26` and Latte `8b5812/eff1f5`.
+    - The selected row took each theme's `sel`, bold. High contrast reverses it: black on white.
+    - Cycling returned to Tokyo Night with identical colours.
+    - Under `NO_COLOR=1` there is no background anywhere, and the labels are present.
+    - Findings: none.)
 
 ---
 
