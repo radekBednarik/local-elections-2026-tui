@@ -401,6 +401,18 @@ describe("what a fetch outcome logs (004 research R5)", () => {
     })
   })
 
+  test("a new session logs a reason the database still holds from the last one (code review, T046)", async () => {
+    // lastError is persisted. Compared against it, a source still unpublished after a
+    // restart would never be logged, and the awaiting line would send the user to a
+    // logs view with nothing in it about why.
+    await withLog((log, scheduler) => {
+      scheduler.recordFailure("national", "Data zatím nejsou zveřejněna", T0)
+      recordFetch(db, scheduler, "national", notFound, log, T0)
+      recordFetch(db, scheduler, "national", notFound, log, T0)
+      expect(messages(log)).toEqual(["info Data zatím nejsou zveřejněna"])
+    })
+  })
+
   test("a transport failure is still logged every time", async () => {
     await withLog((log, scheduler) => {
       recordFetch(db, scheduler, "national", down, log, T0)

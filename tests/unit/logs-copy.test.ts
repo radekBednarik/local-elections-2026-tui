@@ -90,6 +90,17 @@ describe("performing a copy (FR-016–FR-019)", () => {
     expect(sent).toEqual([])
   })
 
+  test("off the logs screens nothing is copied, whatever the key says (code review, T046)", () => {
+    // The key map sends c and C to perform() on every screen; only the palette checks
+    // availability. On the national overview row 3 must not copy the 4th log line.
+    const { sent, copy } = recorder()
+    for (const screen of [{ kind: "national" }, { kind: "council", kodzastup: "582786" }] as const) {
+      expect(performCopy("one", screen, 1, entries, copy)).toBe("Tento příkaz zde není dostupný.")
+      expect(performCopy("all", screen, 0, entries, copy)).toBe("Tento příkaz zde není dostupný.")
+    }
+    expect(sent).toEqual([])
+  })
+
   test("a refusing terminal is reported", () => {
     const { copy } = recorder(false)
     expect(performCopy("one", { kind: "logs" }, 0, entries, copy)).toBe(

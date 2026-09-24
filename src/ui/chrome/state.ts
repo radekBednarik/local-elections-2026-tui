@@ -170,7 +170,7 @@ export function frameState(inputs: FrameInputs): FrameState {
   const lines = withSelection(content.lines, content.firstRow, selected)
   const backgrounds = rowBackgrounds(content.rows, selectedLine)
 
-  // A notice wins the row for the one keystroke it lives (004 research R3). The source
+  // A notice wins the row until the next key press clears it (004 research R3). The source
   // status can be up for hours before publication, and under the old rule - the warning
   // always wins - every confirmation in that time, a copy included, went unseen. Nothing
   // is lost meanwhile: the title bar badge still carries the source state.

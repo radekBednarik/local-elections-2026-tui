@@ -73,7 +73,10 @@ export function buildLogListRows(
 
   for (const entry of entries) {
     const role = LEVEL_ROLE[entry.level]
-    const message = entry.detail === null ? entry.message : `${entry.message} | ${entry.detail}`
+    const full = entry.detail === null ? entry.message : `${entry.message} | ${entry.detail}`
+    // An Error's message is kept verbatim and may span lines; a raw newline in a cell
+    // would break the one-line row the selection depends on. The detail shows the lines.
+    const message = full.replace(/\r?\n/g, " ↵ ")
     rows.push({
       kind: "data",
       columns,
@@ -88,6 +91,7 @@ export function buildLogListRows(
 /**
  * One entry in full: its log-file line, wrapped to the width with nothing lost, so what
  * the user reads here is exactly what `c` copies and what the file holds (FR-011, FR-015).
+ * A line the entry itself breaks (an Error message can) starts a new row.
  */
 export function buildLogEntryRows(entries: readonly LogEntry[], seq: number, width: number): SemanticRow[] {
   const rows = heading("Záznam", width)
@@ -96,18 +100,30 @@ export function buildLogEntryRows(entries: readonly LogEntry[], seq: number, wid
     rows.push(line("Záznam již není k dispozici."))
     return rows
   }
-  const chars = [...entry.line]
   const room = Math.max(1, width)
-  for (let start = 0; start < chars.length; start += room) {
-    rows.push(line(chars.slice(start, start + room).join(""), LEVEL_ROLE[entry.level]))
+  for (const physical of entry.line.split(/\r?\n/)) {
+    const chars = [...physical]
+    for (let start = 0; start < Math.max(1, chars.length); start += room) {
+      rows.push(line(chars.slice(start, start + room).join(""), LEVEL_ROLE[entry.level]))
+    }
   }
   return rows
 }
 
-/** Opens the list with the newest entry selected (FR-009). */
-export function openLogs(nav: Navigation, count: number): void {
+/** The screens that make up the logs view. */
+const onLogsScreen = (screen: Screen) => screen.kind === "logs" || screen.kind === "log-entry"
+
+/**
+ * Opens the list with the newest entry selected (FR-009), and says whether it did.
+ *
+ * Already on the logs nothing is pushed: the key reaches here on every screen, and a
+ * second list on the stack would take a second Esc to leave.
+ */
+export function openLogs(nav: Navigation, count: number): boolean {
+  if (onLogsScreen(nav.screen)) return false
   nav.push({ kind: "logs" })
   nav.moveTo("last", count)
+  return true
 }
 
 /**
@@ -159,6 +175,9 @@ export function performCopy(
   entries: readonly LogEntry[],
   copy: (text: string) => boolean,
 ): string {
+  // The key map sends c and C here from every screen; only the palette checks where an
+  // action applies. Anywhere else the "selected" row is not a log entry at all.
+  if (!onLogsScreen(screen)) return "Tento příkaz zde není dostupný."
   const seq = screen.kind === "log-entry" ? screen.seq : (entries[selected]?.seq ?? null)
   const text = copyText(entries, scope, seq)
   if (text === null) return copyNotice(0, false)

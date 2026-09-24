@@ -429,8 +429,7 @@ export class App {
         break
       case "logs":
         this.sort = UNSORTED
-        openLogs(this.nav, this.deps.log.entries().length)
-        this.logsDroppedSeen = this.deps.log.dropped
+        if (openLogs(this.nav, this.deps.log.entries().length)) this.logsDroppedSeen = this.deps.log.dropped
         break
       case "help":
         if (this.nav.screen.kind !== "help") {
@@ -797,6 +796,27 @@ function latestSuccess(subscriptions: { lastSuccessAt: string | null }[]): strin
 const NOT_PUBLISHED = "Data zatím nejsou zveřejněna"
 
 /**
+ * The reason last logged for each source, per logger - that is, per session.
+ *
+ * `lastError` alone is not enough to decide: it is persisted, so after a restart before
+ * publication every source would match it and nothing would be logged, leaving the
+ * awaiting line pointing at a logs view with no word on why (T046 review).
+ */
+const loggedReasons = new WeakMap<Logger, Map<SourceKey, string>>()
+
+/** Whether this reason for this source is news: to the database or to this session. */
+function isNewReason(log: Logger, key: SourceKey, previous: string | null, reason: string): boolean {
+  let logged = loggedReasons.get(log)
+  if (logged === undefined) {
+    logged = new Map()
+    loggedReasons.set(log, logged)
+  }
+  const news = previous !== reason || logged.get(key) !== reason
+  logged.set(key, reason)
+  return news
+}
+
+/**
  * Stores one fetch's outcome and records it against the source's subscription.
  *
  * A successful ingest passes the document's finality on, which is what takes a final
@@ -814,7 +834,7 @@ export function recordFetch(
   // every source repeats one on every retry, and those repeats would flood the logs view
   // with nothing new; a transport failure is still logged each time, since a run of them
   // is worth counting (004 research R5). A success clears `lastError`, so the next
-  // occurrence after one is logged again.
+  // occurrence after one is logged again, and so is the first in each session.
   const previous = scheduler.get(key)?.lastError ?? null
   if (outcome.kind === "ok") {
     const result = ingestFor(db, key, outcome.body)
@@ -829,13 +849,14 @@ export function recordFetch(
       // A document failing validation is a failure of the source, not of the
       // application: the previous snapshot stays on screen (FR-025, FR-027).
       scheduler.recordFailure(key, result.reason, now)
-      if (previous !== result.reason) log.warn("Dokument odmítnut", { source: key, reason: result.reason })
+      if (isNewReason(log, key, previous, result.reason))
+        log.warn("Dokument odmítnut", { source: key, reason: result.reason })
     }
   } else if (outcome.kind === "not-modified") {
     scheduler.recordSuccess(key, {}, now)
   } else if (outcome.kind === "not-found") {
     scheduler.recordFailure(key, NOT_PUBLISHED, now)
-    if (previous !== NOT_PUBLISHED) log.info(NOT_PUBLISHED, { source: key })
+    if (isNewReason(log, key, previous, NOT_PUBLISHED)) log.info(NOT_PUBLISHED, { source: key })
   } else {
     scheduler.recordFailure(key, outcome.reason, now)
     log.warn("Stahování selhalo", { source: key, reason: outcome.reason })

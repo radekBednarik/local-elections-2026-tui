@@ -82,6 +82,14 @@ describe("the list (FR-009, FR-010, FR-014)", () => {
     expect(labels).toEqual(["CHYBA", "VAROVÁNÍ", "INFO", "LADĚNÍ"])
   })
 
+  test("a newline in the message cannot break the one-line row", () => {
+    const multi = entry(8, { message: "Neošetřená výjimka", detail: "Error: prvni\r\ndruhy" })
+    const { rows, firstRow } = buildLogListRows([multi], 120)
+    const text = rows[firstRow]?.cells[3]?.text ?? ""
+    expect(text).not.toMatch(/[\r\n]/)
+    expect(text).toBe("Neošetřená výjimka | Error: prvni ↵ druhy")
+  })
+
   test("an entry without a source leaves the source cell empty", () => {
     const { rows, firstRow } = buildLogListRows(entries, 100)
     expect(rows[firstRow]?.cells[2]?.text).toBe("")
@@ -133,6 +141,20 @@ describe("the detail (FR-011)", () => {
     expect(pieces.join("")).toBe(long.line)
   })
 
+  test("a message spanning several lines keeps them as separate rows, never a raw newline in one", () => {
+    const multi = entry(6, {
+      level: "error",
+      message: "Neošetřená výjimka",
+      detail: 'ZodError: [\n  {\n    "code": 1\n  }\n]',
+    })
+    // Wide enough that nothing wraps, so the rows are exactly the entry's own lines.
+    const rows = buildLogEntryRows([multi], 6, 200)
+    const pieces = rows.slice(3).map((r) => r.cells.map((c) => c.text).join(""))
+    for (const piece of pieces) expect(piece).not.toMatch(/[\r\n]/)
+    expect(pieces).toHaveLength(5)
+    expect(pieces.join("\n")).toBe(multi.line)
+  })
+
   test("says so when the entry has been evicted meanwhile", () => {
     const text = toTextLines(buildLogEntryRows([entry(4)], 5, 60))
     expect(text).toContain("Záznam již není k dispozici.")
@@ -153,6 +175,19 @@ describe("opening, closing and keeping the selection (FR-008, FR-009, FR-012)", 
     openLogs(nav, 4)
     expect(nav.screen.kind).toBe("logs")
     expect(nav.current.selected).toBe(3)
+  })
+
+  test("opening again while the logs are open stacks nothing (code review, T046)", () => {
+    const nav = atCouncil()
+    expect(openLogs(nav, 4)).toBe(true)
+    const depth = nav.depth
+    nav.current.selected = 1
+    expect(openLogs(nav, 4)).toBe(false)
+    expect(nav.depth).toBe(depth)
+    expect(nav.current.selected).toBe(1)
+    nav.push({ kind: "log-entry", seq: 1 })
+    expect(openLogs(nav, 4)).toBe(false)
+    expect(nav.depth).toBe(depth + 1)
   })
 
   test("with nothing logged the selection is the first row", () => {
