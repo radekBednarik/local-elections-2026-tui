@@ -32,8 +32,8 @@ function sub(overrides: Partial<Subscription> = {}): Subscription {
 
 describe("sourceStatus (004 FR-001–FR-004)", () => {
   const NOW = new Date("2026-10-09T21:10:00.000Z")
-  const AWAITING = "○ Výsledky zatím nejsou zveřejněny, aplikace je průběžně kontroluje. · l záznamy"
-  const stale = (age: string) => `! ZASTARALÁ DATA: zobrazena data ${age}. Obnovení se nedaří. · l záznamy`
+  const AWAITING = "○ Výsledky zatím nejsou zveřejněny, aplikace je dál kontroluje. · l záznamy"
+  const stale = (age: string) => `! ZASTARALÁ DATA z doby ${age}. Obnovení se nedaří. · l záznamy`
   const PARSER =
     "vysledky.xml: XML není well-formed: Expected closing tag 'VOLEBNI_STRANA' " +
     "(opened in line 6, col 1) instead of closing tag 'VYSLEDEK'. (řádek 7)"
@@ -122,6 +122,23 @@ describe("sourceStatus (004 FR-001–FR-004)", () => {
       new Date("2026-10-09T21:45:00.000Z"),
     )
     expect(status?.text).toBe(stale("před 0 s"))
+  })
+
+  test("fits the 80-column minimum whole, key hint included, at any age (FR-004, US1/AC4)", () => {
+    // The row adds one leading space; a line cut to fit would lose the hint first.
+    const at = (seconds: number) => new Date(NOW.getTime() - seconds * 1000).toISOString()
+    const statuses = [
+      sourceStatus([sub({ consecutiveFailures: 1, lastSuccessAt: null })], NOW),
+      ...[59, 59 * 60, 23 * 3600 + 59 * 60, 999 * 3600 + 59 * 60].map((age) =>
+        sourceStatus([sub({ consecutiveFailures: 1, lastSuccessAt: at(age) })], NOW),
+      ),
+    ]
+    expect(statuses[4]?.text).toContain(formatAge(999 * 3600 + 59 * 60))
+    for (const status of statuses) {
+      const text = status?.text ?? ""
+      expect([...` ${text}`].length).toBeLessThanOrEqual(79)
+      expect(text.endsWith("· l záznamy")).toBe(true)
+    }
   })
 
   test("no error text reaches the line, whatever the reason says (FR-004)", () => {

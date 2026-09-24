@@ -147,7 +147,7 @@ true, in one line and without the technical detail:
 
 - `○ Výsledky zatím nejsou zveřejněny…` – nothing has been loaded yet, typically before
   publication. The title bar shows `čeká na výsledky`.
-- `! ZASTARALÁ DATA: zobrazena data před …` – figures loaded earlier can no longer be
+- `! ZASTARALÁ DATA z doby před …` – figures loaded earlier can no longer be
   refreshed, with the age of the oldest. The title bar shows `ZASTARALÉ`.
 
 The reason itself (a 404, a rejected document, a network error) goes to the log, and so

@@ -18,10 +18,12 @@ export const MIN_COLUMNS = 80
 export const MIN_ROWS = 24
 
 /** Before publication: nothing has ever loaded, so nothing on screen can be out of date. */
-const AWAITING_TEXT = "○ Výsledky zatím nejsou zveřejněny, aplikace je průběžně kontroluje. · l záznamy"
+const AWAITING_TEXT = "○ Výsledky zatím nejsou zveřejněny, aplikace je dál kontroluje. · l záznamy"
 
 /** Figures that were current once and can no longer be refreshed. */
-const staleText = (age: string) => `! ZASTARALÁ DATA: zobrazena data ${age}. Obnovení se nedaří. · l záznamy`
+// Both texts fit the 80-column minimum whole, with the row's leading space, at any age
+// formatAge writes: a line cut to fit would lose the key hint first (FR-004).
+const staleText = (age: string) => `! ZASTARALÁ DATA z doby ${age}. Obnovení se nedaří. · l záznamy`
 
 /** What the status row says about the sources, or null when nothing is wrong (004 FR-001–FR-004). */
 export type SourceStatus = { kind: "stale" | "awaiting"; text: string } | null

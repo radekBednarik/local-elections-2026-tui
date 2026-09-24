@@ -589,3 +589,28 @@ texts until US2 lands, and record that in T015.
   starts. Record in the task notes when a test passed at once and why (see T040).
 - **Commits:** one per task, or per test-then-implementation pair, in the repository's
   Conventional Commits style.
+
+---
+
+## Phase 8: Convergence
+
+- [X] T047 Make both status-row texts fit the 80-column minimum with the key hint whole, per FR-004 and US1/AC4 (partial).
+  - **Evidence:** in `src/ui/components/status.ts` the awaiting text renders 81 columns with the row's leading space, and a stale text with an age in hours renders 83. At 80×24 the row reads `… kontroluje. · l zázna…`.
+  - **Test first:** in `tests/unit/status-bar.test.ts`, assert that for awaiting, and for stale at `formatAge` of 59 s, 59 min, 23 h 59 min and 999 h 59 min:
+    - the text plus one leading space is at most 79 columns, which leaves room at 80;
+    - the text ends with `· l záznamy`.
+  - **Then:** shorten the wording, keeping the meaning of contract § 1. For example, `○ Výsledky zatím nejsou zveřejněny, kontroluji dál. · l záznamy` and `! ZASTARALÁ DATA z doby před …, obnovení se nedaří. · l záznamy`.
+  - **Update the exact strings** in `specs/004-logs-view/contracts/interface.md` § 1, `README.md` (`### Polling`), and every test that pins the old text: `status-bar`, `colour`, `stability`, `frame`.
+  - (Done 2026-09-24. Red first: 6 failures. The new texts are `○ Výsledky zatím nejsou zveřejněny, aplikace je dál kontroluje. · l záznamy` (76 columns with the leading space) and `! ZASTARALÁ DATA z doby {age}. Obnovení se nedaří. · l záznamy` (75 columns at `před 999 h 59 min`). They keep the app's third-person voice and the original meaning. Updated the contract § 1, README, research, quickstart and four test files. 997 pass. Rendered live at 80×24, the row is whole: `… aplikace je dál kontroluje. · l záznamy`.)
+- [ ] T048 Redraw after logging an unhandled error, so the entry appears in an open logs view without a key press, per FR-012 and US2/AC3 (partial).
+  - **Evidence:** in `src/ui/app.ts`, the `unhandledRejection` and `uncaughtException` handlers call `this.deps.log.error(...)` and never `draw()`. When no source is due, for example when every source is final, nothing redraws until a key press.
+  - **Test first:** a structural test in `tests/unit/logs-view.test.ts`, in the style of the existing app.ts guard, asserting that each handler body calls `this.draw()` after logging. Or extract the handler into a testable function if that reads better.
+  - **Then:** call `this.draw()` in both handlers, guarded so that a throw inside `draw` cannot recurse into the handler.
+- [ ] T049 Bring the design documents in line with the reviewed code, per plan: research R5/R6/R7, data-model and quickstart (contradicts). They are reference for later features and currently describe pre-review behaviour.
+  - **`research.md` R5:** dedup compares the reason with both the stored `lastError` and what this session has logged (`isNewReason`, a `WeakMap` keyed by the logger), with the reason why.
+  - **`data-model.md` § Logs-screen functions:**
+    - `openLogs` returns `boolean` and refuses on `logs` / `log-entry`;
+    - `performCopy` returns `NOT_AVAILABLE_HERE` off the logs screens without calling `copy`;
+    - list cells show line breaks as ` ↵ `, and the detail splits on them.
+  - **`contracts/interface.md` § 7:** a restarted session logs a still-unpublished source once.
+  - **`quickstart.md` § 1 table:** the "title bar … čeká na výsledky" and "notice takes the status row" rows point to `tests/ui/colour.test.ts`, not `tests/ui/frame.test.ts`. Add rows for the review tests (copy off the logs screens, `l` on the logs screens, restart logging, line breaks).

@@ -228,7 +228,7 @@ describe("the minimum terminal, end to end (T124, FR-041)", () => {
 describe("every screen fits 80 by 24 with the warning shown (002 T025, SC-007, FR-028)", () => {
   const WARNING: SourceStatus = {
     kind: "stale",
-    text: "! ZASTARALÁ DATA: zobrazena data před 4 min. Obnovení se nedaří. · l záznamy",
+    text: "! ZASTARALÁ DATA z doby před 4 min. Obnovení se nedaří. · l záznamy",
   }
   const screens: [string, Screen[]][] = [
     ["national", []],

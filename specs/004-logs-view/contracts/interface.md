@@ -10,8 +10,8 @@ is. The requests sent to the publisher do not change.
 | Condition | Text | Look |
 |---|---|---|
 | A notice from the last key press | the notice | `element` surface. Unchanged look; it now **wins** over the source status (research R3). |
-| A source that loaded before is failing (stale) | `! ZASTARALÁ DATA: zobrazena data {age}. Obnovení se nedaří. · l záznamy` | `warning` surface, `warning` role |
-| Only never-loaded sources are failing (awaiting) | `○ Výsledky zatím nejsou zveřejněny, aplikace je průběžně kontroluje. · l záznamy` | `element` surface, `muted` role |
+| A source that loaded before is failing (stale) | `! ZASTARALÁ DATA z doby {age}. Obnovení se nedaří. · l záznamy` | `warning` surface, `warning` role |
+| Only never-loaded sources are failing (awaiting) | `○ Výsledky zatím nejsou zveřejněny, aplikace je dál kontroluje. · l záznamy` | `element` surface, `muted` role |
 | Nothing is failing, or the screen is `logs` / `log-entry` with no notice | (no row) | |
 
 - The first matching row wins.

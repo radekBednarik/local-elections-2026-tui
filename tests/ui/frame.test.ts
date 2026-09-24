@@ -252,7 +252,7 @@ describe("the warning row (FR-044)", () => {
       f.setBreadcrumb("ČR")
       f.setRows(BODY_LINES)
       f.setStatus("q konec")
-      f.setWarning("! ZASTARALÁ DATA: zobrazena data před 4 min. Obnovení se nedaří. · l záznamy")
+      f.setWarning("! ZASTARALÁ DATA z doby před 4 min. Obnovení se nedaří. · l záznamy")
     })
     expect(with_.frame).toContain("ZASTARALÁ DATA")
   })

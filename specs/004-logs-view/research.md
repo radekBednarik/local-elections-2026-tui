@@ -42,8 +42,8 @@ bar badge already are (003 contract § 2).
 **Decision**: `staleWarning` is replaced by `sourceStatus(subscriptions, now)`. It
 returns `{ kind: "stale" | "awaiting", text }` or `null`, and the text is fixed Czech
 with no error text (contract § 1):
-- **stale**: `! ZASTARALÁ DATA: zobrazena data {age}. Obnovení se nedaří. · l záznamy`
-- **awaiting**: `○ Výsledky zatím nejsou zveřejněny, aplikace je průběžně kontroluje. · l záznamy`
+- **stale**: `! ZASTARALÁ DATA z doby {age}. Obnovení se nedaří. · l záznamy`
+- **awaiting**: `○ Výsledky zatím nejsou zveřejněny, aplikace je dál kontroluje. · l záznamy`
 
 The title bar indicator gains a fourth state, `awaiting`, shown as ` ○ čeká na výsledky `
 in the `muted` role. `stale` keeps ` ● ZASTARALÉ `.

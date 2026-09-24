@@ -66,7 +66,7 @@ which you will see in the logs view. (Checked 2026-09-24, T031.)
 
 Expected:
 - The status row reads
-  `○ Výsledky zatím nejsou zveřejněny, aplikace je průběžně kontroluje. · l záznamy`.
+  `○ Výsledky zatím nejsou zveřejněny, aplikace je dál kontroluje. · l záznamy`.
 - The title bar shows `○ čeká na výsledky`.
 - Neither `ZASTARALÁ` nor `ZASTARALÉ` appears anywhere (SC-001).
 
@@ -98,7 +98,7 @@ Expected:
 - **Before 60 s:** `● živě` and no status row.
 - **After 60 s:**
   - The title bar shows `● ZASTARALÉ`.
-  - The status row reads `! ZASTARALÁ DATA: zobrazena data před … . Obnovení se nedaří. · l záznamy`,
+  - The status row reads `! ZASTARALÁ DATA z doby před … . Obnovení se nedaří. · l záznamy`,
     with no error text in it (FR-003, FR-004).
 
 Now check the logs view:

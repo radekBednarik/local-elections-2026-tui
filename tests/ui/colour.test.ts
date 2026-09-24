@@ -223,11 +223,11 @@ interface PaintOptions {
 
 const STALE: SourceStatus = {
   kind: "stale",
-  text: "! ZASTARALÁ DATA: zobrazena data před 4 min. Obnovení se nedaří. · l záznamy",
+  text: "! ZASTARALÁ DATA z doby před 4 min. Obnovení se nedaří. · l záznamy",
 }
 const AWAITING: SourceStatus = {
   kind: "awaiting",
-  text: "○ Výsledky zatím nejsou zveřejněny, aplikace je průběžně kontroluje. · l záznamy",
+  text: "○ Výsledky zatím nejsou zveřejněny, aplikace je dál kontroluje. · l záznamy",
 }
 
 const hexOf = (colour: RGBA): string => (colour.a === 0 ? "none" : rgbToHex(colour))
