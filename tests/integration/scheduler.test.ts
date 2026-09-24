@@ -227,6 +227,12 @@ describe("subscription lifecycle (FR-018a)", () => {
     expect(scheduler.all()).toHaveLength(0)
   })
 
+  test("a newly subscribed source is not final", () => {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    scheduler.subscribeAll(liveSources(1), T0)
+    expect(scheduler.get("national")?.final).toBe(false)
+  })
+
   test("an idle application polls only the live set, never every council", () => {
     const scheduler = new Scheduler(db, { intervalSeconds: 60 })
     scheduler.subscribeAll(liveSources(79), T0)

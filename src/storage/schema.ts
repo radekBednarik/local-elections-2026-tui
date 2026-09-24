@@ -22,8 +22,11 @@
 
 import type { Database } from "bun:sqlite"
 
-/** Bumped whenever the statements below change in a way that needs a rebuild. */
-export const SCHEMA_VERSION = 1
+/**
+ * Bumped whenever the statements below change. A version-1 database is upgraded in
+ * place by `upgradeSchema`; any other mismatch needs a rebuild.
+ */
+export const SCHEMA_VERSION = 2
 
 /*
  * Reference tables carry NO foreign keys between them, deliberately.
@@ -245,6 +248,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_candidate_result_unique
   ON candidate_result(snapshot_id, vstrana, COALESCE(ballot_order, -1), ballot_number);
 `
 
+/** One definition, used by both the table and the version-1 upgrade. */
+const FINAL_COLUMN = "INTEGER NOT NULL DEFAULT 0 CHECK (final IN (0, 1))"
+
 const LOCAL_TABLES = `
 -- One row per source being polled. Implements FR-015, FR-016 and FR-043.
 CREATE TABLE IF NOT EXISTS source_subscription (
@@ -259,7 +265,10 @@ CREATE TABLE IF NOT EXISTS source_subscription (
   etag                  TEXT,
   last_modified         TEXT,
   -- A watched source stays subscribed even when it is off screen (FR-018a).
-  pinned                INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1))
+  pinned                INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
+  -- The last successfully read copy was final, so it is not polled automatically
+  -- (feature 003, research R1). Added in schema version 2.
+  final                 ${FINAL_COLUMN}
 );
 
 CREATE TABLE IF NOT EXISTS watchlist_entry (
@@ -318,4 +327,23 @@ export function readSchemaVersion(db: Database): number | null {
     value: string
   } | null
   return row === null ? null : Number(row.value)
+}
+
+/**
+ * Brings a database from `from` up to `SCHEMA_VERSION`, in place.
+ *
+ * Only version 1 has a path: it gains `source_subscription.final`. SQLite adds a
+ * column with a constant default without rewriting the table, and every existing row
+ * reads as not final, which is correct - it will be re-read within one interval.
+ * Rebuilding instead would cost the user their watchlist and a 7 MB re-download
+ * (research R2). Any other version is left alone for the caller to refuse.
+ */
+export function upgradeSchema(db: Database, from: number): void {
+  if (from !== 1) return
+  db.transaction(() => {
+    db.run(`ALTER TABLE source_subscription ADD COLUMN final ${FINAL_COLUMN}`)
+    db.query("UPDATE app_config SET value = $v WHERE key = 'schema_version'").run({
+      v: String(SCHEMA_VERSION),
+    })
+  })()
 }

@@ -29,6 +29,8 @@ export interface Subscription {
   lastModified: string | null
   /** A watched council stays subscribed while off screen (FR-018a). */
   pinned: boolean
+  /** The most recent successfully read copy was final; such a source is not polled automatically. */
+  final: boolean
 }
 
 export interface SchedulerOptions {
@@ -219,5 +221,6 @@ function toSubscription(row: Record<string, unknown>): Subscription {
     etag: (row.etag as string | null) ?? null,
     lastModified: (row.last_modified as string | null) ?? null,
     pinned: Number(row.pinned ?? 0) === 1,
+    final: Number(row.final ?? 0) === 1,
   }
 }

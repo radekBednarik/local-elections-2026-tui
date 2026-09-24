@@ -9,7 +9,7 @@
 import { Database } from "bun:sqlite"
 import { mkdirSync } from "node:fs"
 import { dirname } from "node:path"
-import { createSchema, readSchemaVersion, SCHEMA_VERSION } from "./schema.ts"
+import { createSchema, readSchemaVersion, SCHEMA_VERSION, upgradeSchema } from "./schema.ts"
 
 export interface OpenOptions {
   /** Applied on open. A second instance waits rather than failing immediately. */
@@ -44,10 +44,14 @@ export function openDatabase(path: string, options: OpenOptions = {}): Database 
       const version = readSchemaVersion(db)
       if (version === null) {
         createSchema(db)
+      } else if (version === 1) {
+        // The one in-place step: version 2 only added a column. Refusing to open would
+        // cost the user their watchlist and a re-download of the registries (research R2).
+        upgradeSchema(db, version)
       } else if (version !== SCHEMA_VERSION) {
-        // No migration path exists yet, and none is needed: everything in the database
-        // is either reference data that can be re-fetched or results that refresh
-        // within a minute. Rebuilding is simpler than migrating, per KISS.
+        // Everything else in the database is either reference data that can be
+        // re-fetched or results that refresh within a minute, so any other mismatch is
+        // rebuilt rather than migrated, per KISS.
         throw new SchemaVersionError(version, SCHEMA_VERSION)
       }
     } catch (error) {

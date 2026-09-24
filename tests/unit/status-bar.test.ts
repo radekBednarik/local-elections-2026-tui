@@ -23,6 +23,7 @@ function sub(overrides: Partial<Subscription> = {}): Subscription {
     etag: null,
     lastModified: null,
     pinned: false,
+    final: false,
     ...overrides,
   }
 }

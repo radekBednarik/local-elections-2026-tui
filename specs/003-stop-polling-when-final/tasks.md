@@ -30,7 +30,7 @@ this visible. A task is complete only when its review has no open findings.
 
 **Purpose**: Establish a green baseline, so every later failure is known to be new.
 
-- [ ] T001 Create and switch to the branch `003-stop-polling-when-final` from `main` (`git switch -c 003-stop-polling-when-final`). Then run `bun test`, `bun run typecheck` and `bun run check` from the repository root. Record the pass counts in this task's notes. Stop and report if anything fails before a change has been made.
+- [X] T001 Create and switch to the branch `003-stop-polling-when-final` from `main` (`git switch -c 003-stop-polling-when-final`). Then run `bun test`, `bun run typecheck` and `bun run check` from the repository root. Record the pass counts in this task's notes. Stop and report if anything fails before a change has been made. (Baseline 2026-09-24: 858 pass, 0 fail across 50 files; typecheck clean; biome clean, 132 files. Branch created before this task ran.)
 
 ---
 
@@ -43,32 +43,33 @@ read it. Every story needs this.
 
 ### Tests (write first, observe failing)
 
-- [ ] T002 [P] Add to `tests/integration/schema.test.ts`, in `describe("schema creation")`:
+- [X] T002 [P] Add to `tests/integration/schema.test.ts`, in `describe("schema creation")`:
   - A new database has a `final` column on `source_subscription`, declared `INTEGER NOT NULL`, `DEFAULT 0`, `CHECK (final IN (0, 1))`. Read the declaration with `PRAGMA table_info(source_subscription)`.
   - Inserting `final = 2` throws, and inserting a row without `final` stores 0. Add this to `describe("constraints")`.
   - `SCHEMA_VERSION` is `2`.
-- [ ] T003 [P] Add `describe("upgrading from schema version 1")` to `tests/integration/schema.test.ts`, using `withTempDataDir` from `tests/helpers/tmpdir.ts`:
+- [X] T003 [P] Add `describe("upgrading from schema version 1")` to `tests/integration/schema.test.ts`, using `withTempDataDir` from `tests/helpers/tmpdir.ts`:
   - Build a version-1 database on disk: create the schema, drop the `final` column by recreating `source_subscription` without it, set `schema_version` to `'1'`, and insert one subscription row and one watchlist row. Close it.
   - `openDatabase` on that file does not throw. Afterwards `readSchemaVersion` returns 2, the subscription row has `final = 0`, and the watchlist row is still there.
   - The existing test "refuses to open a database written by a different schema version" (value `'999'`) still passes unchanged.
-- [ ] T004 [P] Add to `tests/integration/scheduler.test.ts`, in `describe("subscription lifecycle (FR-018a)")`: a newly subscribed source has `final === false` on the record returned by `scheduler.get`.
+- [X] T004 [P] Add to `tests/integration/scheduler.test.ts`, in `describe("subscription lifecycle (FR-018a)")`: a newly subscribed source has `final === false` on the record returned by `scheduler.get`.
 
 ### Implementation
 
-- [ ] T005 In `src/storage/schema.ts`:
+- [X] T005 In `src/storage/schema.ts`:
   - Add `final INTEGER NOT NULL DEFAULT 0 CHECK (final IN (0, 1))` to `source_subscription`, after `pinned`, with a comment citing this feature and research R1.
   - Set `SCHEMA_VERSION = 2`.
   - Export `upgradeSchema(db: Database, from: number): void`. For `from === 1` it runs `ALTER TABLE source_subscription ADD COLUMN final INTEGER NOT NULL DEFAULT 0 CHECK (final IN (0, 1))` and writes `schema_version = '2'`, in one transaction. For any other value it does nothing.
   - Keep the column definition in one constant used by both the `CREATE TABLE` and the `ALTER TABLE`, so it is written once (Principle I).
   - Makes T002 pass.
-- [ ] T006 In `src/storage/db.ts`, in `openDatabase`: when `version === 1`, call `upgradeSchema(db, 1)` instead of throwing. Any other mismatch still throws `SchemaVersionError`. Update the comment above the check: one in-place step exists because rebuilding would cost users their watchlist (research R2). Makes T003 pass.
-- [ ] T007 In `src/sources/scheduler.ts`, add `final: boolean` to `Subscription`, with a doc comment ("The most recent successfully read copy was final; such a source is not polled automatically."). Map it in `toSubscription` as `Number(row.final ?? 0) === 1`. Makes T004 pass. Then update the `Subscription` literal in `tests/unit/status-bar.test.ts` (line 18 area) with `final: false`, so typecheck passes.
-- [ ] T008 REVIEW Phase 2 against Principles I–III and data-model.md. Check that:
+- [X] T006 In `src/storage/db.ts`, in `openDatabase`: when `version === 1`, call `upgradeSchema(db, 1)` instead of throwing. Any other mismatch still throws `SchemaVersionError`. Update the comment above the check: one in-place step exists because rebuilding would cost users their watchlist (research R2). Makes T003 pass.
+- [X] T007 In `src/sources/scheduler.ts`, add `final: boolean` to `Subscription`, with a doc comment ("The most recent successfully read copy was final; such a source is not polled automatically."). Map it in `toSubscription` as `Number(row.final ?? 0) === 1`. Makes T004 pass. Then update the `Subscription` literal in `tests/unit/status-bar.test.ts` (line 18 area) with `final: false`, so typecheck passes.
+- [X] T008 REVIEW Phase 2 against Principles I–III and data-model.md. Check that:
   - the column definition exists once,
   - a version-1 database keeps every row,
   - no other version is silently upgraded.
 
   Run `bun test`, `bun run typecheck` and `bun run check`. Fix every finding before continuing.
+  - (Done 2026-09-24. 863 pass, 0 fail. Findings: none open. The constraint test in T002 first passed for the wrong reason, because the column did not exist, so it was tightened to require `final = 1` to be accepted, and then failed as it should. No database is opened read-only anywhere, so the version-1 upgrade always runs. Formatting fixed with biome.)
 
 **Checkpoint**: every database has the column. Nothing behaves differently yet.
 

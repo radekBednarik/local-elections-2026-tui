@@ -77,6 +77,84 @@ describe("schema creation", () => {
       expect(() => openDatabase(path)).toThrow(SchemaVersionError)
     })
   })
+
+  test("is at version 2, which added finality to the polling state", () => {
+    expect(SCHEMA_VERSION).toBe(2)
+  })
+
+  test("a source subscription records whether its source is final, defaulting to not", () => {
+    const db = openMemoryDatabase()
+    try {
+      const columns = db.query("PRAGMA table_info(source_subscription)").all() as {
+        name: string
+        type: string
+        notnull: number
+        dflt_value: string | null
+      }[]
+      const final = columns.find((c) => c.name === "final")
+      expect(final).toBeDefined()
+      expect(final?.type).toBe("INTEGER")
+      expect(final?.notnull).toBe(1)
+      expect(final?.dflt_value).toBe("0")
+
+      db.run(
+        "INSERT INTO source_subscription (source_key, area_kind, area_id) VALUES ('national', 'national', '')",
+      )
+      const row = db.query("SELECT final FROM source_subscription").get() as { final: number }
+      expect(row.final).toBe(0)
+    } finally {
+      db.close()
+    }
+  })
+})
+
+/** The `source_subscription` table exactly as schema version 1 created it. */
+const VERSION_1_SUBSCRIPTION = `
+CREATE TABLE source_subscription (
+  source_key            TEXT PRIMARY KEY,
+  area_kind             TEXT NOT NULL,
+  area_id               TEXT NOT NULL,
+  last_success_at       TEXT,
+  last_attempt_at       TEXT,
+  last_error            TEXT,
+  consecutive_failures  INTEGER NOT NULL DEFAULT 0,
+  next_due_at           TEXT,
+  etag                  TEXT,
+  last_modified         TEXT,
+  pinned                INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1))
+)`
+
+describe("upgrading from schema version 1", () => {
+  test("a version-1 database opens, gains the column and keeps every row", async () => {
+    await withTempDataDir((dir) => {
+      const path = dir.file("volby.sqlite")
+      const old = openDatabase(path)
+      old.run("DROP TABLE source_subscription")
+      old.run(VERSION_1_SUBSCRIPTION)
+      old.run("UPDATE app_config SET value = '1' WHERE key = 'schema_version'")
+      old.run(
+        "INSERT INTO source_subscription (source_key, area_kind, area_id, next_due_at) VALUES ('national', 'national', '', '2026-10-09T20:00:00Z')",
+      )
+      old.run(
+        "INSERT INTO watchlist_entry (kodzastup, added_at, position) VALUES ('551082', '2026-09-24T10:00:00Z', 0)",
+      )
+      old.close()
+
+      const db = openDatabase(path)
+      try {
+        expect(readSchemaVersion(db)).toBe(2)
+        const row = db.query("SELECT final, next_due_at FROM source_subscription").get() as {
+          final: number
+          next_due_at: string
+        }
+        expect(row.final).toBe(0)
+        expect(row.next_due_at).toBe("2026-10-09T20:00:00Z")
+        expect(db.query("SELECT kodzastup FROM watchlist_entry").all()).toEqual([{ kodzastup: "551082" }])
+      } finally {
+        db.close()
+      }
+    })
+  })
 })
 
 describe("constraints", () => {
@@ -132,6 +210,19 @@ describe("constraints", () => {
         insert.run({ t: "OBEC" })
         insert.run({ t: "MCMO" })
       }).not.toThrow()
+    } finally {
+      db.close()
+    }
+  })
+
+  test("a subscription's finality is restricted to 0 or 1", () => {
+    const db = openMemoryDatabase()
+    try {
+      const insert = db.query(
+        "INSERT INTO source_subscription (source_key, area_kind, area_id, final) VALUES ($k, 'national', '', $f)",
+      )
+      expect(() => insert.run({ k: "a", f: 1 })).not.toThrow()
+      expect(() => insert.run({ k: "b", f: 2 })).toThrow()
     } finally {
       db.close()
     }
