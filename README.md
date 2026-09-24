@@ -208,5 +208,7 @@ released.
 
 ## Licence and disclaimer
 
+Released under the [MIT License](LICENSE).
+
 Unofficial. Not affiliated with the Czech Statistical Office. The published data is
 authoritative; this is a viewer for it.
