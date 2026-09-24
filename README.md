@@ -6,6 +6,13 @@ you can drill into from the whole country down to an individual candidate.
 
 The interface is in Czech throughout, because the data is.
 
+## About this project
+
+This project was created as an exercise to try out
+[GitHub Spec Kit](https://github.github.com/spec-kit/index.html). It was developed
+following the Spec Kit workflow (specification, plan, tasks, implementation), and
+therefore most of the code was written using AI tooling.
+
 ## What it does
 
 - **Live national overview** – turnout, polling districts counted, seats by electoral
