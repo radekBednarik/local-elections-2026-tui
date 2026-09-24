@@ -252,7 +252,7 @@ describe("the warning row (FR-044)", () => {
       f.setBreadcrumb("ČR")
       f.setRows(BODY_LINES)
       f.setStatus("q konec")
-      f.setWarning("! ZASTARALÁ DATA (national): spojení selhalo.")
+      f.setWarning("! ZASTARALÁ DATA z doby před 4 min. Obnovení se nedaří. · l záznamy")
     })
     expect(with_.frame).toContain("ZASTARALÁ DATA")
   })
@@ -341,7 +341,7 @@ describe("the scroll bar stays on the right edge", () => {
 
 describe("title bar indicator (contract § 2)", () => {
   const trail = ["ČR", "Okres Brno-město", "Brno", "Kandidáti"]
-  const text = (indicator: "live" | "final" | "stale") =>
+  const text = (indicator: "live" | "final" | "stale" | "awaiting") =>
     titleBarRow(trail, indicator, "2026-10-09T21:15:00.000Z", 120)
       .cells.map((c) => c.text)
       .join("")
@@ -354,6 +354,15 @@ describe("title bar indicator (contract § 2)", () => {
   test("still says live while counting, and stale while failing", () => {
     expect(text("live")).toContain(" ● živě ")
     expect(text("stale")).toContain(" ● ZASTARALÉ ")
+  })
+
+  test("says it is waiting for results before anything has loaded, in muted text (004 FR-001)", () => {
+    expect(text("awaiting")).toContain(" ○ čeká na výsledky ")
+    expect(text("awaiting")).not.toContain("ZASTARALÉ")
+    expect(text("awaiting")).not.toContain("živě")
+    const cell = titleBarRow(trail, "awaiting", null, 120).cells.find((c) => c.text.includes("čeká"))
+    expect(cell?.role).toBe("muted")
+    expect(cell?.surface).toBeUndefined()
   })
 
   test("fits 80 columns exactly with the final indicator intact", () => {

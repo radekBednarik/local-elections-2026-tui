@@ -9,7 +9,7 @@ import { fetchDocument } from "../../src/sources/client.ts"
 import { ingestNational } from "../../src/sources/ingest.ts"
 import { Scheduler } from "../../src/sources/scheduler.ts"
 import { openDatabase } from "../../src/storage/db.ts"
-import { staleWarning } from "../../src/ui/components/status.ts"
+import { sourceStatus } from "../../src/ui/components/status.ts"
 import { renderNationalView } from "../../src/ui/views/national.ts"
 
 const F = join(import.meta.dir, "../../fixtures")
@@ -53,7 +53,7 @@ async function pass(label: string, at = new Date()) {
   }
 
   const s = scheduler.get("national")
-  const warn = staleWarning(scheduler.all())
+  const warn = sourceStatus(scheduler.all())?.text
   const head = renderNationalView(db, { width: 92 })[4] ?? "(žádná data)"
   console.log(`\n--- ${label} -> ${what} (selhání: ${s?.consecutiveFailures}) ---`)
   console.log(`  ${head.trim()}`)

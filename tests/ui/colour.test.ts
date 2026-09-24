@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { type CapturedSpan, type RGBA, rgbToHex } from "@opentui/core"
 import { createTestRenderer } from "@opentui/core/testing"
+import type { LogEntry } from "../../src/logging/logger.ts"
 import { extractArchiveFile } from "../../src/reference/archive.ts"
 import { loadReference, type ReferenceArchives } from "../../src/reference/loader.ts"
 import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
@@ -19,6 +20,7 @@ import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { addToWatchlist } from "../../src/storage/queries/watchlist.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
 import { applyFrameState, type FrameState, frameState } from "../../src/ui/chrome/state.ts"
+import type { SourceStatus } from "../../src/ui/components/status.ts"
 import type { Column } from "../../src/ui/format.ts"
 import type { Screen } from "../../src/ui/navigation.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
@@ -72,7 +74,7 @@ async function paint(screen: Screen, theme: Theme, width = 110, height = 34): Pr
         width,
         contentWidth: frame.contentWidth > 0 ? frame.contentWidth : width - 2,
         contentHeight: frame.contentHeight > 0 ? frame.contentHeight : height - 3,
-        warning: null,
+        sourceStatus: null,
         notice: null,
       }),
     )
@@ -213,8 +215,19 @@ interface PaintOptions {
   sort?: SortState
   selected?: number
   content?: ScreenContent
-  warning?: string | null
+  sourceStatus?: SourceStatus
+  notice?: string | null
   lastSuccessAt?: string | null
+  logEntries?: readonly LogEntry[]
+}
+
+const STALE: SourceStatus = {
+  kind: "stale",
+  text: "! ZASTARALÁ DATA z doby před 4 min. Obnovení se nedaří. · l záznamy",
+}
+const AWAITING: SourceStatus = {
+  kind: "awaiting",
+  text: "○ Výsledky zatím nejsou zveřejněny, aplikace je dál kontroluje. · l záznamy",
 }
 
 const hexOf = (colour: RGBA): string => (colour.a === 0 ? "none" : rgbToHex(colour))
@@ -242,16 +255,17 @@ async function paintRows(screen: Screen, theme: Theme, options: PaintOptions = {
       width,
       contentWidth: frame.contentWidth,
       contentHeight: frame.contentHeight,
-      warning: options.warning ?? null,
-      notice: null,
+      sourceStatus: options.sourceStatus ?? null,
+      notice: options.notice ?? null,
       content: options.content,
       lastSuccessAt: options.lastSuccessAt ?? null,
+      logEntries: options.logEntries,
     })
     applyFrameState(frame, state, theme)
     await setup.renderOnce()
     // A warning row takes a line from the content; draw again after the layout, as the
     // application does on its next tick.
-    if (options.warning) {
+    if (options.sourceStatus || options.notice) {
       applyFrameState(frame, state, theme)
       await setup.renderOnce()
     }
@@ -525,11 +539,21 @@ describe("the title bar (T027, FR-011, FR-012)", () => {
   test("turns the indicator into a warning badge while data is stale (acceptance 2.5)", async () => {
     const { grid } = await paintRows(council, TOKYO, {
       lastSuccessAt: LAST_SUCCESS,
-      warning: "! ZASTARALÁ DATA (CZ0642): spojení selhalo.",
+      sourceStatus: STALE,
     })
     const text = (grid[0] ?? []).map((c) => c.ch).join("")
     expect(text).not.toContain("živě")
     expectRun(cellsAt(grid[0], "● ZASTARALÉ"), slot(TOKYO, "onAccent"), slot(TOKYO, "warning"), true)
+  })
+
+  test("says it is waiting for results, never stale, before anything has loaded (004 FR-001)", async () => {
+    const { grid, text } = await paintRows(council, TOKYO, { sourceStatus: AWAITING })
+    const title = (grid[0] ?? []).map((c) => c.ch).join("")
+    expect(title).toContain("○ čeká na výsledky")
+    expect(title).not.toContain("živě")
+    expectRun(cellsAt(grid[0], "○ čeká na výsledky"), slot(TOKYO, "muted"), slot(TOKYO, "panel"))
+    expect(text).not.toContain("ZASTARALÁ")
+    expect(text).not.toContain("ZASTARALÉ")
   })
 })
 
@@ -547,9 +571,54 @@ describe("the status bar (T028, FR-013)", () => {
 })
 
 describe("the warning row (T029, FR-014)", () => {
+  const rowWith = (grid: PaintedCell[][], needle: string) =>
+    grid.find((line) =>
+      line
+        .map((c) => c.ch)
+        .join("")
+        .includes(needle),
+    )
+
+  test("the awaiting line sits on element in muted text, with no error in it (004 FR-002, FR-004)", async () => {
+    const { grid } = await paintRows({ kind: "districts" }, TOKYO, { sourceStatus: AWAITING })
+    const row = rowWith(grid, "Výsledky zatím nejsou zveřejněny")
+    expect(row).toBeDefined()
+    expectRun(row ?? [], null, slot(TOKYO, "element"))
+    expectRun(cellsAt(row, "Výsledky zatím nejsou zveřejněny"), slot(TOKYO, "muted"), slot(TOKYO, "element"))
+  })
+
+  test("a notice takes the row for its keystroke, and the title bar keeps the stale badge (004 R3)", async () => {
+    const { grid, state } = await paintRows({ kind: "districts" }, TOKYO, {
+      sourceStatus: STALE,
+      notice: "Tento příkaz zde není dostupný.",
+    })
+    expect(state.warning).toBe("Tento příkaz zde není dostupný.")
+    expect(state.warningKind).toBe("notice")
+    expect(rowWith(grid, "Tento příkaz zde není dostupný.")).toBeDefined()
+    expect(rowWith(grid, "ZASTARALÁ DATA")).toBeUndefined()
+    expect((grid[0] ?? []).map((c) => c.ch).join("")).toContain("● ZASTARALÉ")
+  })
+
+  test("is left out on the logs screens, which it would only point back to (004 data-model)", async () => {
+    for (const screen of [{ kind: "logs" }, { kind: "log-entry", seq: 0 }] as Screen[]) {
+      const { grid, state, text } = await paintRows(screen, TOKYO, { sourceStatus: AWAITING })
+      expect(state.warning).toBeNull()
+      expect(text).not.toContain("Výsledky zatím nejsou zveřejněny")
+      expect((grid[0] ?? []).map((c) => c.ch).join("")).toContain("○ čeká na výsledky")
+    }
+  })
+
+  test("still shows a notice on the logs screens", async () => {
+    const { state } = await paintRows({ kind: "logs" }, TOKYO, {
+      sourceStatus: AWAITING,
+      notice: "Není co kopírovat.",
+    })
+    expect(state.warning).toBe("Není co kopírovat.")
+    expect(state.warningKind).toBe("notice")
+  })
+
   test("is the warning colour across the full width, its text in onAccent", async () => {
-    const warning = "! ZASTARALÁ DATA (CZ0642): spojení selhalo."
-    const { grid } = await paintRows({ kind: "districts" }, TOKYO, { warning })
+    const { grid } = await paintRows({ kind: "districts" }, TOKYO, { sourceStatus: STALE })
     const row = grid.find((line) =>
       line
         .map((c) => c.ch)
@@ -636,7 +705,7 @@ describe("a theme switch repaints everything at once (T043, FR-027, acceptance 3
           width,
           contentWidth: frame.contentWidth,
           contentHeight: frame.contentHeight,
-          warning: null,
+          sourceStatus: null,
           notice: null,
         }
         applyFrameState(frame, frameState(inputs), theme)
@@ -660,6 +729,90 @@ describe("a theme switch repaints everything at once (T043, FR-027, acceptance 3
       expect(stale).toEqual([])
       const status = setup.captureCharFrame().split("\n").at(-2) ?? ""
       expect(status.trimEnd().endsWith("Nord")).toBe(true)
+    } finally {
+      setup.renderer.destroy()
+    }
+  })
+})
+
+describe("the logs view follows the theme (004 FR-020, SC-005)", () => {
+  const ENTRIES: LogEntry[] = (["warn", "info", "debug"] as const).map((level, seq) => ({
+    seq,
+    at: "2026-10-09T19:04:10.000Z",
+    level,
+    message: `zprava ${level}`,
+    detail: null,
+    source: null,
+    line: `2026-10-09T19:04:10.000Z ${level.toUpperCase().padEnd(5)} zprava ${level}`,
+  }))
+  const LOGS: Screen = { kind: "logs" }
+  // INFO is selected, so the two rows whose colour is under test keep their stripes.
+  const options: PaintOptions = { logEntries: ENTRIES, selected: 1 }
+
+  test.each([...THEME_NAMES])("%s: warnings in warning, debug muted, the selection on sel", async (name) => {
+    const theme = themeByName(name)
+    const { state, rows } = await paintRows(LOGS, theme, options)
+    const first = state.content.firstRow
+    expectRun(cellsAt(rows[first] ?? [], "VAROVÁNÍ"), slot(theme, "warning"), slot(theme, "bg"))
+    expectRun(cellsAt(rows[first + 2] ?? [], "LADĚNÍ"), slot(theme, "muted"), slot(theme, "bg"))
+    expectRowBg(rows[first + 1], slot(theme, "sel"), "selected")
+    expect(rows[first + 1]?.[0]?.ch).toBe("▶")
+  })
+
+  test("in monochrome the labels carry the severity, and the selection is ▶", async () => {
+    const { state, rows, text } = await paintRows(LOGS, MONOCHROME, options)
+    for (const label of ["VAROVÁNÍ", "INFO", "LADĚNÍ"]) expect(text).toContain(label)
+    rows.forEach((painted, index) => {
+      if (painted !== null) expectRowBg(painted, "none", `row ${index}`)
+    })
+    expect(rows[state.content.firstRow + 1]?.[0]?.ch).toBe("▶")
+  })
+
+  test("a theme switch while the logs are open leaves no cell in the old theme", async () => {
+    const width = 110
+    const height = 34
+    const setup = await createTestRenderer({ width, height })
+    try {
+      const frame = new Frame(setup.renderer)
+      frame.attach(setup.renderer.root)
+      await setup.renderOnce()
+      const nav = new Navigation()
+      nav.push(LOGS)
+      const draw = async (theme: Theme) => {
+        const inputs = {
+          db,
+          nav,
+          councilType: "OBEC",
+          query: "",
+          theme,
+          sort: UNSORTED,
+          width,
+          contentWidth: frame.contentWidth,
+          contentHeight: frame.contentHeight,
+          sourceStatus: null,
+          notice: null,
+          logEntries: ENTRIES,
+        }
+        applyFrameState(frame, frameState(inputs), theme)
+        await setup.renderOnce()
+      }
+
+      const tokyo = themeByName("tokyonight")
+      const nord = themeByName("nord")
+      await draw(tokyo)
+      await draw(nord)
+
+      const old = new Set(Object.values(tokyo.slots))
+      for (const value of Object.values(nord.slots)) old.delete(value)
+      const stale = setup
+        .captureSpans()
+        .lines.flatMap((line, row) =>
+          line.spans
+            .filter((s) => old.has(hexOf(s.bg)) || (s.text.trim() !== "" && old.has(hexOf(s.fg))))
+            .map((s) => `${row}:"${s.text.trim()}"`),
+        )
+      expect(stale).toEqual([])
+      expect(setup.captureCharFrame()).toContain("VAROVÁNÍ")
     } finally {
       setup.renderer.destroy()
     }

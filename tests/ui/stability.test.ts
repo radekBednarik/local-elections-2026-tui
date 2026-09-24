@@ -20,6 +20,7 @@ import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
 import { applyFrameState, type FrameState, frameState } from "../../src/ui/chrome/state.ts"
+import type { SourceStatus } from "../../src/ui/components/status.ts"
 import { Navigation, type Screen } from "../../src/ui/navigation.ts"
 import { UNSORTED } from "../../src/ui/sort.ts"
 import { themeByName } from "../../src/ui/theme/themes.ts"
@@ -68,7 +69,7 @@ function regionsOf(captured: string): Regions {
 interface Harness {
   frame: Frame
   nav: Navigation
-  draw: (warning?: string | null) => Promise<string>
+  draw: (sourceStatus?: SourceStatus) => Promise<string>
   /** The state the last draw applied. */
   state: () => FrameState | null
   destroy: () => void
@@ -83,7 +84,7 @@ async function harness(width = 100, height = 30): Promise<Harness> {
   await setup.renderOnce()
 
   let last: FrameState | null = null
-  const draw = async (warning: string | null = null) => {
+  const draw = async (sourceStatus: SourceStatus = null) => {
     last = frameState({
       db,
       nav,
@@ -94,7 +95,7 @@ async function harness(width = 100, height = 30): Promise<Harness> {
       width,
       contentWidth: frame.contentWidth,
       contentHeight: frame.contentHeight,
-      warning,
+      sourceStatus,
       notice: null,
     })
     applyFrameState(frame, last, themeByName("tokyonight"))
@@ -209,7 +210,7 @@ describe("the minimum terminal, end to end (T124, FR-041)", () => {
         width: 80,
         contentWidth: 78,
         contentHeight: 20,
-        warning: null,
+        sourceStatus: null,
         notice: null,
       })
       expect([...state.breadcrumb].length).toBeLessThanOrEqual(80)
@@ -225,7 +226,10 @@ describe("the minimum terminal, end to end (T124, FR-041)", () => {
 })
 
 describe("every screen fits 80 by 24 with the warning shown (002 T025, SC-007, FR-028)", () => {
-  const WARNING = "! ZASTARALÁ DATA (CZ0642): časový limit spojení. Zobrazena poslední známá data před 4 min."
+  const WARNING: SourceStatus = {
+    kind: "stale",
+    text: "! ZASTARALÁ DATA z doby před 4 min. Obnovení se nedaří. · l záznamy",
+  }
   const screens: [string, Screen[]][] = [
     ["national", []],
     ["districts", [{ kind: "districts" }]],

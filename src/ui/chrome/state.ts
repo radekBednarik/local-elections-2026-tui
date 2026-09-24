@@ -13,8 +13,9 @@
 
 import type { Database } from "bun:sqlite"
 import type { StyledText } from "@opentui/core"
+import type { LogEntry } from "../../logging/logger.ts"
 import { availableCouncilTypes } from "../../storage/queries/national.ts"
-import { statusBarLine, statusBarRow } from "../components/status.ts"
+import { type SourceStatus, statusBarLine, statusBarRow } from "../components/status.ts"
 import { clampLines } from "../format.ts"
 import type { Navigation } from "../navigation.ts"
 import type { ActionContext } from "../palette/actions.ts"
@@ -62,8 +63,8 @@ export interface FrameInputs {
   contentWidth: number
   /** Rows inside the border. */
   contentHeight: number
-  /** The persistent staleness warning, when there is one (FR-044). */
-  warning: string | null
+  /** What the sources' state is, when something is failing (004 FR-001–FR-004). */
+  sourceStatus: SourceStatus
   /** Every source the screen shows is final, so the title bar says polling has stopped (FR-008). */
   final?: boolean
   /** A one-off confirmation, shown only when nothing is wrong. */
@@ -80,13 +81,15 @@ export interface FrameInputs {
   lastSuccessAt?: string | null
   /** Whether the command palette is open, which renames the status bar's screen label. */
   paletteOpen?: boolean
+  /** This session's log entries, for the logs screens (004). */
+  logEntries?: readonly LogEntry[]
 }
 
 export interface FrameState {
   breadcrumb: string
   warning: string | null
-  /** What the warning row is showing: stale data, or a one-off confirmation. */
-  warningKind: "stale" | "notice" | null
+  /** What the warning row is showing: stale data, awaiting publication, or a one-off confirmation. */
+  warningKind: "stale" | "awaiting" | "notice" | null
   /** The styled chrome, as rows to be drawn at the full terminal width. */
   titleRow: SemanticRow
   statusRow: SemanticRow
@@ -150,6 +153,7 @@ export function frameState(inputs: FrameInputs): FrameState {
       query: inputs.query,
       sort: inputs.sort,
       contentHeight: inputs.contentHeight,
+      logEntries: inputs.logEntries,
     })
 
   const context: ActionContext = {
@@ -166,9 +170,18 @@ export function frameState(inputs: FrameInputs): FrameState {
   const lines = withSelection(content.lines, content.firstRow, selected)
   const backgrounds = rowBackgrounds(content.rows, selectedLine)
 
-  // A real staleness warning always wins the row: it is the more important message.
-  const warning = inputs.warning ?? inputs.notice
-  const warningKind = inputs.warning !== null ? "stale" : inputs.notice !== null ? "notice" : null
+  // A notice wins the row until the next key press clears it (004 research R3). The source
+  // status can be up for hours before publication, and under the old rule - the warning
+  // always wins - every confirmation in that time, a copy included, went unseen. Nothing
+  // is lost meanwhile: the title bar badge still carries the source state.
+  //
+  // On the logs screens the source status is left out: it would only point to the screen
+  // the user is already on. The title bar badge still carries it (004 data-model).
+  const onLogs = nav.screen.kind === "logs" || nav.screen.kind === "log-entry"
+  const status = inputs.sourceStatus
+  const rowStatus = onLogs ? null : status
+  const warning = inputs.notice ?? rowStatus?.text ?? null
+  const warningKind = inputs.notice !== null ? "notice" : (rowStatus?.kind ?? null)
 
   return {
     breadcrumb: breadcrumbFor(db, nav.screens, inputs.width),
@@ -176,8 +189,8 @@ export function frameState(inputs: FrameInputs): FrameState {
     warningKind,
     titleRow: titleBarRow(
       segmentsFor(db, nav.screens),
-      // A failing source wins over finality: the stale badge stays global (contract § 2).
-      inputs.warning !== null ? "stale" : inputs.final === true ? "final" : "live",
+      // A failing source wins over finality: the badge stays global (003 contract § 2).
+      status !== null ? status.kind : inputs.final === true ? "final" : "live",
       inputs.lastSuccessAt ?? null,
       inputs.width,
     ),
@@ -208,9 +221,14 @@ export function frameState(inputs: FrameInputs): FrameState {
   }
 }
 
-/** How the warning row reads: stale data on the warning colour, a notice on element. */
-const WARNING_LOOK: Record<"stale" | "notice", { surface: Surface; role?: Cell["role"] }> = {
+/**
+ * How the warning row reads: stale data on the warning colour; awaiting publication in
+ * muted text on element, since nothing is wrong with what is on screen; a notice on
+ * element.
+ */
+const WARNING_LOOK: Record<"stale" | "awaiting" | "notice", { surface: Surface; role?: Cell["role"] }> = {
   stale: { surface: "warning", role: "warning" },
+  awaiting: { surface: "element", role: "muted" },
   notice: { surface: "element" },
 }
 
@@ -231,15 +249,18 @@ function clockOf(iso: string | null): string | null {
  * What the title bar says about the data on screen.
  *
  * `final` replaces the live claim once every source on screen is final and no longer
- * polled on its own (feature 003, FR-008). Its text carries the whole meaning, so it
- * reads the same without colour.
+ * polled on its own (feature 003, FR-008). `awaiting` says nothing has been published
+ * yet, which is not the same as stale: there are no figures to be out of date (004
+ * FR-001). Precedence: stale, then awaiting, then final, then live. Each text carries the
+ * whole meaning, so it reads the same without colour.
  */
-export type LiveIndicator = "live" | "final" | "stale"
+export type LiveIndicator = "live" | "final" | "stale" | "awaiting"
 
 const INDICATOR_CELLS: Record<LiveIndicator, Cell> = {
   live: { text: " ● živě ", fgSlot: "success" },
   final: { text: " ■ konečné · obnova ručně ", role: "muted" },
   stale: { text: " ● ZASTARALÉ ", role: "warning", surface: "warning" },
+  awaiting: { text: " ○ čeká na výsledky ", role: "muted" },
 }
 
 /**

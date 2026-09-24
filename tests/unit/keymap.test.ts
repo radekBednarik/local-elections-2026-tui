@@ -28,6 +28,9 @@ describe("every action has a key (FR-078)", () => {
     open: press("return"),
     back: press("escape"),
     search: press("/"),
+    logs: press("l"),
+    "copy-entry": press("c"),
+    "copy-all": press("c", { shift: true }),
     watch: press("w"),
     watchlist: press("w", { shift: true }),
     "export-csv": press("e"),
@@ -67,6 +70,12 @@ describe("shift distinguishes the pairs", () => {
     expect(actionOf(press("w", { shift: true }))).toBe("watchlist")
     // The key name arrives lower-cased, so the sequence is the other way of telling.
     expect(actionOf(press("w", { sequence: "W" }))).toBe("watchlist")
+  })
+
+  test("c copies the selected log entry, C copies them all (004)", () => {
+    expect(actionOf(press("c"))).toBe("copy-entry")
+    expect(actionOf(press("c", { shift: true }))).toBe("copy-all")
+    expect(actionOf(press("c", { sequence: "C" }))).toBe("copy-all")
   })
 
   test("e exports the table, E writes the summary", () => {

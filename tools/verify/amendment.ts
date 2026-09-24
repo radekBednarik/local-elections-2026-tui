@@ -105,7 +105,7 @@ async function paint(
           width,
           contentWidth: frame.contentWidth > 0 ? frame.contentWidth : width - 3,
           contentHeight: frame.contentHeight > 0 ? frame.contentHeight : height - 4,
-          warning: null,
+          sourceStatus: null,
           notice: null,
         }),
       )

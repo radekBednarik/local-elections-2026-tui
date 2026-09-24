@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Server } from "bun"
 import { MIN_INTERVAL_SECONDS } from "../../src/config/args.ts"
-import { createNullLogger } from "../../src/logging/logger.ts"
+import { createLogger, createNullLogger, type Logger } from "../../src/logging/logger.ts"
 import { backoffSeconds } from "../../src/sources/backoff.ts"
 import { fetchDocument } from "../../src/sources/client.ts"
 import { ingestNational } from "../../src/sources/ingest.ts"
@@ -20,7 +20,7 @@ import { Scheduler } from "../../src/sources/scheduler.ts"
 import { openDatabase, openMemoryDatabase } from "../../src/storage/db.ts"
 import { readNationalTotals } from "../../src/storage/queries/national.ts"
 import { recordFetch } from "../../src/ui/app.ts"
-import { staleWarning } from "../../src/ui/components/status.ts"
+import { sourceStatus } from "../../src/ui/components/status.ts"
 import { renderNationalView } from "../../src/ui/views/national.ts"
 import { withTempDataDir } from "../helpers/tmpdir.ts"
 
@@ -117,27 +117,37 @@ describe("last good data is kept (FR-027)", () => {
     await pass(scheduler)
 
     expect(scheduler.get("national")?.consecutiveFailures).toBe(1)
-    expect(staleWarning(scheduler.all())).not.toBeNull()
+    expect(sourceStatus(scheduler.all())?.kind).toBe("stale")
   })
 })
 
 describe("the staleness warning (FR-044)", () => {
-  test("appears on failure, names the reason, and clears on recovery", async () => {
+  test("appears on failure and clears on recovery", async () => {
     const scheduler = newScheduler()
     mode = "counting"
     await pass(scheduler)
-    expect(staleWarning(scheduler.all())).toBeNull()
+    expect(sourceStatus(scheduler.all())).toBeNull()
 
     mode = "down"
     await pass(scheduler)
-    const warning = staleWarning(scheduler.all())
-    expect(warning).not.toBeNull()
-    expect(warning).toContain("503")
+    const status = sourceStatus(scheduler.all())
+    // The counting pass succeeded first, so these figures really are out of date.
+    expect(status?.kind).toBe("stale")
+    // The reason lives only in the log now (004 FR-004).
+    expect(status?.text).not.toContain("503")
 
     // Recovery is unattended: the next successful pass clears it with no restart.
     mode = "counting"
     await pass(scheduler, new Date(Date.now() + 120_000))
-    expect(staleWarning(scheduler.all())).toBeNull()
+    expect(sourceStatus(scheduler.all())).toBeNull()
+  })
+
+  test("reads as awaiting publication, not stale, when nothing has ever loaded (004 FR-001)", async () => {
+    const scheduler = newScheduler()
+    mode = "down"
+    await pass(scheduler)
+    expect(scheduler.get("national")?.consecutiveFailures).toBe(1)
+    expect(sourceStatus(scheduler.all())?.kind).toBe("awaiting")
   })
 
   test("does not appear when a refresh of final results fails, since they are not stale (FR-009)", async () => {
@@ -148,7 +158,7 @@ describe("the staleness warning (FR-044)", () => {
     mode = "down"
     await pass(scheduler)
     expect(scheduler.get("national")?.consecutiveFailures).toBe(1)
-    expect(staleWarning(scheduler.all())).toBeNull()
+    expect(sourceStatus(scheduler.all())).toBeNull()
   })
 })
 
@@ -207,6 +217,9 @@ describe("offline start (FR-042)", () => {
       const outcome = await fetchDocument(url)
       if (outcome.kind !== "ok") throw new Error("fixture server did not serve")
       ingestNational(first, outcome.body)
+      // As the real fetch path does: a stored copy means a recorded success, which is
+      // what makes the cached figures stale rather than awaiting (004 research R1).
+      scheduler.recordSuccess("national", {}, new Date(), false)
       scheduler.recordFailure("national", "Spojení odmítnuto")
       first.close()
 
@@ -218,7 +231,7 @@ describe("offline start (FR-042)", () => {
         expect(totals?.turnoutPct).toBe(46.07)
 
         const restored = new Scheduler(second, { intervalSeconds: 60 })
-        expect(staleWarning(restored.all())).not.toBeNull()
+        expect(sourceStatus(restored.all())?.kind).toBe("stale")
 
         const view = renderNationalView(second).join("\n")
         expect(view).toMatch(/účast/i)
@@ -325,5 +338,86 @@ describe("recording a fetch outcome", () => {
     recordFetch(db, scheduler, "national", { kind: "failed", reason: "Server odpověděl 503" }, log)
     expect(scheduler.get("national")?.lastError).toBe("Server odpověděl 503")
     expect(scheduler.get("national")?.consecutiveFailures).toBe(2)
+  })
+})
+
+describe("what a fetch outcome logs (004 research R5)", () => {
+  const T0 = new Date("2026-10-09T20:00:00.000Z")
+  const ok = (body: string) => ({ kind: "ok" as const, body, etag: null, lastModified: null })
+  const notFound = { kind: "not-found" as const }
+  const down = { kind: "failed" as const, reason: "Server odpověděl 503" }
+
+  async function withLog(run: (log: Logger, scheduler: Scheduler) => void): Promise<void> {
+    await withTempDataDir((dir) => {
+      const log = createLogger(dir.file("volby.log"))
+      const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+      scheduler.subscribeAll([{ key: "national", areaKind: "national", areaId: "" }], T0)
+      run(log, scheduler)
+    })
+  }
+  const messages = (log: Logger) => log.entries().map((e) => `${e.level} ${e.message}`)
+
+  test("a 404 is logged once, with its source, not on every poll", async () => {
+    await withLog((log, scheduler) => {
+      recordFetch(db, scheduler, "national", notFound, log, T0)
+      recordFetch(db, scheduler, "national", notFound, log, T0)
+      expect(messages(log)).toEqual(["info Data zatím nejsou zveřejněna"])
+      expect(log.entries()[0]?.source).toBe("national")
+    })
+  })
+
+  test("a 404 after a different failure is logged again", async () => {
+    await withLog((log, scheduler) => {
+      recordFetch(db, scheduler, "national", notFound, log, T0)
+      recordFetch(db, scheduler, "national", down, log, T0)
+      recordFetch(db, scheduler, "national", notFound, log, T0)
+      expect(messages(log)).toEqual([
+        "info Data zatím nejsou zveřejněna",
+        "warn Stahování selhalo",
+        "info Data zatím nejsou zveřejněna",
+      ])
+    })
+  })
+
+  test("a document rejected for the same reason is logged once", async () => {
+    await withLog((log, scheduler) => {
+      recordFetch(db, scheduler, "national", ok(MALFORMED), log, T0)
+      recordFetch(db, scheduler, "national", ok(MALFORMED), log, T0)
+      expect(messages(log)).toEqual(["warn Dokument odmítnut"])
+    })
+  })
+
+  test("a rejection for a different reason, or after a success, is logged again", async () => {
+    await withLog((log, scheduler) => {
+      recordFetch(db, scheduler, "national", ok(MALFORMED), log, T0)
+      recordFetch(db, scheduler, "national", ok("<VYSLEDKY/>"), log, T0)
+      recordFetch(db, scheduler, "national", ok(NATIONAL), log, T0)
+      recordFetch(db, scheduler, "national", ok("<VYSLEDKY/>"), log, T0)
+      expect(messages(log)).toEqual([
+        "warn Dokument odmítnut",
+        "warn Dokument odmítnut",
+        "warn Dokument odmítnut",
+      ])
+    })
+  })
+
+  test("a new session logs a reason the database still holds from the last one (code review, T046)", async () => {
+    // lastError is persisted. Compared against it, a source still unpublished after a
+    // restart would never be logged, and the awaiting line would send the user to a
+    // logs view with nothing in it about why.
+    await withLog((log, scheduler) => {
+      scheduler.recordFailure("national", "Data zatím nejsou zveřejněna", T0)
+      recordFetch(db, scheduler, "national", notFound, log, T0)
+      recordFetch(db, scheduler, "national", notFound, log, T0)
+      expect(messages(log)).toEqual(["info Data zatím nejsou zveřejněna"])
+    })
+  })
+
+  test("a transport failure is still logged every time", async () => {
+    await withLog((log, scheduler) => {
+      recordFetch(db, scheduler, "national", down, log, T0)
+      recordFetch(db, scheduler, "national", down, log, T0)
+      expect(messages(log)).toEqual(["warn Stahování selhalo", "warn Stahování selhalo"])
+    })
   })
 })

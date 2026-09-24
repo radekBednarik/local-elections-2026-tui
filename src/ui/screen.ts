@@ -11,6 +11,7 @@
  */
 
 import type { Database } from "bun:sqlite"
+import type { LogEntry } from "../logging/logger.ts"
 import type { SourceKey } from "../sources/urls.ts"
 import { availableCouncilTypes } from "../storage/queries/national.ts"
 import { clampLines } from "./format.ts"
@@ -24,6 +25,7 @@ import {
   buildDistrictRows,
 } from "./views/areas.ts"
 import { buildHelpRows } from "./views/help.ts"
+import { buildLogEntryRows, buildLogListRows } from "./views/logs.ts"
 import { buildNationalRows } from "./views/national-rows.ts"
 import { buildSearchRows } from "./views/search.ts"
 import { buildWatchlistRows } from "./views/watchlist.ts"
@@ -56,6 +58,8 @@ export interface ScreenOptions {
   sort?: SortState
   /** Rows the content area affords, for a view that adapts its summary to it (FR-021). */
   contentHeight?: number
+  /** This session's log entries, for the logs screens (004). */
+  logEntries?: readonly LogEntry[]
 }
 
 /** Completes a screen, deriving the plain-text rendering from the rows. */
@@ -158,6 +162,22 @@ export function composeScreen(db: Database, screen: Screen, options: ScreenOptio
     case "help": {
       const rows = buildHelpRows(width)
       return content(rows, width, 0, 0, () => null)
+    }
+
+    case "logs": {
+      const entries = options.logEntries ?? []
+      const view = buildLogListRows(entries, width)
+      return content(view.rows, width, view.firstRow, entries.length, (index) => {
+        const entry = entries[index]
+        return entry === undefined ? null : { kind: "log-entry", seq: entry.seq }
+      })
+    }
+
+    case "log-entry": {
+      // Nothing here is selectable, so the list "starts" past the last row and no line
+      // takes the selection marker.
+      const rows = buildLogEntryRows(options.logEntries ?? [], screen.seq, width)
+      return content(rows, width, rows.length, 0, () => null)
     }
 
     case "watchlist": {

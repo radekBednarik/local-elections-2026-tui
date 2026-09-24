@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url"
 import { isBatchPath } from "./urls.ts"
 
 /** Sent so the publisher can attribute this traffic (FR-024). */
-export const USER_AGENT = "volby-kv2026/0.1.0 (+https://github.com/radekBednarik/local-elections-2026-tui)"
+export const USER_AGENT = "volby-kv2026/0.2.0 (+https://github.com/radekBednarik/local-elections-2026-tui)"
 
 const DEFAULT_TIMEOUT_MS = 20_000
 

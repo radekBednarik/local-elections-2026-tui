@@ -126,6 +126,8 @@ describe("the styled status bar (002 T028, FR-013)", () => {
     [{ kind: "watchlist" }, "SLEDOVANÉ"],
     [{ kind: "search" }, "HLEDÁNÍ"],
     [{ kind: "help" }, "NÁPOVĚDA"],
+    [{ kind: "logs" }, "ZÁZNAMY"],
+    [{ kind: "log-entry", seq: 0 }, "ZÁZNAM"],
   ] as [Screen, string][])("%j is labelled %s", (screen, label) => {
     expect(screenLabel(screen, false)).toBe(label)
   })
@@ -173,5 +175,28 @@ describe("the styled status bar (002 T028, FR-013)", () => {
     expect(keys.length).toBeLessThan(all.length)
     expect(keys).toEqual(all.slice(0, keys.length).map((h) => h.key))
     expect([...text(row)].length).toBe(80)
+  })
+})
+
+describe("the logs screens' status bar (004 research R8)", () => {
+  test("names the screen and offers both copy keys right after going back, even at 80 columns", () => {
+    const line = statusBarLine(ctx({ kind: "logs" }, { depth: 2, rowCount: 5 }), 80)
+    const copyAt = line.indexOf("c kopírovat")
+    expect(copyAt).toBeGreaterThan(-1)
+    expect(line.indexOf("C vše")).toBeGreaterThan(copyAt)
+    expect(line.indexOf("Esc zpět")).toBeLessThan(copyAt)
+    expect(line.indexOf("Ctrl+P")).toBeGreaterThan(line.indexOf("C vše"))
+    const row = statusBarRow(ctx({ kind: "logs" }, { depth: 2, rowCount: 5 }), 80, "Tokyo Night", false)
+    expect(
+      row.cells
+        .map((c) => c.text)
+        .join("")
+        .startsWith(" ZÁZNAMY "),
+    ).toBe(true)
+  })
+
+  test("elsewhere the copy keys take no room", () => {
+    const line = statusBarLine(ctx({ kind: "council", kodzastup: "582786" }, { depth: 3, rowCount: 5 }), 200)
+    expect(line).not.toContain("kopírovat")
   })
 })

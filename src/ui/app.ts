@@ -37,10 +37,10 @@ import { toggleWatchlist, watchedCodes } from "../storage/queries/watchlist.ts"
 import { Frame } from "./chrome/frame.ts"
 import { panelFits } from "./chrome/panel.ts"
 import { applyFrameState, applyPanel, applyPlainLines, frameState, viewWidthFor } from "./chrome/state.ts"
-import { allFinal, isTooSmall, staleWarning, tooSmallMessage } from "./components/status.ts"
+import { allFinal, isTooSmall, sourceStatus, tooSmallMessage } from "./components/status.ts"
 import { type Intent, intentFor } from "./keymap.ts"
 import { Navigation } from "./navigation.ts"
-import { type ActionContext, type ActionId, themeOfAction } from "./palette/actions.ts"
+import { type ActionContext, type ActionId, NOT_AVAILABLE_HERE, themeOfAction } from "./palette/actions.ts"
 import { Palette } from "./palette/view.ts"
 import { composeScreen, type ScreenContent, shownSources, sourcesForScreen } from "./screen.ts"
 import { applySearchKey, type KeyEvent } from "./search-input.ts"
@@ -54,6 +54,7 @@ import {
   withCapabilities,
 } from "./theme/detect.ts"
 import { nextTheme, type Theme, type ThemeName, themeLabel } from "./theme/themes.ts"
+import { openLogs, performCopy, syncLogSelection } from "./views/logs.ts"
 
 /** How close two clicks on one row must be to count as a double click. */
 const DOUBLE_CLICK_MS = 400
@@ -66,6 +67,11 @@ export interface AppDependencies {
   options: CliOptions
   log: Logger
   scheduler: Scheduler
+  /**
+   * Puts text on the clipboard, returning whether it was sent (004 research R7). Absent,
+   * the renderer's OSC 52 call is used; tests pass a recorder.
+   */
+  copy?: (text: string) => boolean
 }
 
 export class App {
@@ -84,6 +90,8 @@ export class App {
   private query = ""
   /** One-off confirmation line, cleared on the next key press. */
   private notice: string | null = null
+  /** The logger's dropped count when the logs list was last corrected (004 FR-012). */
+  private logsDroppedSeen = 0
   private councilType = "OBEC"
   /**
    * The sort the user has applied, reset when they move to another screen.
@@ -166,10 +174,10 @@ export class App {
     // unhandled rejection must leave a trace in the log rather than vanishing, since the
     // console overlay that used to show it is deliberately gone.
     process.on("unhandledRejection", (reason) => {
-      this.deps.log.error("Neošetřené odmítnutí příslibu", reason)
+      this.logUnhandled("Neošetřené odmítnutí příslibu", reason)
     })
     process.on("uncaughtException", (error) => {
-      this.deps.log.error("Neošetřená výjimka", error)
+      this.logUnhandled("Neošetřená výjimka", error)
     })
 
     const shutdown = () => {
@@ -334,7 +342,7 @@ export class App {
       this.closePalette(palette)
       if (action === null) {
         // The highlighted entry does nothing here. Say so rather than closing silently.
-        this.notice = "Tento příkaz zde není dostupný."
+        this.notice = NOT_AVAILABLE_HERE
       } else {
         await this.perform(action.id, this.currentContent())
       }
@@ -409,6 +417,20 @@ export class App {
       case "theme":
         this.cycleTheme()
         break
+      case "copy-entry":
+      case "copy-all":
+        this.notice = performCopy(
+          id === "copy-all" ? "all" : "one",
+          this.nav.screen,
+          this.nav.current.selected,
+          this.deps.log.entries(),
+          this.copyToClipboard,
+        )
+        break
+      case "logs":
+        this.sort = UNSORTED
+        if (openLogs(this.nav, this.deps.log.entries().length)) this.logsDroppedSeen = this.deps.log.dropped
+        break
       case "help":
         if (this.nav.screen.kind !== "help") {
           this.sort = UNSORTED
@@ -425,6 +447,25 @@ export class App {
       }
     }
   }
+
+  /**
+   * Logs an error nothing else caught, and draws, so an open logs view shows it at once:
+   * while no source is due - once every source is final, say - nothing else would redraw
+   * until a key press (004 FR-012). A draw that throws is swallowed here, since throwing
+   * from these handlers would take the process down with it.
+   */
+  private logUnhandled(message: string, detail: unknown): void {
+    this.deps.log.error(message, detail)
+    try {
+      this.draw()
+    } catch {
+      // Already logged; drawing again is what failed, so there is nothing more to do.
+    }
+  }
+
+  /** The clipboard, through the renderer unless a test supplied its own. */
+  private readonly copyToClipboard = (text: string): boolean =>
+    this.deps.copy !== undefined ? this.deps.copy(text) : (this.renderer?.copyToClipboardOSC52(text) ?? false)
 
   private openPalette(content: ScreenContent): void {
     if (this.palette === null) return
@@ -642,6 +683,7 @@ export class App {
       // The same height the draw passes, for the same reason: the national summary
       // chooses its form by it, and the two must never disagree.
       contentHeight: this.frame?.contentHeight,
+      logEntries: this.deps.log.entries(),
     })
   }
 
@@ -704,6 +746,7 @@ export class App {
 
     const width = renderer.width
     const height = renderer.height
+    this.logsDroppedSeen = syncLogSelection(this.nav, this.logsDroppedSeen, this.deps.log.dropped)
 
     if (isTooSmall(width, height)) {
       frame.setBreadcrumb("")
@@ -737,7 +780,7 @@ export class App {
         width,
         contentWidth: this.contentWidth(),
         contentHeight: frame.contentHeight,
-        warning: staleWarning(subscriptions),
+        sourceStatus: sourceStatus(subscriptions),
         final: allFinal(
           subscriptions,
           shownSources(this.nav.screen, watchedCodes(this.deps.db), this.districts),
@@ -748,6 +791,7 @@ export class App {
         content,
         lastSuccessAt: latestSuccess(subscriptions),
         paletteOpen: this.palette?.open === true,
+        logEntries: this.deps.log.entries(),
       }),
       theme,
     )
@@ -761,6 +805,30 @@ function latestSuccess(subscriptions: { lastSuccessAt: string | null }[]): strin
     if (lastSuccessAt !== null && (latest === null || lastSuccessAt > latest)) latest = lastSuccessAt
   }
   return latest
+}
+
+/** The reason recorded, and logged, for a source the publisher has not put out yet. */
+const NOT_PUBLISHED = "Data zatím nejsou zveřejněna"
+
+/**
+ * The reason last logged for each source, per logger - that is, per session.
+ *
+ * `lastError` alone is not enough to decide: it is persisted, so after a restart before
+ * publication every source would match it and nothing would be logged, leaving the
+ * awaiting line pointing at a logs view with no word on why (T046 review).
+ */
+const loggedReasons = new WeakMap<Logger, Map<SourceKey, string>>()
+
+/** Whether this reason for this source is news: to the database or to this session. */
+function isNewReason(log: Logger, key: SourceKey, previous: string | null, reason: string): boolean {
+  let logged = loggedReasons.get(log)
+  if (logged === undefined) {
+    logged = new Map()
+    loggedReasons.set(log, logged)
+  }
+  const news = previous !== reason || logged.get(key) !== reason
+  logged.set(key, reason)
+  return news
 }
 
 /**
@@ -777,6 +845,12 @@ export function recordFetch(
   log: Logger,
   now = new Date(),
 ): void {
+  // A "no usable data yet" reason is logged only when it changes. Before publication
+  // every source repeats one on every retry, and those repeats would flood the logs view
+  // with nothing new; a transport failure is still logged each time, since a run of them
+  // is worth counting (004 research R5). A success clears `lastError`, so the next
+  // occurrence after one is logged again, and so is the first in each session.
+  const previous = scheduler.get(key)?.lastError ?? null
   if (outcome.kind === "ok") {
     const result = ingestFor(db, key, outcome.body)
     if (result.ok) {
@@ -790,12 +864,14 @@ export function recordFetch(
       // A document failing validation is a failure of the source, not of the
       // application: the previous snapshot stays on screen (FR-025, FR-027).
       scheduler.recordFailure(key, result.reason, now)
-      log.warn("Dokument odmítnut", { source: key, reason: result.reason })
+      if (isNewReason(log, key, previous, result.reason))
+        log.warn("Dokument odmítnut", { source: key, reason: result.reason })
     }
   } else if (outcome.kind === "not-modified") {
     scheduler.recordSuccess(key, {}, now)
   } else if (outcome.kind === "not-found") {
-    scheduler.recordFailure(key, "Data zatím nejsou zveřejněna", now)
+    scheduler.recordFailure(key, NOT_PUBLISHED, now)
+    if (isNewReason(log, key, previous, NOT_PUBLISHED)) log.info(NOT_PUBLISHED, { source: key })
   } else {
     scheduler.recordFailure(key, outcome.reason, now)
     log.warn("Stahování selhalo", { source: key, reason: outcome.reason })
