@@ -18,7 +18,7 @@ dist/
 fixtures/source-2026-reg/
 
 # Local mirrors of previous elections, built by tools/mirror/build.ts.
-mirror/
+/mirror/
 
 # Exports the application writes, which default to the working directory (FR-049).
 volby-kv2026-*.csv
