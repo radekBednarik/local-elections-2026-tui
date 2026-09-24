@@ -132,7 +132,17 @@ With the logs view open:
 
 ## 6. Responsiveness after a long run
 
-Leave section 3 running long enough to fill the view past 1000 entries. With
-`--log-level debug`, the view fills much faster. Then:
-- `l` and `Esc` still respond at once, and scrolling stays smooth (SC-003, SC-006).
-- The selection stays on the same entry as older entries drop out (FR-012).
+Filling the view past 1000 entries takes hours of real polling. Nothing in the code logs
+at `debug`, so `--log-level debug` does not speed it up. Measure the frame instead, with
+a logger filled directly:
+- Build the logs screen's full frame state from 1000 entries (250 already evicted).
+- Style the visible rows.
+- Time many repetitions.
+
+It must stay well inside the 100 ms keystroke budget (SC-003, SC-006). Then evict
+further entries while an entry is selected, apply `syncLogSelection`, and check that the
+same `seq` is still selected (FR-012).
+
+Measured 2026-09-24 (T045), 120 columns wide:
+- **Frame time:** median 2.8 ms, p95 4.7 ms, max 5.2 ms.
+- **Eviction:** after 37 evictions the selection stayed on the same entry.

@@ -25,7 +25,9 @@ therefore most of the code was written using AI tooling.
   restart.
 - **Export** – the displayed table to CSV, or a readable summary report.
 - **Survives a bad network** – keeps the last good figures on screen, says plainly that
-  they are stale and why, backs off, and recovers on its own.
+  they are stale, backs off, and recovers on its own. Before anything is published it
+  says so instead, rather than calling data stale that never existed. The reasons are in
+  the logs view (`l`).
 
 ## The interface
 
@@ -41,6 +43,12 @@ not the row you had selected.
 - **Side panel** (`Ctrl+B`) – your watchlist beside the table, with live turnout. It hides
   itself when the terminal is too narrow to show it without squeezing the table, and comes
   back when there is room. Its state survives a restart.
+- **Logs** (`l`) – everything the application recorded this session, newest selected:
+  time, severity, source and message, one line each. `Enter` shows an entry in full,
+  `c` copies it and `Shift+C` copies the whole log, `Esc` goes back. Copying uses the
+  terminal's own clipboard support (OSC 52), so it works over SSH; a terminal that ignores
+  it cannot be detected, so the notice says the text was sent. Earlier sessions are in
+  `volby.log` in the data directory.
 - **Themes** (`Ctrl+T`, or type `motiv` in the palette) – Tokyo Night (the default),
   Catppuccin Mocha, Gruvbox Dark, Nord, Catppuccin Latte (light) and high contrast. Each
   region sits on its own background, table rows are striped, and every text colour meets
@@ -133,6 +141,18 @@ complete is not requested again, not even after a restart. The title bar then sa
 60-second floor. Individual councils are fetched when you open them and stay subscribed
 only while on screen or on your watchlist. A final council is remembered after you leave
 it, so opening it again requests nothing.
+
+When a source cannot be read, the row under the title bar says which of two things is
+true, in one line and without the technical detail:
+
+- `○ Výsledky zatím nejsou zveřejněny…` – nothing has been loaded yet, typically before
+  publication. The title bar shows `čeká na výsledky`.
+- `! ZASTARALÁ DATA: zobrazena data před …` – figures loaded earlier can no longer be
+  refreshed, with the age of the oldest. The title bar shows `ZASTARALÉ`.
+
+The reason itself (a 404, a rejected document, a network error) goes to the log, and so
+to the logs view. A "not published yet" or a rejected document is logged when its reason
+changes rather than on every retry, so the view is not flooded before publication.
 
 ## Data source
 

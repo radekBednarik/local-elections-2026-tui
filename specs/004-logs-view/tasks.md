@@ -457,12 +457,15 @@ separate severities without colour. Contract § 3, FR-020, SC-005.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T043 [P] Update `README.md`:
+- [X] T043 [P] Update `README.md`:
   - In `## The interface`, add a **Logs** (`l`) bullet: what it lists, `Enter` for detail, `c` / `Shift+C` to copy, `Esc` to close, current session only, and the log file for older sessions.
   - Describe the status row's two states: awaiting vs stale.
   - In `### Polling`, replace any wording that says a failure shows its reason on screen.
-- [ ] T044 [P] Search `src/` and `tests/` for any remaining `ZASTARALÁ DATA (` pattern, `staleWarning`, `MAX_REASON` or `warning:` field on `FrameInputs`. Remove leftovers; there must be no dead code (Quality Standards).
-- [ ] T045 Run quickstart § 6: fill past 1000 entries with `--log-level debug`. Confirm the view opens and scrolls with no visible delay, and that the selection stays on its entry as old entries drop out. Record the result in this task's notes.
+  - (Done 2026-09-24. There was no such wording in `### Polling`; the one claim of that kind was "says plainly that they are stale and why" under `## What it does`, now corrected. The Logs bullet and the two-state description were added.)
+- [X] T044 [P] Search `src/` and `tests/` for any remaining `ZASTARALÁ DATA (` pattern, `staleWarning`, `MAX_REASON` or `warning:` field on `FrameInputs`. Remove leftovers; there must be no dead code (Quality Standards).
+  - (Done 2026-09-24. `staleWarning` and `MAX_REASON` are gone from `src`, `tests` and `tools`. The one leftover old-format string was in `tests/ui/frame.test.ts`, fed straight to `Frame.setWarning`; it now uses the new wording. `FrameState.warning` in `state.ts` is the row's text, which is legitimate, not the removed input.)
+- [X] T045 Run quickstart § 6: fill past 1000 entries with `--log-level debug`. Confirm the view opens and scrolls with no visible delay, and that the selection stays on its entry as old entries drop out. Record the result in this task's notes.
+  - (Done 2026-09-24, by measurement. The task's `--log-level debug` premise was wrong: nothing logs at debug, so a live run cannot fill 1000 entries in reasonable time, and quickstart § 6 was corrected. The timing script fills a real logger to 1000 entries with 250 dropped and builds the logs `frameState` at 120 columns: median 2.8 ms, p95 4.7 ms, max 5.2 ms, about 20× inside the 100 ms budget. With entry `seq` 750 selected, 37 more evictions followed by `syncLogSelection` kept `seq` 750 selected.)
 - [ ] T046 FINAL REVIEW of the whole branch against Principles I–III, spec FR-001 to FR-022 and SC-001 to SC-006. Every FR must trace to a test named in this file. Run `bun test`, `bun run typecheck` and `bun run check`, and record the counts. Fix every finding.
 
 ---
