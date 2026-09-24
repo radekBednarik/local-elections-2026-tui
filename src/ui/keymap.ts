@@ -75,6 +75,8 @@ export function intentFor(key: KeyEvent): Intent | null {
       return { kind: "action", id: "council-type" }
     case "s":
       return { kind: "action", id: "sort" }
+    case "l":
+      return { kind: "action", id: "logs" }
     case "r":
       return { kind: "action", id: "refresh" }
     case "?":

@@ -596,6 +596,24 @@ describe("the warning row (T029, FR-014)", () => {
     expect((grid[0] ?? []).map((c) => c.ch).join("")).toContain("● ZASTARALÉ")
   })
 
+  test("is left out on the logs screens, which it would only point back to (004 data-model)", async () => {
+    for (const screen of [{ kind: "logs" }, { kind: "log-entry", seq: 0 }] as Screen[]) {
+      const { grid, state, text } = await paintRows(screen, TOKYO, { sourceStatus: AWAITING })
+      expect(state.warning).toBeNull()
+      expect(text).not.toContain("Výsledky zatím nejsou zveřejněny")
+      expect((grid[0] ?? []).map((c) => c.ch).join("")).toContain("○ čeká na výsledky")
+    }
+  })
+
+  test("still shows a notice on the logs screens", async () => {
+    const { state } = await paintRows({ kind: "logs" }, TOKYO, {
+      sourceStatus: AWAITING,
+      notice: "Není co kopírovat.",
+    })
+    expect(state.warning).toBe("Není co kopírovat.")
+    expect(state.warningKind).toBe("notice")
+  })
+
   test("is the warning colour across the full width, its text in onAccent", async () => {
     const { grid } = await paintRows({ kind: "districts" }, TOKYO, { sourceStatus: STALE })
     const row = grid.find((line) =>

@@ -54,6 +54,7 @@ import {
   withCapabilities,
 } from "./theme/detect.ts"
 import { nextTheme, type Theme, type ThemeName, themeLabel } from "./theme/themes.ts"
+import { openLogs, syncLogSelection } from "./views/logs.ts"
 
 /** How close two clicks on one row must be to count as a double click. */
 const DOUBLE_CLICK_MS = 400
@@ -84,6 +85,8 @@ export class App {
   private query = ""
   /** One-off confirmation line, cleared on the next key press. */
   private notice: string | null = null
+  /** The logger's dropped count when the logs list was last corrected (004 FR-012). */
+  private logsDroppedSeen = 0
   private councilType = "OBEC"
   /**
    * The sort the user has applied, reset when they move to another screen.
@@ -409,6 +412,11 @@ export class App {
       case "theme":
         this.cycleTheme()
         break
+      case "logs":
+        this.sort = UNSORTED
+        openLogs(this.nav, this.deps.log.entries().length)
+        this.logsDroppedSeen = this.deps.log.dropped
+        break
       case "help":
         if (this.nav.screen.kind !== "help") {
           this.sort = UNSORTED
@@ -642,6 +650,7 @@ export class App {
       // The same height the draw passes, for the same reason: the national summary
       // chooses its form by it, and the two must never disagree.
       contentHeight: this.frame?.contentHeight,
+      logEntries: this.deps.log.entries(),
     })
   }
 
@@ -704,6 +713,7 @@ export class App {
 
     const width = renderer.width
     const height = renderer.height
+    this.logsDroppedSeen = syncLogSelection(this.nav, this.logsDroppedSeen, this.deps.log.dropped)
 
     if (isTooSmall(width, height)) {
       frame.setBreadcrumb("")
@@ -748,6 +758,7 @@ export class App {
         content,
         lastSuccessAt: latestSuccess(subscriptions),
         paletteOpen: this.palette?.open === true,
+        logEntries: this.deps.log.entries(),
       }),
       theme,
     )
@@ -763,6 +774,9 @@ function latestSuccess(subscriptions: { lastSuccessAt: string | null }[]): strin
   return latest
 }
 
+/** The reason recorded, and logged, for a source the publisher has not put out yet. */
+const NOT_PUBLISHED = "Data zatím nejsou zveřejněna"
+
 /**
  * Stores one fetch's outcome and records it against the source's subscription.
  *
@@ -777,6 +791,12 @@ export function recordFetch(
   log: Logger,
   now = new Date(),
 ): void {
+  // A "no usable data yet" reason is logged only when it changes. Before publication
+  // every source repeats one on every retry, and those repeats would flood the logs view
+  // with nothing new; a transport failure is still logged each time, since a run of them
+  // is worth counting (004 research R5). A success clears `lastError`, so the next
+  // occurrence after one is logged again.
+  const previous = scheduler.get(key)?.lastError ?? null
   if (outcome.kind === "ok") {
     const result = ingestFor(db, key, outcome.body)
     if (result.ok) {
@@ -790,12 +810,13 @@ export function recordFetch(
       // A document failing validation is a failure of the source, not of the
       // application: the previous snapshot stays on screen (FR-025, FR-027).
       scheduler.recordFailure(key, result.reason, now)
-      log.warn("Dokument odmítnut", { source: key, reason: result.reason })
+      if (previous !== result.reason) log.warn("Dokument odmítnut", { source: key, reason: result.reason })
     }
   } else if (outcome.kind === "not-modified") {
     scheduler.recordSuccess(key, {}, now)
   } else if (outcome.kind === "not-found") {
-    scheduler.recordFailure(key, "Data zatím nejsou zveřejněna", now)
+    scheduler.recordFailure(key, NOT_PUBLISHED, now)
+    if (previous !== NOT_PUBLISHED) log.info(NOT_PUBLISHED, { source: key })
   } else {
     scheduler.recordFailure(key, outcome.reason, now)
     log.warn("Stahování selhalo", { source: key, reason: outcome.reason })

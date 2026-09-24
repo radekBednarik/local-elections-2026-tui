@@ -39,6 +39,7 @@ export type ActionId =
   | "open"
   | "back"
   | "search"
+  | "logs"
   | "watch"
   | "watchlist"
   | "export-csv"
@@ -84,6 +85,7 @@ export interface Action {
 
 const TABLE_SCREENS: Screen["kind"][] = ["national", "district", "council", "candidates"]
 const REPORT_SCREENS: Screen["kind"][] = ["district", "council", "candidates"]
+const LOGS_SCREENS: Screen["kind"][] = ["logs", "log-entry"]
 
 /** Always applicable. */
 const always = () => null
@@ -136,6 +138,14 @@ export const ACTIONS: Action[] = [
     key: "/",
     where: "všude",
     unavailable: always,
+  },
+  {
+    id: "logs",
+    label: "Zobrazit záznamy",
+    hint: "záznamy",
+    key: "l",
+    where: "všude",
+    unavailable: (c) => (LOGS_SCREENS.includes(c.screen.kind) ? "záznamy jsou právě otevřené" : null),
   },
   {
     id: "watch",

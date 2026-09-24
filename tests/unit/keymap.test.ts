@@ -28,6 +28,7 @@ describe("every action has a key (FR-078)", () => {
     open: press("return"),
     back: press("escape"),
     search: press("/"),
+    logs: press("l"),
     watch: press("w"),
     watchlist: press("w", { shift: true }),
     "export-csv": press("e"),

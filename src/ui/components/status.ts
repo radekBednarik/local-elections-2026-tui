@@ -153,6 +153,10 @@ export function screenLabel(screen: Screen, paletteOpen: boolean): string {
       return "HLEDÁNÍ"
     case "help":
       return "NÁPOVĚDA"
+    case "logs":
+      return "ZÁZNAMY"
+    case "log-entry":
+      return "ZÁZNAM"
   }
 }
 

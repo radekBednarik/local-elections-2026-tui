@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Server } from "bun"
 import { MIN_INTERVAL_SECONDS } from "../../src/config/args.ts"
-import { createNullLogger } from "../../src/logging/logger.ts"
+import { createLogger, createNullLogger, type Logger } from "../../src/logging/logger.ts"
 import { backoffSeconds } from "../../src/sources/backoff.ts"
 import { fetchDocument } from "../../src/sources/client.ts"
 import { ingestNational } from "../../src/sources/ingest.ts"
@@ -338,5 +338,74 @@ describe("recording a fetch outcome", () => {
     recordFetch(db, scheduler, "national", { kind: "failed", reason: "Server odpověděl 503" }, log)
     expect(scheduler.get("national")?.lastError).toBe("Server odpověděl 503")
     expect(scheduler.get("national")?.consecutiveFailures).toBe(2)
+  })
+})
+
+describe("what a fetch outcome logs (004 research R5)", () => {
+  const T0 = new Date("2026-10-09T20:00:00.000Z")
+  const ok = (body: string) => ({ kind: "ok" as const, body, etag: null, lastModified: null })
+  const notFound = { kind: "not-found" as const }
+  const down = { kind: "failed" as const, reason: "Server odpověděl 503" }
+
+  async function withLog(run: (log: Logger, scheduler: Scheduler) => void): Promise<void> {
+    await withTempDataDir((dir) => {
+      const log = createLogger(dir.file("volby.log"))
+      const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+      scheduler.subscribeAll([{ key: "national", areaKind: "national", areaId: "" }], T0)
+      run(log, scheduler)
+    })
+  }
+  const messages = (log: Logger) => log.entries().map((e) => `${e.level} ${e.message}`)
+
+  test("a 404 is logged once, with its source, not on every poll", async () => {
+    await withLog((log, scheduler) => {
+      recordFetch(db, scheduler, "national", notFound, log, T0)
+      recordFetch(db, scheduler, "national", notFound, log, T0)
+      expect(messages(log)).toEqual(["info Data zatím nejsou zveřejněna"])
+      expect(log.entries()[0]?.source).toBe("national")
+    })
+  })
+
+  test("a 404 after a different failure is logged again", async () => {
+    await withLog((log, scheduler) => {
+      recordFetch(db, scheduler, "national", notFound, log, T0)
+      recordFetch(db, scheduler, "national", down, log, T0)
+      recordFetch(db, scheduler, "national", notFound, log, T0)
+      expect(messages(log)).toEqual([
+        "info Data zatím nejsou zveřejněna",
+        "warn Stahování selhalo",
+        "info Data zatím nejsou zveřejněna",
+      ])
+    })
+  })
+
+  test("a document rejected for the same reason is logged once", async () => {
+    await withLog((log, scheduler) => {
+      recordFetch(db, scheduler, "national", ok(MALFORMED), log, T0)
+      recordFetch(db, scheduler, "national", ok(MALFORMED), log, T0)
+      expect(messages(log)).toEqual(["warn Dokument odmítnut"])
+    })
+  })
+
+  test("a rejection for a different reason, or after a success, is logged again", async () => {
+    await withLog((log, scheduler) => {
+      recordFetch(db, scheduler, "national", ok(MALFORMED), log, T0)
+      recordFetch(db, scheduler, "national", ok("<VYSLEDKY/>"), log, T0)
+      recordFetch(db, scheduler, "national", ok(NATIONAL), log, T0)
+      recordFetch(db, scheduler, "national", ok("<VYSLEDKY/>"), log, T0)
+      expect(messages(log)).toEqual([
+        "warn Dokument odmítnut",
+        "warn Dokument odmítnut",
+        "warn Dokument odmítnut",
+      ])
+    })
+  })
+
+  test("a transport failure is still logged every time", async () => {
+    await withLog((log, scheduler) => {
+      recordFetch(db, scheduler, "national", down, log, T0)
+      recordFetch(db, scheduler, "national", down, log, T0)
+      expect(messages(log)).toEqual(["warn Stahování selhalo", "warn Stahování selhalo"])
+    })
   })
 })

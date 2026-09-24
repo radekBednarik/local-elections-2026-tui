@@ -93,6 +93,10 @@ export function segmentFor(db: Database, screen: Screen): string {
       return "Hledání"
     case "help":
       return "Nápověda"
+    case "logs":
+      return "Záznamy"
+    case "log-entry":
+      return "Záznam"
     default:
       return ""
   }

@@ -210,7 +210,7 @@ check the logs view".
 
 ### Tests (write first, observe failing)
 
-- [ ] T016 [P] [US2] Create `tests/unit/logs-view.test.ts` for `src/ui/views/logs.ts`. Build `LogEntry` literals directly. Tests:
+- [X] T016 [P] [US2] Create `tests/unit/logs-view.test.ts` for `src/ui/views/logs.ts`. Build `LogEntry` literals directly. Tests:
   - **`buildLogListRows(entries, width)`:**
     - The heading is `Záznamy`, followed by a rule and a table header with `Čas`, `Úroveň`, `Zdroj` and `Zpráva`.
     - There is one data row per entry, oldest first.
@@ -223,20 +223,20 @@ check the logs view".
   - **`buildLogEntryRows(entries, seq, width)`:**
     - The heading is `Záznam`, and the entry's full `line` is wrapped to `width` with no characters lost. Joining the wrapped pieces gives `line`.
     - A `seq` not present gives `Záznam již není k dispozici.`
-- [ ] T017 [P] [US2] Add to `tests/integration/screen.test.ts`. Pass `logEntries` through `ScreenOptions`:
+- [X] T017 [P] [US2] Add to `tests/integration/screen.test.ts`. Pass `logEntries` through `ScreenOptions`:
   - `composeScreen(db, { kind: "logs" }, …)`:
     - `rowCount` equals the number of entries, and `firstRow` points at the first data row;
     - `target(i)` is `{ kind: "log-entry", seq: entries[i].seq }`.
   - `{ kind: "log-entry", seq }` has `rowCount` 0 and `target` null.
   - `shownSources` for both kinds returns `["national"]`, as for `help`.
-- [ ] T018 [P] [US2] In `tests/ui/help-and-language.test.ts`, check that:
+- [X] T018 [P] [US2] In `tests/ui/help-and-language.test.ts`, check that:
   - `describe("every screen composes (exhaustiveness)")` covers `logs` and `log-entry`;
   - the help screen lists a row with key `l` and label `Zobrazit záznamy`.
 
   In `tests/unit/breadcrumb.test.ts` (or wherever `segmentsFor` is tested), check that:
   - `segmentsFor` gives `Záznamy` for `logs` and `Záznam` for `log-entry`;
   - `screenLabel` gives `ZÁZNAMY` and `ZÁZNAM`.
-- [ ] T019 [P] [US2] In `tests/unit/keymap.test.ts`:
+- [X] T019 [P] [US2] In `tests/unit/keymap.test.ts`:
   - `l` maps to `{ kind: "action", id: "logs" }`;
   - the `describe("every action has a key (FR-078)")` suite still passes with the new registry entry.
 
@@ -244,8 +244,8 @@ check the logs view".
   - `logs` is available on `national`, `council` and `help`;
   - on `logs` and `log-entry` it is unavailable with the reason `záznamy jsou právě otevřené`;
   - `open` is unavailable on `log-entry` (rowCount 0) and available on `logs` when there are entries.
-- [ ] T020 [P] [US2] In `tests/ui/frame.test.ts`: on `logs` and `log-entry` screens, with an awaiting `sourceStatus` and no notice, there is no status row, but the title bar still shows `čeká na výsledky`. With a notice, the notice row is shown (data-model § FrameInputs/FrameState).
-- [ ] T021 [P] [US2] In `tests/unit/logs-view.test.ts`, add `describe("opening, closing and keeping the selection (FR-008, FR-009, FR-012)")`.
+- [X] T020 [P] [US2] In `tests/ui/frame.test.ts`: on `logs` and `log-entry` screens, with an awaiting `sourceStatus` and no notice, there is no status row, but the title bar still shows `čeká na výsledky`. With a notice, the notice row is shown (data-model § FrameInputs/FrameState).
+- [X] T021 [P] [US2] In `tests/unit/logs-view.test.ts`, add `describe("opening, closing and keeping the selection (FR-008, FR-009, FR-012)")`.
   - **Why here:** no test drives `App` today (`perform` is private, and no test constructs `App`). The logs-screen behaviour is therefore specified as two pure functions in `src/ui/views/logs.ts` that operate on a real `Navigation`. `App` only calls them (T029). That keeps every line of production code behind a failing test (Principle II).
   - **`openLogs(nav: Navigation, count: number): void`:** pushes `{ kind: "logs" }` and selects the last row. Tests:
     - From `national`, push a council, then set `nav.current.selected = 5` and `nav.current.offset = 3`. `openLogs(nav, 4)` gives `nav.screen.kind === "logs"` and `nav.current.selected === 3` (FR-009).
@@ -263,7 +263,7 @@ check the logs view".
     3. Call `syncLogSelection(nav, 0, 4)`: nothing changes and it returns `0`.
     4. `pop()`.
     5. Call `syncLogSelection(nav, 0, 4)`: `selected` goes from 999 to 995, so it still points at the same `seq`.
-- [ ] T022 [P] [US2] In `tests/integration/resilience.test.ts`, in `describe("recording a fetch outcome")`, use a logger created with `createLogger` in a temp dir, and read it with `entries()`. Tests:
+- [X] T022 [P] [US2] In `tests/integration/resilience.test.ts`, in `describe("recording a fetch outcome")`, use a logger created with `createLogger` in a temp dir, and read it with `entries()`. Tests:
   - Two consecutive `not-found` outcomes for `national` log exactly one `info` entry `Data zatím nejsou zveřejněna` with `source: "national"`.
   - A `failed` outcome in between, followed by `not-found` again, logs it again.
   - Two consecutive `ok` outcomes whose body fails validation with the same reason log exactly one `warn` entry `Dokument odmítnut`. Use the fixture server's malformed or unexpected-shape mode, or an inline body such as `<VYSLEDKY/>`. A body rejected for a different reason logs again. A successful ingest in between, followed by the same rejection, logs it again, because a success clears `lastError`.
@@ -271,30 +271,30 @@ check the logs view".
 
 ### Implementation
 
-- [ ] T023 [US2] In `src/ui/navigation.ts`, add `| { kind: "logs" } | { kind: "log-entry"; seq: number }` to `Screen`. Then fix every exhaustive `switch` that `bun run typecheck` flags, as in the tasks below. No `default` fallbacks are added to silence it.
-- [ ] T024 [US2] Create `src/ui/views/logs.ts` with:
+- [X] T023 [US2] In `src/ui/navigation.ts`, add `| { kind: "logs" } | { kind: "log-entry"; seq: number }` to `Screen`. Then fix every exhaustive `switch` that `bun run typecheck` flags, as in the tasks below. No `default` fallbacks are added to silence it.
+- [X] T024 [US2] Create `src/ui/views/logs.ts` with:
   - `buildLogListRows`, `buildLogEntryRows`, `openLogs` and `syncLogSelection`, as specified in T016 and T021.
   - A private `LEVEL_LABEL: Record<LogLevel, string>` and a private `LEVEL_ROLE`.
   - The same `row.ts` helpers `help.ts` uses (`line`, `blank`, `tableHeader`, `cell`).
   - A file header comment citing 004 FR-009 to FR-014 and research R6, including why long entries open a detail screen rather than wrapping in the list.
   - Makes T016 and T021 pass.
-- [ ] T025 [US2] In `src/ui/screen.ts`:
+- [X] T025 [US2] In `src/ui/screen.ts`:
   - Add `logEntries?: readonly LogEntry[]` to `ScreenOptions`. Default: `[]`.
   - Add `case "logs"`: `content(rows, width, firstRow, entries.length, (i) => entries[i] ? { kind: "log-entry", seq: entries[i].seq } : null)`.
   - Add `case "log-entry"`: `content(rows, width, 0, 0, () => null)`.
   - In `sourcesForScreen` and `shownSources`, treat both kinds like `help`.
   - Makes T017 pass.
-- [ ] T026 [US2] In `src/ui/chrome/breadcrumb.ts`, add the segments `Záznamy` / `Záznam`. In `src/ui/components/status.ts` `screenLabel`, add `ZÁZNAMY` / `ZÁZNAM`. Makes T018's breadcrumb and label assertions pass.
-- [ ] T027 [US2] In `src/ui/palette/actions.ts`:
+- [X] T026 [US2] In `src/ui/chrome/breadcrumb.ts`, add the segments `Záznamy` / `Záznam`. In `src/ui/components/status.ts` `screenLabel`, add `ZÁZNAMY` / `ZÁZNAM`. Makes T018's breadcrumb and label assertions pass.
+- [X] T027 [US2] In `src/ui/palette/actions.ts`:
   - Add `"logs"` to `ActionId`.
   - Add the registry entry right after `search`: `{ id: "logs", label: "Zobrazit záznamy", hint: "záznamy", key: "l", where: "všude", unavailable: (c) => (c.screen.kind === "logs" || c.screen.kind === "log-entry" ? "záznamy jsou právě otevřené" : null) }`.
   - In `src/ui/keymap.ts`, add `case "l": return { kind: "action", id: "logs" }`.
   - Makes T018's help assertion and T019 pass.
-- [ ] T028 [US2] In `src/ui/chrome/state.ts`:
+- [X] T028 [US2] In `src/ui/chrome/state.ts`:
   - Add `logEntries: readonly LogEntry[]` to `FrameInputs` and pass it to `composeScreen`. Default `[]` at the test call sites updated in T014, or make the field optional with default `[]`.
   - Leave out `sourceStatus` from the status row when `nav.screen.kind` is `logs` or `log-entry`.
   - Makes T020 pass.
-- [ ] T029 [US2] In `src/ui/app.ts`, glue only. Every decision is in the functions T021 tests, and this task adds no branching logic of its own:
+- [X] T029 [US2] In `src/ui/app.ts`, glue only. Every decision is in the functions T021 tests, and this task adds no branching logic of its own:
   - **`perform`:** add `case "logs"`:
     - `this.sort = UNSORTED`;
     - `openLogs(this.nav, this.deps.log.entries().length)`;
@@ -307,20 +307,32 @@ check the logs view".
     - it contains no `nav.push({ kind: "logs" })` of its own.
 
     This way the glue cannot quietly grow a second implementation. Write the test first and observe it fail.
-- [ ] T030 [US2] In `src/ui/app.ts` `recordFetch`:
+- [X] T030 [US2] In `src/ui/app.ts` `recordFetch`:
   - At the top of the function, read `const previous = scheduler.get(key)?.lastError ?? null` BEFORE any `recordFailure` call.
   - **`not-found` branch:** call `log.info(NOT_PUBLISHED, { source: key })` only when `previous !== NOT_PUBLISHED`. `NOT_PUBLISHED = "Data zatím nejsou zveřejněna"` is one constant used for both the failure record and the log (Principle I).
   - **Rejected-document branch** (`result.ok === false`): call `log.warn("Dokument odmítnut", …)` only when `previous !== result.reason`.
   - **`failed` branch:** unchanged.
   - Comment the rule once, above `previous`: repeats of an unchanged "no data yet" reason would flood the 1000-entry view before publication, while every network failure still counts (research R5).
   - Makes T022 pass.
-- [ ] T031 [US2] REVIEW Phase 4 against Principles I–III and contract § 3, § 4, § 6 and § 7. Check that:
+- [X] T031 [US2] REVIEW Phase 4 against Principles I–III and contract § 3, § 4, § 6 and § 7. Check that:
   - no screen `switch` gained a `default` fallback;
   - `Esc` from `log-entry` returns to `logs` with its selection, and `Esc` from `logs` returns to the origin screen with its selection and offset;
   - entries are read from the logger, never from the file;
   - `l` typed in the search box and in the palette still reaches the input.
 
   Run `bun test`, `bun run typecheck` and `bun run check`, then run quickstart § 2 and § 3 by hand. Record the working command for quickstart § 2 in `specs/004-logs-view/quickstart.md`: check whether `--election kv2099` starts, as the plan flagged. Fix every finding before continuing.
+  - (Done 2026-09-24. Red first: 17 failures plus the missing `views/logs.ts` module. Two of T022's tests passed at once because they describe behaviour that stays the same, and they remain as guards. After implementation: 964 pass, 0 fail; typecheck and biome clean.
+    - **Deviations:** `segmentsFor` is tested in `tests/integration/screen.test.ts`, because it needs a database. `screenLabel` is tested in `tests/unit/context-status.test.ts`, where its table already was.
+    - **Run by hand** in a pseudo-terminal (pyte, 100×30) against the replay server with `--election kv2099`:
+      - the awaiting row and badge show;
+      - `l` opens `ZÁZNAMY` with the newest entry selected;
+      - `Enter` shows the full line;
+      - `Esc` goes back one level each time;
+      - `/` then `brl` types into the query;
+      - `l` in the palette filters it without switching screens.
+    - **Finding, fixed:** the detail screen put `▶` on its heading, because `firstRow` 0 with no rows let the frame mark line 0. `log-entry` now starts its list past the last row. A test was written first and failed. The help screen has the same pre-existing quirk, which is out of scope and not changed.
+    - **Noted, by design:** `lastError` persists across restarts, so a source still unpublished after a restart is not logged again in the new session (R5 compares with the stored reason).
+    - **Quickstart § 2:** the `--election kv2099` recipe starts. Reference loading failure is not fatal. The quickstart now says so.)
 
 **Checkpoint**: US1 + US2 together are the MVP. The status row is honest, and `l` shows the detail behind it.
 

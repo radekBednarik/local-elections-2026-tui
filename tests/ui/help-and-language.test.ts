@@ -50,6 +50,8 @@ const SCREENS: [string, Screen][] = [
   ["watchlist", { kind: "watchlist" }],
   ["search", { kind: "search" }],
   ["help", { kind: "help" }],
+  ["logs", { kind: "logs" }],
+  ["log-entry", { kind: "log-entry", seq: 0 }],
 ]
 
 describe("help completeness (FR-005)", () => {
@@ -63,6 +65,11 @@ describe("help completeness (FR-005)", () => {
     for (const essential of ["Enter", "Esc", "/", "q", "Ctrl+C", "?"]) {
       expect(body).toContain(essential)
     }
+  })
+
+  test("lists the key for the logs view (004 FR-007)", () => {
+    const body = renderHelp().join("\n")
+    expect(body).toMatch(/\bl\s+Zobrazit záznamy/)
   })
 
   test("explains the polling limit and the polling-district boundary", () => {

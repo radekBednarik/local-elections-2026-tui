@@ -90,6 +90,32 @@ describe("unavailable actions are shown with a reason, never hidden (FR-069)", (
   })
 })
 
+describe("the logs actions (004 FR-007, FR-021, research R8)", () => {
+  const LOGS = ctx({ kind: "logs" }, { depth: 2, rowCount: 3 })
+  const ENTRY = ctx({ kind: "log-entry", seq: 1 }, { depth: 3 })
+  const entry = (context: ActionContext, id: string) =>
+    paletteEntries(context).find((e) => e.action.id === id)
+
+  test("the logs view can be opened from any other screen", () => {
+    for (const context of [ctx({ kind: "national" }), COUNCIL, ctx({ kind: "help" }, { depth: 2 })]) {
+      expect(entry(context, "logs")?.available).toBe(true)
+    }
+  })
+
+  test("it is listed but unavailable, with the reason, while the logs are open", () => {
+    for (const context of [LOGS, ENTRY]) {
+      const logs = entry(context, "logs")
+      expect(logs?.available).toBe(false)
+      expect(logs?.reason).toBe("záznamy jsou právě otevřené")
+    }
+  })
+
+  test("the list opens an entry; the detail has nothing to open", () => {
+    expect(entry(LOGS, "open")?.available).toBe(true)
+    expect(entry(ENTRY, "open")?.available).toBe(false)
+  })
+})
+
 describe("filtering folds case and diacritics (FR-067)", () => {
   const all = paletteEntries(COUNCIL)
 

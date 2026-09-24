@@ -13,6 +13,7 @@
 
 import type { Database } from "bun:sqlite"
 import type { StyledText } from "@opentui/core"
+import type { LogEntry } from "../../logging/logger.ts"
 import { availableCouncilTypes } from "../../storage/queries/national.ts"
 import { type SourceStatus, statusBarLine, statusBarRow } from "../components/status.ts"
 import { clampLines } from "../format.ts"
@@ -80,6 +81,8 @@ export interface FrameInputs {
   lastSuccessAt?: string | null
   /** Whether the command palette is open, which renames the status bar's screen label. */
   paletteOpen?: boolean
+  /** This session's log entries, for the logs screens (004). */
+  logEntries?: readonly LogEntry[]
 }
 
 export interface FrameState {
@@ -150,6 +153,7 @@ export function frameState(inputs: FrameInputs): FrameState {
       query: inputs.query,
       sort: inputs.sort,
       contentHeight: inputs.contentHeight,
+      logEntries: inputs.logEntries,
     })
 
   const context: ActionContext = {
@@ -170,9 +174,14 @@ export function frameState(inputs: FrameInputs): FrameState {
   // status can be up for hours before publication, and under the old rule - the warning
   // always wins - every confirmation in that time, a copy included, went unseen. Nothing
   // is lost meanwhile: the title bar badge still carries the source state.
+  //
+  // On the logs screens the source status is left out: it would only point to the screen
+  // the user is already on. The title bar badge still carries it (004 data-model).
+  const onLogs = nav.screen.kind === "logs" || nav.screen.kind === "log-entry"
   const status = inputs.sourceStatus
-  const warning = inputs.notice ?? status?.text ?? null
-  const warningKind = inputs.notice !== null ? "notice" : (status?.kind ?? null)
+  const rowStatus = onLogs ? null : status
+  const warning = inputs.notice ?? rowStatus?.text ?? null
+  const warningKind = inputs.notice !== null ? "notice" : (rowStatus?.kind ?? null)
 
   return {
     breadcrumb: breadcrumbFor(db, nav.screens, inputs.width),

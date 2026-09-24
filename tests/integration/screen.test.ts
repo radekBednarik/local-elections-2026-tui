@@ -7,10 +7,12 @@ import type { Database } from "bun:sqlite"
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import type { LogEntry } from "../../src/logging/logger.ts"
 import { extractArchiveFile } from "../../src/reference/archive.ts"
 import { loadReference, type ReferenceArchives } from "../../src/reference/loader.ts"
 import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
+import { segmentsFor } from "../../src/ui/chrome/breadcrumb.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
 import { composeScreen, shownSources, sourcesForScreen } from "../../src/ui/screen.ts"
 
@@ -202,5 +204,55 @@ describe("sources shown on a screen (contract § 2)", () => {
       "council:582786",
     ])
     expect(shownSources({ kind: "watchlist" }, [], districts)).toEqual(["national"])
+  })
+})
+
+describe("the logs screens (004 FR-009, FR-011)", () => {
+  const entries: LogEntry[] = [7, 8, 9].map((seq) => ({
+    seq,
+    at: "2026-10-09T19:04:10.000Z",
+    level: "warn",
+    message: `zprava ${seq}`,
+    detail: null,
+    source: null,
+    line: `2026-10-09T19:04:10.000Z WARN  zprava ${seq}`,
+  }))
+
+  test("the list selects over its entries, and each opens its own detail by seq", () => {
+    const content = composeScreen(db, { kind: "logs" }, { ...opts, logEntries: entries })
+    expect(content.rowCount).toBe(3)
+    expect(content.lines[content.firstRow]).toContain("zprava 7")
+    expect(content.target(0)).toEqual({ kind: "log-entry", seq: 7 })
+    expect(content.target(2)).toEqual({ kind: "log-entry", seq: 9 })
+    expect(content.target(3)).toBeNull()
+  })
+
+  test("the detail has nothing to select and opens nothing", () => {
+    const content = composeScreen(db, { kind: "log-entry", seq: 8 }, { ...opts, logEntries: entries })
+    expect(content.rowCount).toBe(0)
+    expect(content.target(0)).toBeNull()
+    expect(content.lines.join("\n")).toContain("zprava 8")
+    // No row is selectable, so none may carry the selection marker: the list starts past
+    // the end, as the empty list's does (found running the application, T031).
+    expect(content.firstRow).toBeGreaterThanOrEqual(content.rows.length)
+  })
+
+  test("with no entries passed the list is the empty state", () => {
+    const content = composeScreen(db, { kind: "logs" }, opts)
+    expect(content.rowCount).toBe(0)
+    expect(content.lines.join("\n")).toContain("Zatím nebyly zaznamenány žádné záznamy.")
+  })
+
+  test("both show the national source, as help does, and subscribe to nothing", () => {
+    for (const screen of [{ kind: "logs" }, { kind: "log-entry", seq: 1 }] as const) {
+      expect(shownSources(screen, [], ["CZ0100"])).toEqual(["national"])
+      expect(sourcesForScreen(screen)).toEqual([])
+    }
+  })
+
+  test("the breadcrumb names them", () => {
+    expect(
+      segmentsFor(db, [{ kind: "national" }, { kind: "logs" }, { kind: "log-entry", seq: 1 }]).slice(1),
+    ).toEqual(["Záznamy", "Záznam"])
   })
 })

@@ -126,6 +126,8 @@ describe("the styled status bar (002 T028, FR-013)", () => {
     [{ kind: "watchlist" }, "SLEDOVANÉ"],
     [{ kind: "search" }, "HLEDÁNÍ"],
     [{ kind: "help" }, "NÁPOVĚDA"],
+    [{ kind: "logs" }, "ZÁZNAMY"],
+    [{ kind: "log-entry", seq: 0 }, "ZÁZNAM"],
   ] as [Screen, string][])("%j is labelled %s", (screen, label) => {
     expect(screenLabel(screen, false)).toBe(label)
   })

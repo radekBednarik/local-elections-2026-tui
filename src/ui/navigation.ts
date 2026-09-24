@@ -17,6 +17,10 @@ export type Screen =
   | { kind: "watchlist" }
   | { kind: "search" }
   | { kind: "help" }
+  /** This session's log entries (004). */
+  | { kind: "logs" }
+  /** One log entry in full, named by its `seq` so evictions cannot change which (004 R6). */
+  | { kind: "log-entry"; seq: number }
 
 export interface StackEntry {
   screen: Screen

@@ -59,10 +59,10 @@ bun run replay
 bun run dev -- --base-url http://localhost:8787 --election kv2099 --reset
 ```
 
-If startup stops because the registries or code lists cannot be loaded for that
-election, run once against `kv2026` first so they are cached. Then check during
-implementation whether they are cached per election, and record the working recipe
-here.
+This starts as it is. The registries and code lists are not published for `kv2099`
+either, but failing to load them is not fatal (`src/main.ts`, FR-011): the app carries
+on with numeric codes and logs `VAROVÁNÍ Referenční data se nepodařilo stáhnout`,
+which you will see in the logs view. (Checked 2026-09-24, T031.)
 
 Expected:
 - The status row reads
