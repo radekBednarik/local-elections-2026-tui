@@ -117,28 +117,35 @@ after a restart without `--reset`.
   - A `not-found` outcome and an `error` outcome record failures with the existing reasons ("Data zatím nejsou zveřejněna" and the outcome's reason).
   - Construct outcomes as literals of the type `fetchDocument` returns. No server is needed.
 
+- [ ] T014 [P] [US2] Add `describe("manual refresh of a final source (FR-004, FR-005)")` to `tests/integration/scheduler.test.ts`. It belongs to US2, but it sits here because T016 implements this behaviour. Written any later, it could never be seen failing (Principle II).
+  - A source recorded final at `T0`: `requestRefresh("national", at(30))` returns `false` and `due(at(30))` is empty. `requestRefresh("national", at(60))` returns `true`, and `due(at(60))` contains exactly `national` (SC-004).
+  - After that request, `recordSuccess(..., at(61), true)` leaves it final, `nextDueAt === null`, and absent from `due(at(3600))`.
+  - After that request, a `304` (`recordSuccess` without `final`) leaves it final and unscheduled.
+  - After that request, `recordFailure` leaves it final and unscheduled.
+  - After that request, `recordSuccess(..., at(61), false)` sets `final === false` and makes it due again at `at(121)` (FR-005).
+
 ### Implementation
 
-- [ ] T014 [US1] In `src/sources/ingest.ts`:
+- [ ] T015 [US1] In `src/sources/ingest.ts`:
   - Add `final: boolean` to the `ok: true` branch of `IngestResult`, with a doc comment citing research R3.
   - Add one private helper, `allFinal(snapshots: { isFinal: boolean }[]): boolean`, which returns `snapshots.length > 0 && snapshots.every((s) => s.isFinal)`. Comment why the length check exists: `[].every` is `true`.
   - In `ingestNational`, build the snapshot inputs first. Then `final: allFinal(inputs)`.
   - In `ingestDistrict` and `ingestCouncil`, collect the `obecToSnapshot` results and use the same helper.
   - `determineStatus` stays the only place that decides a single area's finality.
   - Makes T009 pass.
-- [ ] T015 [US1] In `src/sources/scheduler.ts`:
+- [ ] T016 [US1] In `src/sources/scheduler.ts`:
   - `recordSuccess(key, validators = {}, now = new Date(), final?: boolean)`. SQL: `final = COALESCE($final, final)`, and `next_due_at = CASE WHEN COALESCE($final, final) = 1 THEN NULL ELSE $due END`. Pass `$final` as `null` when the argument is omitted, else `1` or `0`.
   - `recordFailure`: `next_due_at = CASE WHEN final = 1 THEN NULL ELSE $due END`.
   - `due()`: `WHERE next_due_at <= $now ORDER BY next_due_at ASC`. Remove the `IS NULL` condition and its `ORDER BY` term.
   - Add `releaseCouncils(needed: Set<SourceKey>)`, which deletes `council` rows not in `needed` with `pinned = 0 AND final = 0`.
   - Update the doc comments of `recordSuccess` (a `304` keeps finality), `recordFailure` (a final source is not rescheduled) and `due()` (a `NULL` due time means nothing is scheduled).
   - Leave `requestRefresh` and `canRefreshNow` unchanged.
-  - Makes T010 and T011 pass.
-- [ ] T016 [US1] In `src/ui/app.ts`:
+  - Makes T010, T011 and T014 pass.
+- [ ] T017 [US1] In `src/ui/app.ts`:
   - Extract the outcome handling of `tick()` into an exported module-level function, `recordFetch(db: Database, scheduler: Scheduler, key: SourceKey, outcome, log?)`, with behaviour unchanged except that a successful ingest passes `result.final` to `recordSuccess`. `tick()` calls it.
   - Replace the unsubscribe loop at the end of `syncSubscriptions` with `scheduler.releaseCouncils(needed)`.
-  - Makes T013 pass, and T012 with T015.
-- [ ] T017 [US1] REVIEW Phase 3 against Principles I–III, research R3–R5 and data-model.md § Validation rules. In particular, check that:
+  - Makes T013 pass, and T012 with T016.
+- [ ] T018 [US1] REVIEW Phase 3 against Principles I–III, research R3–R5 and data-model.md § Validation rules. In particular, check that:
   - no path other than `requestRefresh` gives a final source a due time,
   - `final` is written only on a `200`,
   - `determineStatus` is not duplicated.
@@ -157,18 +164,12 @@ final keeps it stopped. A result that is no longer final resumes automatic polli
 **Independent Test**: Quickstart § 3. With a final screen, `r` produces exactly one request in the
 replay log, a second `r` within 60 s produces none, and nothing is requested automatically afterwards.
 
-### Tests (write first, observe failing)
+This story's scheduler tests (T014) and the implementation (T016) are in Phase 3, so that each test
+is seen failing before its code. What stays here is the check end to end.
 
-- [ ] T018 [P] [US2] Add `describe("manual refresh of a final source (FR-004, FR-005)")` to `tests/integration/scheduler.test.ts`:
-  - A source recorded final at `T0`: `requestRefresh("national", at(30))` returns `false` and `due(at(30))` is empty. `requestRefresh("national", at(60))` returns `true`, and `due(at(60))` contains exactly `national` (SC-004).
-  - After that request, `recordSuccess(..., at(61), true)` leaves it final, `nextDueAt === null`, and absent from `due(at(3600))`.
-  - After that request, a `304` (`recordSuccess` without `final`) leaves it final and unscheduled.
-  - After that request, `recordFailure` leaves it final and unscheduled.
-  - After that request, `recordSuccess(..., at(61), false)` sets `final === false` and makes it due again at `at(121)` (FR-005).
+### Validation
 
-### Implementation
-
-- [ ] T019 [US2] No production change is expected: T015 already implements this. If a T018 test fails, fix it in `src/sources/scheduler.ts` within the rules of research R4, and record the cause here. Either way, confirm in `src/ui/app.ts` that `refreshNow()` still calls `requestRefresh` for every source of the screen and for `national`, then `tick()`.
+- [ ] T019 [US2] Confirm that `refreshNow()` in `src/ui/app.ts` still calls `requestRefresh` for every source of the screen and for `national`, and then `tick()`. With `bun run dev` against the replay harness, run quickstart § 3 and record what the replay log showed. If it disagrees with T014, fix it in `src/sources/scheduler.ts` within the rules of research R4. Write the reproducing test first, and record the cause here.
 - [ ] T020 [US2] REVIEW Phase 4 against Principles I–III. Check that the 60-second floor covers manual refreshes of final sources. Run the full suite, and quickstart § 3 against the replay harness. Fix every finding before continuing.
 
 **Checkpoint**: users keep full manual control over final data.
@@ -242,15 +243,16 @@ left.
 ### Phase dependencies
 
 - **Setup (1)** → **Foundational (2)** → **US1 (3)** → **US2 (4)** and **US3 (5)** → **Polish (6)**.
-- **US2** depends on US1: T015 is the scheduler change it verifies.
+- **US2** depends on US1: its tests (T014) and the scheduler change (T016) are in Phase 3. Phase 4 only validates them end to end.
 - **US3** depends on Phase 2 only for `Subscription.final`. It can be built in parallel with US1, but
   its end-to-end check (T027) needs US1 to be done.
 
 ### Within each phase
 
 - Tests before implementation, and each test observed failing.
-- T014 before T016, because `recordFetch` reads `result.final`.
-- T015 before T016, because `recordFetch` passes `final` and `releaseCouncils` must exist.
+- T014 (with T010 and T011) before T016, which it tests.
+- T015 before T017, because `recordFetch` reads `result.final`.
+- T016 before T017, because `recordFetch` passes `final` and `releaseCouncils` must exist.
 - T024 and T025 before T027.
 
 ### Parallel opportunities
@@ -262,7 +264,7 @@ T004      tests/integration/scheduler.test.ts
 
 # US1 tests together:
 T009 tests/integration/ingest.test.ts
-T010 T011 tests/integration/scheduler.test.ts   (same file: write in sequence)
+T010 T011 T014 tests/integration/scheduler.test.ts   (same file: write in sequence)
 T012 tests/integration/dataset.test.ts
 T013 tests/integration/resilience.test.ts
 
@@ -291,7 +293,7 @@ serialised.
 
 ### Incremental delivery
 
-1. Phase 4 (US2): proves manual refresh is intact. Mostly tests, since US1's scheduler change carries it.
+1. Phase 4 (US2): checks end to end that manual refresh is intact. Its tests and code landed in Phase 3.
 2. Phase 5 (US3): the title bar says so, and the stale warning stays quiet.
 3. Phase 6: README, upgrade check, final review.
 

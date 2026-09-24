@@ -25,11 +25,14 @@ The indicator at the right of the title bar, before the clock:
 
 | Condition | Text | Look |
 |---|---|---|
-| A source shown on screen is failing (stale warning) | ` ● ZASTARALÉ ` | `warning` role on the `warning` surface. Unchanged. |
+| Any source still in progress is failing (the stale warning is shown), on any screen | ` ● ZASTARALÉ ` | `warning` role on the `warning` surface. Unchanged. |
 | Every source shown on screen is final | ` ■ konečné · obnova ručně ` | `muted` role. |
 | Otherwise | ` ● živě ` | `success` slot. Unchanged. |
 
-The first matching row wins. The text carries the meaning in full, with or without colour
+The first matching row wins. The stale badge stays global, as it is today: it follows the one stale
+warning, which covers every source, not just the ones on screen. A final council screen therefore
+still shows `ZASTARALÉ` while some district is failing. Making the badge per screen is out of scope.
+The text carries the meaning in full, with or without colour
 (FR-008, `NO_COLOR`). The breadcrumb shortens to make room, as it already does for the
 clock.
 

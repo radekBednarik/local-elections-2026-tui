@@ -75,9 +75,9 @@ past the stale-data threshold and confirm no stale-data warning appears.
 
 **Acceptance Scenarios**:
 
-1. **Given** the screen shows a final source, **When** the user looks at the status area, **Then** it says in text that automatic refresh has stopped because the results are final, and that manual refresh is still available.
+1. **Given** every source the screen shows is final, **When** the user looks at the title bar, **Then** it says in text that automatic refresh has stopped because the results are final, and that manual refresh is still available.
 2. **Given** a final source has not been requested for longer than the stale-data threshold, **When** the user views it, **Then** no stale-data or connection warning is shown for it.
-3. **Given** the screen shows a source still in progress, **When** the user looks at the status area, **Then** it shows the usual polling information and no "stopped" message.
+3. **Given** the screen shows a source still in progress, **When** the user looks at the title bar, **Then** it shows the usual live indicator and no "stopped" message.
 
 ---
 
@@ -89,6 +89,7 @@ past the stale-data threshold and confirm no stale-data warning appears.
 - **The application is restarted after sources became final.** Sources already known final from stored data stay out of automatic polling after the restart, with no fresh request to confirm them.
 - **Stored data is dropped** (`--reset`, or pointing the application at a different election, date or base URL). Finality is forgotten with the data, and every source starts in automatic polling again.
 - **A request for a source that is still in progress fails.** Failure handling and backoff are unchanged. Only final data stops polling, never a failure.
+- **A manual refresh of a final source fails.** The source stays final and unscheduled, the stored figures stay on screen, and the failure is written to the log only. No stale-data warning is raised: the figures are final, not stale, and since nothing retries a final source automatically, such a warning would never clear. A failed refresh therefore looks the same on screen as one that found no change. This is accepted.
 - **The user runs the application against an election that is already complete** (a mirror of 2022, for example). Each source is fetched once, found final, and then left alone.
 - **The user opens a council for the first time and it is already final.** It is fetched once to get its figures, then not polled automatically while it stays on screen or on the watchlist.
 
@@ -103,7 +104,7 @@ past the stale-data threshold and confirm no stale-data warning appears.
 - **FR-005**: If a manual refresh returns data that is no longer final, the source MUST go back to automatic polling. If it returns final data, the source MUST stay out of automatic polling.
 - **FR-006**: Knowledge that a source is final MUST survive a restart, so that a restarted application does not request final sources automatically.
 - **FR-007**: When stored results are dropped (by `--reset`, or because the election, date or base URL changed), every source MUST start in automatic polling again.
-- **FR-008**: For a screen showing data from a final source, the status area MUST say in text, not colour alone, that automatic refresh has stopped because the results are final and that manual refresh is still available.
+- **FR-008**: For a screen where every source it shows is final, the title bar MUST say in text, not colour alone, that automatic refresh has stopped because the results are final and that manual refresh is still available.
 - **FR-009**: The stale-data and connection warnings MUST NOT be shown for a source only because it has not been requested since it became final.
 - **FR-010**: Registries and code lists are outside this feature. Their existing download-once behaviour MUST NOT change.
 - **FR-011**: The README section on polling MUST describe the new behaviour: automatic polling stops for each source once its results are final, and manual refresh stays available.
