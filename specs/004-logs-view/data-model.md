@@ -110,12 +110,18 @@ tested without driving `App` (research R6, R7):
 
 | Function | Does |
 |---|---|
-| `openLogs(nav, count)` | Pushes `{ kind: "logs" }` and selects row `count - 1`, or 0 when `count` is 0. |
+| `openLogs(nav, count)` | Pushes `{ kind: "logs" }` and selects row `count - 1`, or 0 when `count` is 0, returning `true`. Already on `logs` or `log-entry`, it pushes nothing and returns `false`. |
 | `syncLogSelection(nav, seen, dropped)` | On `logs` only: reduces `selected` by `dropped - seen`, clamped at 0, and returns `dropped`. On any other screen it changes nothing and returns `seen`. |
-| `performCopy(scope, screen, selected, entries, copy)` | Picks the text (`copyText`), calls `copy` unless there is nothing to copy, treats a throw as `false`, and returns the notice (`copyNotice`). |
+| `performCopy(scope, screen, selected, entries, copy)` | Off the logs screens returns `NOT_AVAILABLE_HERE` without calling `copy`. Otherwise it picks the text (`copyText`), calls `copy` unless there is nothing to copy, treats a throw as `false`, and returns the notice (`copyNotice`). |
+| `buildLogListRows` / `buildLogEntryRows` | A line break in an entry shows as ` ↵ ` in its list row, and starts a new row in the detail (CRLF, CR or LF). |
 
 `AppDependencies` gains `copy?: (text: string) => boolean`. When it is absent, the App
 uses `renderer.copyToClipboardOSC52`.
+
+Two App methods are glue only, pinned by structural tests in `tests/unit/logs-view.test.ts`:
+- `copyToClipboard`, which passes the clipboard to `performCopy`;
+- `logUnhandled(message, detail)`, which logs an error the process-level handlers
+  caught and then draws, so an open logs view shows it at once (FR-012).
 
 ## ActionId (changed, `src/ui/palette/actions.ts`)
 

@@ -123,6 +123,18 @@ the new failure, and:
 A success clears `lastError`, so the next occurrence after a success is logged again.
 Transport failures (`failed`, `Stahování selhalo`) are still logged every time.
 
+**Amended after the T046 code review.** `lastError` is persisted, so comparing with it
+alone meant that after a restart before publication every source already matched.
+Nothing was logged, and the awaiting line sent the user to a logs view with no word on
+why. The reason is therefore also compared with what **this session** has logged for
+the source. `isNewReason(log, key, previous, reason)` in `src/ui/app.ts` logs when
+either the stored `lastError` or the session's last logged reason differs:
+- the session memory is a `WeakMap<Logger, Map<SourceKey, string>>`, keyed by the
+  logger, so each session (and each test's fresh logger) starts empty with no reset
+  hook;
+- the stored `lastError` still catches a reason that changed through a path that does
+  not log through `recordFetch`, such as the `tick()` catch block.
+
 **Rationale**:
 - Today a `404` is recorded on the subscription but never logged. Before publication,
   the status line would send the user to a logs view that says "no entries yet".
@@ -157,6 +169,13 @@ Behaviour:
 - **Keeping the selection on its entry (FR-012):** appending changes no index, so only
   eviction can move the selection. The app remembers `dropped` when it last drew the
   logs screen, and subtracts the difference from the selection (clamped at 0).
+- **Guards found in the T046 review:** keys reach `perform()` on every screen without
+  the palette's availability check. So `openLogs` refuses on the logs screens,
+  returning `false`, rather than stacking a second list; `App` resets its dropped count
+  only when it returns `true`.
+- **Line breaks:** an `Error` message may span lines. In the list a break is shown as
+  ` ↵ `, so a row stays one line. The detail starts a new row at each break. CRLF,
+  a bare CR and LF are all treated as one break.
 - **Where the behaviour lives:** no test constructs `App`, and `perform` is private.
   Opening the list (push, then select the last row) and the eviction correction are
   therefore two pure functions in `src/ui/views/logs.ts`, `openLogs` and
@@ -196,6 +215,9 @@ Behaviour:
   and wording the notice are one pure function, `performCopy`, in
   `src/ui/views/logs.ts`. Tests pass it a recorder. `App` passes the real clipboard
   and shows the notice it returns (see R6 for why).
+- **Off the logs screens** `performCopy` returns `NOT_AVAILABLE_HERE` (shared with the
+  palette, in `src/ui/palette/actions.ts`) without calling `copy`. The key reaches it
+  from every screen, and elsewhere the "selected" row is not a log entry (T046 review).
 - **What `c` copies:** the selected entry's log-file line. On the detail screen, that
   entry's line.
 - **What `C` copies:** every entry's line, oldest first, joined by `\n`.

@@ -607,7 +607,7 @@ texts until US2 lands, and record that in T015.
   - **Test first:** a structural test in `tests/unit/logs-view.test.ts`, in the style of the existing app.ts guard, asserting that each handler body calls `this.draw()` after logging. Or extract the handler into a testable function if that reads better.
   - **Then:** call `this.draw()` in both handlers, guarded so that a throw inside `draw` cannot recurse into the handler.
   - (Done 2026-09-24. Red first: the structural guard in `tests/unit/logs-view.test.ts` failed. Both handlers now call one private `logUnhandled(message, detail)`, which logs and then draws inside `try/catch`, because throwing from an `uncaughtException` listener would end the process. 24/24 in the file pass.)
-- [ ] T049 Bring the design documents in line with the reviewed code, per plan: research R5/R6/R7, data-model and quickstart (contradicts). They are reference for later features and currently describe pre-review behaviour.
+- [X] T049 Bring the design documents in line with the reviewed code, per plan: research R5/R6/R7, data-model and quickstart (contradicts). They are reference for later features and currently describe pre-review behaviour.
   - **`research.md` R5:** dedup compares the reason with both the stored `lastError` and what this session has logged (`isNewReason`, a `WeakMap` keyed by the logger), with the reason why.
   - **`data-model.md` § Logs-screen functions:**
     - `openLogs` returns `boolean` and refuses on `logs` / `log-entry`;
@@ -615,3 +615,4 @@ texts until US2 lands, and record that in T015.
     - list cells show line breaks as ` ↵ `, and the detail splits on them.
   - **`contracts/interface.md` § 7:** a restarted session logs a still-unpublished source once.
   - **`quickstart.md` § 1 table:** the "title bar … čeká na výsledky" and "notice takes the status row" rows point to `tests/ui/colour.test.ts`, not `tests/ui/frame.test.ts`. Add rows for the review tests (copy off the logs screens, `l` on the logs screens, restart logging, line breaks).
+  - (Done 2026-09-24. Research R5 now has an "Amended after the T046 code review" paragraph. R6 and R7 record the guards and the line-break rule. The data-model table covers `openLogs`'s return value, `performCopy`'s screen guard and line breaks, and names the two glue methods. Contract § 7 covers restarts. The quickstart table points the two rows at `colour.test.ts` and adds rows for the review and T047/T048 tests. No code changed.)

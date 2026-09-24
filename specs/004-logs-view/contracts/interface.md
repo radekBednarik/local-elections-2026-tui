@@ -107,5 +107,7 @@ The status bar label for the screens is `ZÁZNAMY` (list) and `ZÁZNAM` (detail)
 - **`Dokument odmítnut` (`warn`) is logged less often.** It is still written, but only
   when the rejection reason differs from the source's previous failure.
 - **Both of these are logged once per change of reason.** A success resets that, so
-  the next occurrence is logged again.
+  the next occurrence is logged again. So does a new session: a source still
+  unpublished after a restart is logged once, when it is next polled, even though the
+  database already holds that reason.
 - **`Stahování selhalo` is unchanged:** it is logged on every occurrence (research R5).

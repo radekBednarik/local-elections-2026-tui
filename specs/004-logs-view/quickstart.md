@@ -31,8 +31,9 @@ All three must pass. The tests that carry this feature:
 | Entries below the level threshold are neither written nor recorded | `tests/unit/logger.test.ts` | Assumptions |
 | `sourceStatus`: `null` when nothing fails; `awaiting` when only never-loaded sources fail; `stale` when any failing source loaded before; final sources ignored | `tests/unit/status-bar.test.ts` | FR-001–FR-003 |
 | Neither status text contains the error string, a source code, or `ZASTARALÁ` (awaiting); both name `l` | `tests/unit/status-bar.test.ts` | FR-004, SC-001, SC-002 |
-| The title bar shows `čeká na výsledky` in the awaiting state, and `ZASTARALÉ` only when stale | `tests/ui/frame.test.ts` | FR-001, SC-001 |
-| A notice takes the status row over the source status. The row is absent on logs screens | `tests/ui/frame.test.ts` | Research R3 |
+| The title bar shows `čeká na výsledky` in the awaiting state, and `ZASTARALÉ` only when stale | `tests/ui/colour.test.ts` (and `tests/ui/frame.test.ts` for the indicator cell) | FR-001, SC-001 |
+| A notice takes the status row over the source status. The row is absent on logs screens | `tests/ui/colour.test.ts` | Research R3 |
+| Both status texts fit 80 columns whole, key hint included, up to an age of 999 h 59 min | `tests/unit/status-bar.test.ts` | FR-004, US1/AC4 |
 | A `404` or a rejected document is logged once per change of reason, not on every poll. Transport failures are still logged every time | `tests/integration/resilience.test.ts` | Research R5 |
 | Offline start with cached data reads as stale, not awaiting | `tests/integration/resilience.test.ts` | FR-003, research R1 |
 | With several stale sources, the age is the oldest data's age | `tests/unit/status-bar.test.ts` | Research R2 |
@@ -47,6 +48,11 @@ All three must pass. The tests that carry this feature:
 | `openLogs` selects the newest entry, and `Esc` (`pop`) restores the origin screen's selection and offset | `tests/unit/logs-view.test.ts` | FR-008, FR-009 |
 | `syncLogSelection` keeps the selection on the same entry through evictions, including while the detail screen is open | `tests/unit/logs-view.test.ts` | FR-012 |
 | `app.ts` calls `openLogs`, `syncLogSelection` and `performCopy` rather than reimplementing them | `tests/unit/logs-view.test.ts` (structural) | Principle II |
+| `c` / `C` off the logs screens copy nothing and show the "not available" notice | `tests/unit/logs-copy.test.ts` | FR-016, FR-017 (T046 review) |
+| `l` on the logs screens stacks nothing | `tests/unit/logs-view.test.ts` | FR-008, FR-012 (T046 review) |
+| A restarted session logs a still-unpublished source once, although the database holds the reason | `tests/integration/resilience.test.ts` | Research R5 (T046 review) |
+| A line break in an entry never reaches a list row; the detail keeps the lines | `tests/unit/logs-view.test.ts` | FR-010, FR-011 (T046 review) |
+| An unhandled error is logged and drawn at once | `tests/unit/logs-view.test.ts` (structural) | FR-012 (T048) |
 
 ## 2. Before publication (awaiting)
 
