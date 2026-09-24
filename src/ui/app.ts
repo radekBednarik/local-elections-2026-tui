@@ -54,7 +54,7 @@ import {
   withCapabilities,
 } from "./theme/detect.ts"
 import { nextTheme, type Theme, type ThemeName, themeLabel } from "./theme/themes.ts"
-import { openLogs, syncLogSelection } from "./views/logs.ts"
+import { openLogs, performCopy, syncLogSelection } from "./views/logs.ts"
 
 /** How close two clicks on one row must be to count as a double click. */
 const DOUBLE_CLICK_MS = 400
@@ -67,6 +67,11 @@ export interface AppDependencies {
   options: CliOptions
   log: Logger
   scheduler: Scheduler
+  /**
+   * Puts text on the clipboard, returning whether it was sent (004 research R7). Absent,
+   * the renderer's OSC 52 call is used; tests pass a recorder.
+   */
+  copy?: (text: string) => boolean
 }
 
 export class App {
@@ -412,6 +417,16 @@ export class App {
       case "theme":
         this.cycleTheme()
         break
+      case "copy-entry":
+      case "copy-all":
+        this.notice = performCopy(
+          id === "copy-all" ? "all" : "one",
+          this.nav.screen,
+          this.nav.current.selected,
+          this.deps.log.entries(),
+          this.copyToClipboard,
+        )
+        break
       case "logs":
         this.sort = UNSORTED
         openLogs(this.nav, this.deps.log.entries().length)
@@ -433,6 +448,10 @@ export class App {
       }
     }
   }
+
+  /** The clipboard, through the renderer unless a test supplied its own. */
+  private readonly copyToClipboard = (text: string): boolean =>
+    this.deps.copy !== undefined ? this.deps.copy(text) : (this.renderer?.copyToClipboardOSC52(text) ?? false)
 
   private openPalette(content: ScreenContent): void {
     if (this.palette === null) return

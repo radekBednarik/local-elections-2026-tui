@@ -110,6 +110,16 @@ describe("the logs actions (004 FR-007, FR-021, research R8)", () => {
     }
   })
 
+  test("copying is available on both logs screens, and elsewhere says why not", () => {
+    for (const id of ["copy-entry", "copy-all"]) {
+      expect(entry(LOGS, id)?.available).toBe(true)
+      expect(entry(ENTRY, id)?.available).toBe(true)
+      const elsewhere = entry(COUNCIL, id)
+      expect(elsewhere?.available).toBe(false)
+      expect(elsewhere?.reason).toBe("kopírovat lze jen v záznamech")
+    }
+  })
+
   test("the list opens an entry; the detail has nothing to open", () => {
     expect(entry(LOGS, "open")?.available).toBe(true)
     expect(entry(ENTRY, "open")?.available).toBe(false)

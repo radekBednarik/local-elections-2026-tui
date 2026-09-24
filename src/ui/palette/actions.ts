@@ -38,6 +38,8 @@ export type ActionId =
   | "move"
   | "open"
   | "back"
+  | "copy-entry"
+  | "copy-all"
   | "search"
   | "logs"
   | "watch"
@@ -90,6 +92,10 @@ const LOGS_SCREENS: Screen["kind"][] = ["logs", "log-entry"]
 /** Always applicable. */
 const always = () => null
 
+/** Applicable only while the logs are open. */
+const onLogs = (c: ActionContext) =>
+  LOGS_SCREENS.includes(c.screen.kind) ? null : "kopírovat lze jen v záznamech"
+
 /**
  * Ordered by how much a user needs them, because the status bar renders as many as fit
  * and drops from the end.
@@ -119,6 +125,26 @@ export const ACTIONS: Action[] = [
     key: "Esc",
     where: "všude",
     unavailable: (c) => (c.depth > 1 ? null : "jste na úvodní obrazovce"),
+  },
+  // Right after "back" deliberately. They apply only on the logs screens, so everywhere
+  // else they are unavailable and cost the status bar nothing; there, a narrow bar keeps
+  // them rather than dropping them for global keys the palette also offers (004 R8).
+  {
+    id: "copy-entry",
+    label: "Kopírovat vybraný záznam",
+    hint: "kopírovat",
+    key: "c",
+    where: "záznamy",
+    unavailable: onLogs,
+  },
+  {
+    id: "copy-all",
+    label: "Kopírovat všechny záznamy",
+    hint: "vše",
+    key: "Shift+C",
+    shortKey: "C",
+    where: "záznamy",
+    unavailable: onLogs,
   },
   // Placed high deliberately. The status bar drops hints from the end when the terminal
   // is narrow, and the palette is how everything that got dropped is still reachable, so

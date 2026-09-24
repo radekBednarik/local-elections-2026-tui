@@ -227,4 +227,9 @@ describe("the application only calls these, never reimplements them", () => {
     expect(source).toContain("syncLogSelection(")
     expect(source).not.toMatch(/nav\.push\(\{ kind: "logs" \}\)/)
   })
+
+  test("copying goes through performCopy, which picks the text itself", () => {
+    expect(source).toContain("performCopy(")
+    expect(source).not.toContain("copyText(")
+  })
 })

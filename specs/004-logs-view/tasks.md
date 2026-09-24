@@ -350,7 +350,7 @@ Contract § 5 and § 6, research R7.
 
 ### Tests (write first, observe failing)
 
-- [ ] T032 [P] [US3] Create `tests/unit/logs-copy.test.ts` for the functions in `src/ui/views/logs.ts`:
+- [X] T032 [P] [US3] Create `tests/unit/logs-copy.test.ts` for the functions in `src/ui/views/logs.ts`:
   - **`copyText(entries, "one", seq)`:** gives that entry's `line`. For `"all"` it gives every `line` joined by `\n`, oldest first. It gives `null` when there is nothing to copy: no entries, or a `seq` not present.
   - **`copyNotice(count, sent)`:**
     - `(1, true)` → `Odesláno do schránky: 1 záznam.`;
@@ -359,7 +359,7 @@ Contract § 5 and § 6, research R7.
     - `(0, …)` → `Není co kopírovat.`;
     - `(n, false)` → `Terminál nepodporuje kopírování do schránky.`
   - The plural comes from `plural` in `src/ui/format.ts`, not a new rule.
-- [ ] T033 [P] [US3] In `tests/unit/keymap.test.ts`, `describe("shift distinguishes the pairs")`:
+- [X] T033 [P] [US3] In `tests/unit/keymap.test.ts`, `describe("shift distinguishes the pairs")`:
   - `c` maps to `copy-entry`;
   - `C` (shift flag, or sequence `"C"`) maps to `copy-all`.
 
@@ -368,12 +368,12 @@ Contract § 5 and § 6, research R7.
   - elsewhere they are unavailable with the reason `kopírovat lze jen v záznamech`.
 
   In `tests/ui/help-and-language.test.ts`: the help lists `c` / `Kopírovat vybraný záznam` and `Shift+C` / `Kopírovat všechny záznamy`.
-- [ ] T034 [P] [US3] Add a status bar test to `tests/unit/context-status.test.ts`. On `logs` at 80 columns with entries, the bar starts with `ZÁZNAMY`, and within the first hints it contains `c kopírovat` and `C vše` before any global hint that follows `back` in the registry. This checks the placement in research R8.
+- [X] T034 [P] [US3] Add a status bar test to `tests/unit/context-status.test.ts`. On `logs` at 80 columns with entries, the bar starts with `ZÁZNAMY`, and within the first hints it contains `c kopírovat` and `C vše` before any global hint that follows `back` in the registry. This checks the placement in research R8.
 
 ### Implementation
 
-- [ ] T035 [US3] In `src/ui/views/logs.ts`, add `copyText` and `copyNotice` as specified in T032. Makes T032 pass.
-- [ ] T036 [US3] In `src/ui/palette/actions.ts`:
+- [X] T035 [US3] In `src/ui/views/logs.ts`, add `copyText` and `copyNotice` as specified in T032. Makes T032 pass.
+- [X] T036 [US3] In `src/ui/palette/actions.ts`:
   - Add `"copy-entry" | "copy-all"` to `ActionId`.
   - Add both entries right after `back`:
     - `{ id: "copy-entry", label: "Kopírovat vybraný záznam", hint: "kopírovat", key: "c", where: "záznamy", unavailable: onLogs }`;
@@ -382,7 +382,7 @@ Contract § 5 and § 6, research R7.
   - Add a comment explaining the placement: they are unavailable everywhere else, so they cost other screens nothing, and on the logs screens they survive a narrow bar.
   - In `src/ui/keymap.ts`, add `case "c": return { kind: "action", id: shift ? "copy-all" : "copy-entry" }`, and extend the shift comment to name `c`/`C`.
   - Makes T033 and T034 pass.
-- [ ] T037 [P] [US3] In `tests/unit/logs-copy.test.ts`, add `describe("performing a copy (FR-016–FR-019)")` for `performCopy(scope: "one" | "all", screen: Screen, selected: number, entries: readonly LogEntry[], copy: (text: string) => boolean): string`. It returns the notice to show. As in T021, `App` is not driven in tests, so the behaviour lives in this pure function and `App` only calls it (T038). Use a recording `copy` and three entries (`seq` 0 to 2). Tests:
+- [X] T037 [P] [US3] In `tests/unit/logs-copy.test.ts`, add `describe("performing a copy (FR-016–FR-019)")` for `performCopy(scope: "one" | "all", screen: Screen, selected: number, entries: readonly LogEntry[], copy: (text: string) => boolean): string`. It returns the notice to show. As in T021, `App` is not driven in tests, so the behaviour lives in this pure function and `App` only calls it (T038). Use a recording `copy` and three entries (`seq` 0 to 2). Tests:
   - On `logs` with `selected === 2`, `"one"` records exactly `entries[2].line` and returns `Odesláno do schránky: 1 záznam.`
   - On `{ kind: "log-entry", seq: 1 }`, `"one"` records `entries[1].line`, whatever `selected` is.
   - `"all"` records the three lines joined by `\n`, oldest first, and returns `Odesláno do schránky: 3 záznamy.`
@@ -391,7 +391,7 @@ Contract § 5 and § 6, research R7.
   - A `copy` that throws gives the same refusal notice, and the error does not escape (FR-019).
 
   Observe it failing (the function does not exist) before T038.
-- [ ] T038 [US3] Make T037 pass:
+- [X] T038 [US3] Make T037 pass:
   - **In `src/ui/views/logs.ts`:** add `performCopy`, built on `copyText` and `copyNotice` from T035. The seq comes from the screen: `log-entry` uses `screen.seq`; `logs` uses `entries[selected]?.seq`. The `copy` call is wrapped in `try/catch`, which treats a throw as `false`.
   - **In `src/ui/app.ts`, glue only:**
     - Add `copy?: (text: string) => boolean` to `AppDependencies`, documented per data-model.md.
@@ -399,12 +399,20 @@ Contract § 5 and § 6, research R7.
     - In `perform`, `copy-entry` and `copy-all` set `this.notice = performCopy(scope, this.nav.screen, this.nav.current.selected, this.deps.log.entries(), this.copyToClipboard)`.
   - Never log the copied text.
   - Extend T029's structural guard test to assert that `app.ts` calls `performCopy(` and does not call `copyText(` itself.
-- [ ] T039 [US3] REVIEW Phase 5 against Principles I–III and contract § 5–6. Check that:
+- [X] T039 [US3] REVIEW Phase 5 against Principles I–III and contract § 5–6. Check that:
   - the copied text is byte-identical to the file line;
   - nothing writes to stdout;
   - a throwing clipboard call is contained.
 
   Run `bun test`, `bun run typecheck` and `bun run check`, and quickstart § 4 in an OSC 52 terminal. Fix every finding before continuing.
+  - (Done 2026-09-24. Red first: 6 failures, including the missing `copyNotice` export. The extended structural guard failed on its own before `app.ts` called `performCopy`. After: 983 pass, 0 fail; typecheck and biome clean.
+    - **Run in a pseudo-terminal** against the replay server:
+      - `c` emitted one OSC 52 sequence (`ESC ] 52 ; c ; …`) with the selected entry's line, and showed `Odesláno do schránky: 1 záznam.`;
+      - `C` emitted all 4 lines and showed `… 4 záznamy.`;
+      - decoded, the payloads are byte-identical to the log file (the whole file, and its last line).
+    - **The status bar** on `ZÁZNAMY` at 100 columns offers `c kopírovat` and `C vše` right after `Esc zpět`.
+    - **Not checked here:** a real system clipboard receiving the text, which depends on the user's terminal. `copyToClipboard` does not catch errors itself; `performCopy` contains a throw, which T037 tests.
+    - Findings: none open.)
 
 **Checkpoint**: the log can be copied out with two key presses from any screen.
 

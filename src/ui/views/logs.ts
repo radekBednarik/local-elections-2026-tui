@@ -13,8 +13,8 @@
 
 import type { LogLevel } from "../../config/args.ts"
 import type { LogEntry } from "../../logging/logger.ts"
-import { type Column, rule } from "../format.ts"
-import type { Navigation } from "../navigation.ts"
+import { type Column, plural, rule } from "../format.ts"
+import type { Navigation, Screen } from "../navigation.ts"
 import { blank, cell, line, type Role, type SemanticRow, tableHeader } from "../row.ts"
 
 /** The level as a Czech word, so severity reads without colour (FR-005). */
@@ -122,4 +122,51 @@ export function syncLogSelection(nav: Navigation, seen: number, dropped: number)
   if (nav.screen.kind !== "logs") return seen
   if (dropped !== seen) nav.current.selected = Math.max(0, nav.current.selected - (dropped - seen))
   return dropped
+}
+
+/** What `c` or `C` copies: the log-file lines, byte for byte (FR-016, FR-017). */
+export function copyText(
+  entries: readonly LogEntry[],
+  scope: "one" | "all",
+  seq: number | null,
+): string | null {
+  if (scope === "all") return entries.length === 0 ? null : entries.map((e) => e.line).join("\n")
+  const entry = seq === null ? undefined : entries.find((e) => e.seq === seq)
+  return entry === undefined ? null : entry.line
+}
+
+/**
+ * The notice after a copy (FR-018). "Sent", not "copied": a terminal may ignore OSC 52
+ * silently, and the application has no way to tell (research R7).
+ */
+export function copyNotice(count: number, sent: boolean): string {
+  if (count === 0) return "Není co kopírovat."
+  if (!sent) return "Terminál nepodporuje kopírování do schránky."
+  return `Odesláno do schránky: ${count} ${plural(count, "záznam", "záznamy", "záznamů")}.`
+}
+
+/**
+ * Everything behind the copy keys, returning the notice to show (FR-016 to FR-019).
+ *
+ * On the detail screen the entry is the one it shows; on the list, the selected one. The
+ * clipboard is not touched when there is nothing to copy, and a clipboard that throws is
+ * treated as one that refused: a failed copy must never take the application down.
+ */
+export function performCopy(
+  scope: "one" | "all",
+  screen: Screen,
+  selected: number,
+  entries: readonly LogEntry[],
+  copy: (text: string) => boolean,
+): string {
+  const seq = screen.kind === "log-entry" ? screen.seq : (entries[selected]?.seq ?? null)
+  const text = copyText(entries, scope, seq)
+  if (text === null) return copyNotice(0, false)
+  let sent: boolean
+  try {
+    sent = copy(text)
+  } catch {
+    sent = false
+  }
+  return copyNotice(scope === "all" ? entries.length : 1, sent)
 }

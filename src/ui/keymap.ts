@@ -66,7 +66,8 @@ export function intentFor(key: KeyEvent): Intent | null {
     case "slash":
       return { kind: "action", id: "search" }
     // Shift distinguishes the pairs: "w" toggles watching, "W" opens the list; "e"
-    // exports the table, "E" writes the summary.
+    // exports the table, "E" writes the summary; "c" copies the selected log entry, "C"
+    // copies them all.
     case "w":
       return { kind: "action", id: shift ? "watchlist" : "watch" }
     case "e":
@@ -77,6 +78,8 @@ export function intentFor(key: KeyEvent): Intent | null {
       return { kind: "action", id: "sort" }
     case "l":
       return { kind: "action", id: "logs" }
+    case "c":
+      return { kind: "action", id: shift ? "copy-all" : "copy-entry" }
     case "r":
       return { kind: "action", id: "refresh" }
     case "?":

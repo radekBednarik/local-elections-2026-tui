@@ -70,6 +70,8 @@ describe("help completeness (FR-005)", () => {
   test("lists the key for the logs view (004 FR-007)", () => {
     const body = renderHelp().join("\n")
     expect(body).toMatch(/\bl\s+Zobrazit záznamy/)
+    expect(body).toMatch(/\bc\s+Kopírovat vybraný záznam/)
+    expect(body).toMatch(/Shift\+C\s+Kopírovat všechny záznamy/)
   })
 
   test("explains the polling limit and the polling-district boundary", () => {
