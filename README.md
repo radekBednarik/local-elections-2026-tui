@@ -226,6 +226,19 @@ target, and package managers refuse to install another platform's. CI does this 
 matrix; a locally cross-compiled binary has never been executed and should not be
 released.
 
+The Windows binary carries the application icon from `assets/icon.ico`. Bun can only
+embed an icon when it runs on Windows, so on Linux or macOS `build:win` stops with:
+
+```text
+error: Using --windows-icon is only available when compiling on Windows
+```
+
+After compiling, `build:win` runs `tools/build/verify-windows-icon.ts`, which checks that
+every image of the icon is in the `.exe`. If any is missing, the build fails instead of
+shipping Bun's default icon. To change the icon, replace `assets/icon.ico`. The test in
+`tests/unit/windows-icon.test.ts` pins its ten sizes (16 to 256 pixels), so update it to
+match.
+
 ## Licence and disclaimer
 
 Released under the [MIT License](LICENSE).
