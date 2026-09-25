@@ -21,7 +21,7 @@ import { adoptDataset, datasetKey, resetData } from "./storage/dataset.ts"
 import { openDatabase } from "./storage/db.ts"
 import { App } from "./ui/app.ts"
 
-const VERSION = "0.2.0"
+const VERSION = "0.2.1"
 
 /** Dated names of the published reference archives. */
 const REGISTRY_ARCHIVE = "KV2026reg20260915_xml.zip"
