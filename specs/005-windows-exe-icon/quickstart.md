@@ -54,7 +54,7 @@ afterwards.
    Extra large icons. Each view shows the terminal icon, sharp and not Bun's.
 2. Right-click the file, open Properties. The icon is shown in the header.
 3. Right-click, *Show more options*, *Send to*, *Desktop (create shortcut)*. The shortcut
-   shows the icon.
+   shows the icon. Right-click the file, *Pin to taskbar*: the pinned item shows the icon too.
 4. Repeat step 1 with display scaling at 150 %.
 
 If an old build was replaced in the same folder and the old icon still shows, that is

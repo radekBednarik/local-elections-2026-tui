@@ -172,16 +172,18 @@ success line, and a Windows build with the icon removed fails (quickstart § 4 a
     - `&&` in `build:win` on Windows: `bun run` executes scripts with Bun's own shell there, which supports `&&`. T018 confirms this.
 
     Contract rows: every verifier row has a test. The `build:win` rows for Linux (T009) and for missing images (T016, by hand) have been seen. The Windows success row waits for T018.)
-- [ ] T018 [US2] **(Windows)** With the user's approval, push the branch and check the `build` workflow:
+- [X] T018 [US2] **(Windows)** With the user's approval, push the branch and check the `build` workflow:
   - in the `windows-x64` job, the *Build* step ends with `Icon assets/icon.ico is embedded in dist/volby-kv2026.exe (10 images).` and *Smoke-test the binary* passes (FR-005, FR-007);
   - the `linux-x64` job is green (FR-008).
 
   Download the `volby-kv2026-windows-x64` artefact with `gh run download`, then run the verifier on it from WSL. It should report embedded. Run the downloaded `volby-kv2026.exe --version` from WSL (interop runs Windows executables). It must print the `version` in `package.json`, `0.2.0` unless it has been bumped (FR-007). Then ask the user to run quickstart § 5 on it in File Explorer, at 100 % and 150 % scaling (SC-001, SC-002), and record their answer.
 
   **If the verifier fails in CI** but the icon is there (download the artefact from the failed run if one was uploaded, or build it on Windows without the `&&` part, and look in Explorer): research R3's assumption that Bun stores each image unchanged is wrong. Stop. Do not relax the check or remove it from `build:win`. Record what Explorer shows, then re-plan R3, for example by reading the `.exe`'s icon resources and comparing image dimensions and pixel data instead of raw bytes. Update research.md, the contract and the tests before changing the code.
+  - (CI part done 2026-09-25, run 36119067296 on commit `4c9bfb1`, both jobs green. The `windows-x64` *Build* step printed `[577ms] compile  dist/volby-kv2026.exe`, then `Icon assets/icon.ico is embedded in dist/volby-kv2026.exe (10 images).` So Bun on Windows does store the images unchanged, and research R3's assumption holds: the fallback in this task is not needed. `&&` ran under Bun's shell as expected. *Smoke-test the binary* printed `volby-kv2026 0.2.0` and `Self-test prošel (2 z 2)`. The downloaded artefact (96,903,680 bytes) passed the verifier from WSL, and `volby-kv2026.exe --version` printed `volby-kv2026 0.2.0`, matching `package.json` (FR-007). The artefact is at `C:\Users\bedna\Downloads\volby-kv2026-ci-005\`. The user confirmed on 2026-09-25 that the icon shows correctly in Explorer (SC-001, SC-002).)
 - [ ] T019 [US2] **(Windows)** Ask the user to run quickstart § 4 on a Windows machine with Bun 1.4.2: rename `assets/icon.ico` away, run `bun run build:win`, and check the exit code is non-zero and the message names the icon (FR-006, SC-005). Record which layer stopped the build: Bun, or the verifier. That answers research R3's open question. If no Windows machine is available, record that SC-005 rests on T012, T013 and T016, and leave the task open with that note.
 
 **Checkpoint**: both stories done. The next release's Windows asset carries the icon.
+  - (Open, 2026-09-25. The user has no Bun on Windows, so what Bun prints for a missing icon on Windows is still unobserved. SC-005 rests on the tests: T012 (a missing or invalid icon gives exit 1 and a message naming it), T013 (`build:win` always runs the verifier after the compile) and T016 (a real Bun Windows binary without the icon fails with all ten sizes listed). Whatever Bun does, a missing icon cannot produce a passing build. Bun either fails, or compiles without the icon and the verifier then fails. The one open point is only the contract's wording: if Bun fails first, does its message name the icon (FR-006)? Close this task when anyone runs quickstart § 4 on Windows.)
 
 ---
 
@@ -192,7 +194,7 @@ success line, and a Windows build with the icon removed fails (quickstart § 4 a
   - `build:win` checks the icon is embedded and fails if it is not;
   - `build:win` now only runs on Windows, where it used to cross-compile. Quote Bun's error so a Linux user recognises it.
   - (Done 2026-09-25. Added two paragraphs under `### Building`: where the icon lives and Bun's Linux error, quoted; then the check, how to change the icon, and the test that pins its sizes. The existing paragraph is kept.)
-- [ ] T021 FINAL REVIEW of the whole branch against Principles I to III, FR-001 to FR-009 and SC-001 to SC-005. Every FR must trace to a test or a recorded check in this file (FR-001/002/004: T005, T006; FR-003: T005, T007; FR-005: T018; FR-006: T012, T013, T016, T019; FR-007: T018; FR-008: T006, T009; FR-009: T020). Check that nothing leftover remains (no scratch exes in the repo, `dist/` still ignored). Run `bun test`, `bun run typecheck` and `bun run check`, and record the counts against T001. Fix every finding.
+- [X] T021 FINAL REVIEW of the whole branch against Principles I to III, FR-001 to FR-009 and SC-001 to SC-005. Every FR must trace to a test or a recorded check in this file (FR-001/002/004: T005, T006, T018; FR-003: T005, T007; FR-005: T018; FR-006: T012, T013, T016, T019; FR-007: T018; FR-008: T006, T009; FR-009: T020). Check that nothing leftover remains (no scratch exes in the repo, `dist/` still ignored). Run `bun test`, `bun run typecheck` and `bun run check`, and record the counts against T001. Fix every finding.
   - (In progress 2026-09-25. **Local part done.** An independent reviewer read the whole diff and ran the tests, typecheck and lint. There were no findings at or above its confidence threshold. It confirmed:
     - every contract row, including stdout for success and stderr for every failure;
     - `&&` under Bun's script shell on Windows;
@@ -202,7 +204,23 @@ success line, and a Windows build with the icon removed fails (quickstart § 4 a
     - Every fixture was square, so a width/height swap in `readIcoImages` would go unnoticed. One fixture is now 48x24. A deliberate swap of the two reads turned that test red, and it went green again once restored.
     - The process tests duplicated their file setup. They now reuse `withFiles`, which is hoisted to module level, and the odd `(1 images)` is gone.
 
-    Two points were accepted: `toStartWith` on the OS error text, which varies by platform, and `bitsPerPixel` being used only by the asset test, which FR-002 needs. Result: 1024 pass, 0 fail across 53 files. Typecheck clean. Biome clean, 137 files. **Waiting on** T018 and T019, then the requirement trace.)
+    Two points were accepted: `toStartWith` on the OS error text, which varies by platform, and `bitsPerPixel` being used only by the asset test, which FR-002 needs. Result: 1024 pass, 0 fail across 53 files. Typecheck clean. Biome clean, 137 files. **Closed** once T018 was in.)
+  - (Done 2026-09-25. **Requirement trace:**
+    - FR-001: T005, T006, T018 (the user checked Explorer).
+    - FR-002: T005 (ten sizes pinned), T018 (all ten found in the CI build).
+    - FR-003: T005, T007.
+    - FR-004: T006, T008, T018.
+    - FR-005: T018 (CI run 36119067296).
+    - FR-006: T012, T013, T016. The Windows observation in T019 is still open.
+    - FR-007: T018 (smoke test, `--version` 0.2.0).
+    - FR-008: T006, T009, and the green `linux-x64` job.
+    - FR-009: T020.
+    - SC-001 and SC-002: T018. SC-004: 1024 pass against the baseline's 998, typecheck and Biome clean. SC-005: T012, T013 and T016, as noted under T019.
+
+    **Leftovers:** none. No binaries are tracked, `dist/` is ignored, and the scratch binaries are deleted. **Analysis LOW items:**
+    - C3: quickstart § 5 now includes the taskbar pin.
+    - I2: the FR-001 trace above includes T018.
+    - A1: the check took 79 ms on an 86 MB binary (T016).)
 
 ---
 
