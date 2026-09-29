@@ -1,0 +1,599 @@
+<title>Results Chart Panel Mock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* Layout: one column, terminal mock as the centerpiece, design notes below. */
+:root {
+  --bg: #f6f7f9;
+  --fg: #1e222b;
+  --muted: #59606e;
+  --accent: #2f54c9;
+  --line: #dfe2e9;
+  --surface: #ffffff;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14151a; --fg: #e5e8ef; --muted: #99a0ae; --accent: #8ea6f0;
+    --line: #2a2d36; --surface: #1b1d24; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14151a; --fg: #e5e8ef; --muted: #99a0ae; --accent: #8ea6f0;
+  --line: #2a2d36; --surface: #1b1d24; color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  margin: 0; padding-block: 32px 48px; padding-inline: 20px;
+}
+main { max-width: 1040px; margin: 0 auto; }
+h1 { font-size: 26px; font-weight: 600; margin: 0 0 6px; text-wrap: balance; }
+h2 { font-size: 18px; font-weight: 600; margin: 40px 0 4px; }
+h3 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+p { margin: 0 0 10px; max-width: 72ch; }
+.lede { color: var(--muted); margin-bottom: 24px; }
+code, kbd {
+  font-family: var(--font-mono); font-size: 0.86em;
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  border-radius: 4px; padding: 1px 5px;
+}
+kbd { border: 1px solid var(--line); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 18px 28px; margin: 0 0 16px; }
+.group { display: flex; flex-direction: column; gap: 6px; }
+.group > span {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600;
+}
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button {
+  font: 600 13px var(--font-body); color: var(--fg);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 11px; cursor: pointer;
+}
+.seg button:hover { border-color: var(--accent); }
+.seg button[aria-pressed="true"] {
+  background: var(--accent); border-color: var(--accent); color: var(--bg);
+}
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.term-wrap {
+  overflow-x: auto; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); min-width: 0;
+}
+#term {
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.22;
+  white-space: pre; width: max-content; padding: 10px 8px;
+  font-variant-ligatures: none;
+}
+#term .r { height: 1.22em; }
+.caption { color: var(--muted); font-size: 13px; margin-top: 8px; }
+
+.notes { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 32px; margin-top: 12px; }
+.notes > div { min-width: 0; }
+.notes p { font-size: 14px; color: var(--muted); margin: 0; }
+.notes p strong { color: var(--fg); }
+@media (max-width: 720px) { .notes { grid-template-columns: 1fr; } }
+</style>
+
+<main>
+  <h1>Results Chart Panel Mock</h1>
+  <p class="lede">
+    Second iteration of the mock for feature <code>006-results-chart-panel</code>: a pie chart in a
+    split pane instead of a bar overlay. Everything inside the terminal below is a character cell,
+    the colours are the app's real theme slots plus a rank-based slice palette drawn from each
+    theme's published family, and every slice combines a colour with a fill texture so the chart
+    survives monochrome. Press <kbd>g</kbd> to open or close the pane, or use the buttons.
+    Figures are sample data.
+  </p>
+
+  <div class="controls" role="toolbar" aria-label="Mock controls">
+    <div class="group">
+      <span>Screen</span>
+      <div class="seg" id="ctxSeg">
+        <button data-ctx="national" aria-pressed="true">Národní přehled</button>
+        <button data-ctx="council" aria-pressed="false">Zastupitelstvo</button>
+        <button data-ctx="candidates" aria-pressed="false">Kandidáti strany</button>
+      </div>
+    </div>
+    <div class="group">
+      <span>Chart pane</span>
+      <div class="seg" id="openSeg">
+        <button data-open="false" aria-pressed="true">Zavřený (g v patičce)</button>
+        <button data-open="true" aria-pressed="false">Otevřený (rozdělené zobrazení)</button>
+      </div>
+    </div>
+    <div class="group">
+      <span>Theme (Ctrl+T cycle in app)</span>
+      <div class="seg" id="themeSeg"></div>
+    </div>
+  </div>
+
+  <div class="term-wrap"><div id="term" role="img" aria-label="Terminal mock of the pie chart pane"></div></div>
+  <p class="caption">
+    Rendered at 100 × 30 cells. With the pane open, the left table sheds its secondary columns and
+    keeps name, votes and share; below a minimum width the chart action is offered in the command
+    palette as unavailable, with the reason, rather than breaking the table.
+  </p>
+
+  <h2>Design notes</h2>
+  <div class="notes">
+    <div>
+      <h3>Split pane: the watchlist mechanism, reused</h3>
+      <p>The chart opens as a side panel inside the body, exactly like the watchlist panel in
+      <code>src/ui/chrome/frame.ts</code>: panel tone background, a heavy accent rail on its left
+      edge, shown only when there is room (FR-056). The table on the left stays fully interactive
+      – you can keep navigating, sorting and drilling down while the chart follows the selection's
+      context. <kbd>g</kbd> toggles it; nothing is modal.</p>
+    </div>
+    <div>
+      <h3>A pie out of character cells</h3>
+      <p>Terminal cells are roughly twice as tall as wide, so the disc is an ellipse in cell space
+      (about 33 × 17 cells here) that reads as a circle on screen. OpenTUI paints per-cell
+      foreground and background, which is all this needs. Edges are chunky by nature; with at most
+      seven slices, every slice stays several cells wide and remains identifiable.</p>
+    </div>
+    <div>
+      <h3>Colour by rank, not by party</h3>
+      <p>Six slice colours per theme, drawn from each theme's own published palette family, plus
+      the muted tone for the aggregate. Colour follows the <strong>rank position</strong> of the
+      slice, never a party's identity, so no political affiliation is implied (the concern behind
+      the app's original no-party-colours rule). A party's colour can therefore change as rankings
+      change; the adjacent legend is always the authoritative mapping.</p>
+    </div>
+    <div>
+      <h3>Textures keep it monochrome-safe</h3>
+      <p>Each slice pairs its colour with a fill glyph – █ ▓ ▚ ▒ ▞ ░, and · for the aggregate – so
+      slices differ by texture alone in the high-contrast theme, under <code>NO_COLOR</code> and on
+      monochrome terminals. The legend swatch shows the same glyph in the same colour, so the
+      mapping is readable both ways. Try the Vysoký kontrast theme above.</p>
+    </div>
+    <div>
+      <h3>Six slices plus "Ostatní"</h3>
+      <p>The six largest entries get their own slice, ordered clockwise from twelve o'clock;
+      everything beyond the sixth is aggregated into a muted <em>Ostatní</em> slice with the count
+      in its label. That guarantees a legible minimum slice size, and no figure is lost: the legend
+      carries exact votes and share for every slice, and the full breakdown stays in the table on
+      the left.</p>
+    </div>
+    <div>
+      <h3>What the split costs</h3>
+      <p>Half the width leaves about 49 columns for the table, which is less than the full column
+      set needs. While the pane is open the table drops secondary columns from the right –
+      the proportional bar first, then seats – keeping name, votes and share, an extension of the
+      app's existing "lose the aid before any figure" rule. Below the minimum width the palette
+      lists the action greyed with the reason (the FR-069 pattern), and the footer hides the
+      <kbd>g</kbd> hint.</p>
+    </div>
+  </div>
+</main>
+
+<script>
+"use strict";
+/* Exact slot values from src/ui/theme/themes.ts. `pie` is the proposed rank-based slice
+   palette, six tones from each theme's published family; `pieOther` is the aggregate. */
+const THEMES = {
+  "tokyonight": { label: "Tokyo Night", selInverse: false,
+    pie: ["#7aa2f7","#bb9af7","#9ece6a","#ff9e64","#7dcfff","#f7768e"], pieOther: "#697196",
+    s: { bg:"#1a1b26", panel:"#16161e", element:"#24283b", zebra:"#1e2030", sel:"#2e3c64", track:"#292e42", border:"#3b4261", borderActive:"#7aa2f7", text:"#c0caf5", muted:"#697196", subtle:"#737aa2", primary:"#7aa2f7", accent:"#bb9af7", success:"#9ece6a", error:"#f7768e", warning:"#e0af68", onAccent:"#1a1b26", bar:"#7aa2f7" } },
+  "catppuccin-mocha": { label: "Catppuccin Mocha", selInverse: false,
+    pie: ["#89b4fa","#cba6f7","#a6e3a1","#fab387","#89dceb","#f38ba8"], pieOther: "#787b90",
+    s: { bg:"#1e1e2e", panel:"#181825", element:"#313244", zebra:"#24243a", sel:"#45475a", track:"#313244", border:"#45475a", borderActive:"#cba6f7", text:"#cdd6f4", muted:"#787b90", subtle:"#a6adc8", primary:"#89b4fa", accent:"#cba6f7", success:"#a6e3a1", error:"#f38ba8", warning:"#f9e2af", onAccent:"#1e1e2e", bar:"#b4befe" } },
+  "gruvbox": { label: "Gruvbox Dark", selInverse: false,
+    pie: ["#83a598","#fabd2f","#b8bb26","#fe8019","#8ec07c","#fb4934"], pieOther: "#928374",
+    s: { bg:"#282828", panel:"#1d2021", element:"#3c3836", zebra:"#2f2c2a", sel:"#504945", track:"#3c3836", border:"#504945", borderActive:"#fabd2f", text:"#ebdbb2", muted:"#928374", subtle:"#bdae93", primary:"#88a99c", accent:"#fabd2f", success:"#b8bb26", error:"#fc7c6c", warning:"#fabd2f", onAccent:"#282828", bar:"#8ec07c" } },
+  "nord": { label: "Nord", selInverse: false,
+    pie: ["#88c0d0","#b48ead","#a3be8c","#d08770","#81a1c1","#bf616a"], pieOther: "#848ea2",
+    s: { bg:"#2e3440", panel:"#272c36", element:"#3b4252", zebra:"#333a47", sel:"#434c5e", track:"#3b4252", border:"#4c566a", borderActive:"#88c0d0", text:"#e5e9f0", muted:"#848ea2", subtle:"#aeb7c6", primary:"#88c0d0", accent:"#96b1cc", success:"#a3be8c", error:"#d89fa4", warning:"#ebcb8b", onAccent:"#2e3440", bar:"#88c0d0" } },
+  "catppuccin-latte": { label: "Catppuccin Latte", selInverse: false,
+    pie: ["#1e66f5","#8839ef","#40a02b","#fe640b","#04a5e5","#d20f39"], pieOther: "#7b7e8e",
+    s: { bg:"#eff1f5", panel:"#e6e9ef", element:"#dce0e8", zebra:"#e7eaf0", sel:"#ccd0da", track:"#dce0e8", border:"#bcc0cc", borderActive:"#8839ef", text:"#4c4f69", muted:"#7b7e8e", subtle:"#6c6f85", primary:"#1a5ad8", accent:"#7e35de", success:"#2d701e", error:"#c50e36", warning:"#8b5812", onAccent:"#eff1f5", bar:"#1e66f5" } },
+  "high-contrast": { label: "Vysoký kontrast", selInverse: true,
+    pie: ["#ffffff","#ffffff","#ffffff","#ffffff","#ffffff","#ffffff"], pieOther: "#808080",
+    s: { bg:"#000000", panel:"#262626", element:"#1f1f1f", zebra:"#141414", sel:"#ffffff", track:"#2a2a2a", border:"#ffffff", borderActive:"#ffff00", text:"#ffffff", muted:"#808080", subtle:"#d0d0d0", primary:"#ffffff", accent:"#ffff00", success:"#e0e0e0", error:"#a0a0a0", warning:"#ffff00", onAccent:"#000000", bar:"#ffffff" } },
+};
+/* Slice fill textures, one per rank; the aggregate is a sparse dot field. Texture alone
+   distinguishes slices where colour cannot (high contrast, NO_COLOR, monochrome). */
+const TEX = ["█","▓","▚","▒","▞","░"], TEX_OTHER = "·";
+
+/* Sample data. Shares are of valid votes; candidate shares are of the party's votes. */
+const NATIONAL = [
+  { n: "Sdružení nezávislých kandidátů", v: 14612385, p: 27.84, m: 36412, mp: 62.33, c: 1 },
+  { n: "ODS",                     v: 5883197, p: 11.21, m: 3214, mp: 5.50, c: 1 },
+  { n: "ANO 2011",                v: 5132555, p: 9.78,  m: 2801, mp: 4.79, c: 1 },
+  { n: "STAN",                    v: 4261385, p: 8.12,  m: 2455, mp: 4.20, c: -1 },
+  { n: "KDU-ČSL",                 v: 3899273, p: 7.43,  m: 2960, mp: 5.07, c: 0 },
+  { n: "Česká pirátská strana",   v: 2749958, p: 5.24,  m: 1108, mp: 1.90, c: 1 },
+  { n: "SPD",                     v: 2419333, p: 4.61,  m: 987,  mp: 1.69, c: 0 },
+  { n: "SOCDEM",                  v: 2030980, p: 3.87,  m: 1342, mp: 2.30, c: -1 },
+  { n: "TOP 09",                  v: 1637380, p: 3.12,  m: 611,  mp: 1.05, c: 0 },
+  { n: "KSČM",                    v: 1464195, p: 2.79,  m: 894,  mp: 1.53, c: -1 },
+  { n: "Přísaha",                 v: 860674,  p: 1.64,  m: 302,  mp: 0.52, c: 0 },
+  { n: "Zelení",                  v: 745218,  p: 1.42,  m: 214,  mp: 0.37, c: 1 },
+  { n: "Svobodní",                v: 566785,  p: 1.08,  m: 168,  mp: 0.29, c: 2 },
+];
+const COUNCIL = [
+  { n: "Klidné město",        v: 44452, p: 32.15, m: 7, c: 1 },
+  { n: "ODS",                 v: 29589, p: 21.40, m: 4, c: 1 },
+  { n: "STAN",                v: 20490, p: 14.82, m: 3, c: 0 },
+  { n: "ANO 2011",            v: 14739, p: 10.66, m: 2, c: -1 },
+  { n: "Piráti a nezávislí",  v: 12347, p: 8.93,  m: 2, c: 0 },
+  { n: "KDU-ČSL",             v: 9277,  p: 6.71,  m: 1, c: 1 },
+  { n: "SPD",                 v: 7369,  p: 5.33,  m: 1, c: 0 },
+];
+const CANDIDATES = [
+  { n: "Novák Petr, Ing.",      v: 2412, p: 8.15, el: true,  c: 1 },
+  { n: "Svobodová Jana, Mgr.",  v: 2231, p: 7.54, el: true,  c: 1 },
+  { n: "Dvořák Martin",         v: 2087, p: 7.05, el: true,  c: 0 },
+  { n: "Černá Alena, MUDr.",    v: 1954, p: 6.60, el: true,  c: 1 },
+  { n: "Procházka Jiří",        v: 1730, p: 5.85, el: false, c: 0 },
+  { n: "Kučerová Marie",        v: 1642, p: 5.55, el: false, c: -1 },
+  { n: "Horák Tomáš, Ing.",     v: 1512, p: 5.11, el: false, c: 0 },
+  { n: "Benešová Eva",          v: 1385, p: 4.68, el: false, c: 0 },
+  { n: "Marek Jan",             v: 1246, p: 4.21, el: false, c: 2 },
+];
+/* Top six plus everything beyond the sixth aggregated as "Ostatní". */
+function slicesFor(data, otherLabel, otherVotes) {
+  const top = data.slice(0, 6);
+  const rest = 100 - top.reduce((s, d) => s + d.p, 0);
+  return [
+    ...top.map((d) => ({ n: d.n, v: d.v, p: d.p, c: d.c, other: false })),
+    { n: otherLabel, v: otherVotes, p: rest, c: 0, other: true },
+  ];
+}
+const SLICES = {
+  national: () => slicesFor(NATIONAL, "Ostatní (221 stran)", 15941361),
+  council: () => slicesFor(COUNCIL, "Ostatní (1 strana)", 7369),
+  candidates: () => slicesFor(CANDIDATES, "Ostatní (12 kand.)", 17533),
+};
+
+const W = 100, H = 30;
+/* Split geometry: rail 0, table 1..49, scroll bar 50, accent rail 51, pane 52..99. */
+const LEFT_END = 49, SCROLL_COL = 50, DIVIDER = 51, PANE_X = 52;
+const state = { theme: "tokyonight", ctx: "national", open: false };
+let S, TH, M;
+
+/* ---- ports of src/ui/format.ts and src/ui/bar.ts ---- */
+const EIGHTHS = ["▏","▎","▍","▌","▋","▊","▉"], FULL = "█";
+function barTxt(fraction, width) {
+  if (fraction == null) return " ".repeat(width);
+  const clamped = Math.min(1, Math.max(0, fraction));
+  const eighths = Math.round(clamped * width * 8);
+  const full = Math.floor(eighths / 8), rem = eighths % 8;
+  return (FULL.repeat(full) + (rem === 0 ? "" : EIGHTHS[rem - 1])).padEnd(width, " ");
+}
+function fmtI(n) { return String(Math.trunc(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
+function fmtP(v, d = 2) { return v.toFixed(d).replace(".", ",") + " %"; }
+function marker(c) { return c > 1 ? "·" : c === 1 ? "▲" : c === -1 ? "▼" : " "; }
+function chgFg(c) { return c === 1 ? S.success : c === -1 ? S.error : null; }
+function padT(text, w, align) {
+  const chars = [...text];
+  if (chars.length > w) return w <= 1 ? chars.slice(0, w).join("") : chars.slice(0, w - 1).join("") + "…";
+  const fill = " ".repeat(w - chars.length);
+  return align === "right" ? fill + text : text + fill;
+}
+
+/* ---- cell matrix ---- */
+function newMatrix() {
+  M = Array.from({ length: H }, () =>
+    Array.from({ length: W }, () => ({ ch: " ", fg: S.text, bg: S.bg, b: false })));
+}
+function put(r, c, text, fg, bg, bold) {
+  const chars = [...text];
+  for (let i = 0; i < chars.length; i++) {
+    const cell = M[r] && M[r][c + i];
+    if (!cell) continue;
+    cell.ch = chars[i];
+    if (fg) cell.fg = fg;
+    if (bg) cell.bg = bg;
+    cell.b = !!bold;
+  }
+}
+function fillBg(r, c1, c2, bg) {
+  for (let c = c1; c <= c2; c++) { const cell = M[r] && M[r][c]; if (cell) cell.bg = bg; }
+}
+
+/* ---- chrome: title bar (titleBarRow) and status bar (statusBarRow) ---- */
+function titleBar(trail) {
+  fillBg(0, 0, W - 1, S.panel);
+  let x = 0;
+  put(0, x, " ◆ VOLBY ", S.onAccent, S.accent, true); x += 9;
+  let prev = S.accent;
+  trail.forEach((segText, i) => {
+    const last = i === trail.length - 1;
+    const surface = last ? S.primary : S.element;
+    put(0, x, "▌", prev, surface); x += 1;
+    const t = " " + segText + " ";
+    put(0, x, t, last ? S.onAccent : S.text, surface, last); x += [...t].length;
+    prev = surface;
+  });
+  put(0, x, "▌", prev, S.panel); x += 1;
+  const right = " ● živě  20:41:33 ";
+  const rx = W - [...right].length;
+  put(0, rx, " ● živě ", S.success, S.panel);
+  put(0, rx + 8, " 20:41:33 ", S.muted, S.panel);
+}
+function statusBar(label, hints) {
+  const r = H - 1;
+  fillBg(r, 0, W - 1, S.panel);
+  let x = 0;
+  put(r, x, " " + label + " ", S.onAccent, S.primary, true); x += [...label].length + 2;
+  put(r, x, "▌", S.primary, S.panel); x += 2;
+  for (const h of hints) {
+    const chip = " " + h[0] + " ", lab = " " + h[1] + "  ";
+    if (x + [...chip].length + [...lab].length > W - 18) break;
+    put(r, x, chip, S.onAccent, S.accent, true); x += [...chip].length;
+    put(r, x, lab, S.subtle, S.panel); x += [...lab].length;
+  }
+  const t = " " + TH.label + " ";
+  put(r, W - [...t].length, t, S.muted, S.panel);
+}
+/* Body chrome. `split` adds the pane surface and its accent rail, as the watchlist does. */
+function bodyChrome(split, thumbFrom, thumbTo) {
+  const scrollCol = split ? SCROLL_COL : W - 1;
+  for (let r = 1; r < H - 1; r++) {
+    put(r, 0, "┃", S.primary, S.bg);
+    fillBg(r, scrollCol, scrollCol, r >= thumbFrom && r <= thumbTo ? S.muted : S.track);
+    if (split) {
+      put(r, DIVIDER, "┃", S.accent, S.panel);
+      fillBg(r, PANE_X, W - 1, S.panel);
+    }
+  }
+}
+
+/* ---- tables (row.ts conventions: element header, zebra stripes, sel row) ---- */
+const selText = () => (TH.selInverse ? S.bg : S.text);
+function table(r0, cols, rows, selected, xEnd) {
+  let x = 1;
+  fillBg(r0, 1, xEnd, S.element);
+  for (const col of cols) {
+    put(r0, x, padT(col.h, col.w, col.a), S.primary, S.element, true);
+    x += col.w + 1;
+  }
+  rows.forEach((cells, i) => {
+    const r = r0 + 1 + i;
+    const sel = i === selected;
+    const bg = sel ? S.sel : i % 2 === 1 ? S.zebra : S.bg;
+    fillBg(r, 1, xEnd, bg);
+    let cx = 1;
+    cells.forEach((cell, j) => {
+      const col = cols[j];
+      const fg = sel ? selText() : cell.fg || S.text;
+      if (cell.bar != null) put(r, cx, barTxt(cell.bar, col.w), S.bar, bg);
+      else if (cell.chip) put(r, cx, padT(cell.t, col.w, col.a), S.onAccent, S.success, true);
+      else put(r, cx, padT(cell.t, col.w, col.a), fg, bg, sel);
+      cx += col.w + 1;
+    });
+  });
+}
+const votesCell = (d) => ({ t: marker(d.c) + fmtI(d.v), fg: chgFg(d.c), a: "right" });
+
+/* ---- full-width screens (pane closed) ---- */
+function fullNational() {
+  bodyChrome(false, 2, 18);
+  put(2, 2, "Zastupitelstva obcí", S.primary, S.bg, true);
+  put(2, 22, "· průběžné výsledky", S.muted, S.bg);
+  const cards = [
+    { l: " Sečteno okrsků", f: " 11 762 / 14 764", ff: S.text, foot: { bar: 0.7966 } },
+    { l: " Účast", f: " ▲46,07 %", ff: S.success, foot: { bar: 0.4607 } },
+    { l: " Mandáty", f: " 62 981", ff: S.text, foot: { t: " 58 412 zvolených", fg: S.muted } },
+  ];
+  cards.forEach((card, i) => {
+    const cx = 2 + i * 32, cw = 30;
+    for (let dr = 0; dr < 3; dr++) fillBg(4 + dr, cx, cx + cw - 1, S.element);
+    put(4, cx, padT(card.l, cw), S.muted, S.element);
+    put(5, cx, padT(card.f, cw), card.ff, S.element, true);
+    if (card.foot.bar != null) put(6, cx + 1, barTxt(card.foot.bar, cw - 2), S.bar, S.element);
+    else put(6, cx, padT(card.foot.t, cw), card.foot.fg, S.element);
+  });
+  const cols = [
+    { h: " Volební strana", w: 40 }, { h: "Hlasy", w: 12, a: "right" },
+    { h: "Podíl", w: 11, a: "right" }, { h: "", w: 10 },
+    { h: "Mandáty", w: 11, a: "right" }, { h: "Podíl", w: 9, a: "right" },
+  ];
+  table(8, cols, NATIONAL.map((d) => [
+    { t: " " + d.n }, votesCell(d), { t: fmtP(d.p), a: "right" }, { bar: d.p / 100 },
+    { t: fmtI(d.m), a: "right" }, { t: fmtP(d.mp), a: "right" },
+  ]), 0, W - 2);
+}
+function fullCouncil() {
+  bodyChrome(false, 2, 24);
+  put(2, 2, "Říčany", S.primary, S.bg, true);
+  put(2, 9, "(Okres Praha-východ)", S.muted, S.bg);
+  put(3, 2, "Sečteno okrsků: 18 / 18   Účast: ▲48,12 %   Mandátů: 20   průběžné", S.muted, S.bg);
+  const cols = [
+    { h: "  Č.", w: 4, a: "right" }, { h: " Volební strana", w: 46 },
+    { h: "Hlasy", w: 12, a: "right" }, { h: "Podíl", w: 11, a: "right" },
+    { h: "", w: 10 }, { h: "Mandáty", w: 10, a: "right" },
+  ];
+  table(5, cols, COUNCIL.map((d, i) => [
+    { t: String(i + 1), a: "right", fg: S.muted }, { t: " " + d.n }, votesCell(d),
+    { t: fmtP(d.p), a: "right" }, { bar: d.p / 100 }, { t: String(d.m), a: "right" },
+  ]), 1, W - 2);
+}
+function fullCandidates() {
+  bodyChrome(false, 2, 22);
+  put(2, 2, "Kandidáti · ODS", S.primary, S.bg, true);
+  put(3, 2, "Hlasy pro stranu: 29 589   Mandátů: 4   průběžné", S.muted, S.bg);
+  const cols = [
+    { h: " Poř.", w: 5, a: "right" }, { h: " Kandidát", w: 43 },
+    { h: "Hlasy", w: 9, a: "right" }, { h: "Podíl", w: 8, a: "right" },
+    { h: "", w: 10 }, { h: "", w: 18 },
+  ];
+  table(5, cols, CANDIDATES.map((d, i) => [
+    { t: String(i + 1), a: "right", fg: S.muted }, { t: " " + d.n }, votesCell(d),
+    { t: fmtP(d.p), a: "right" }, { bar: d.p / 100 },
+    d.el ? { t: " zvolen(a) ", chip: true } : { t: "" },
+  ]), 0, W - 2);
+}
+
+/* ---- reduced tables beside the pane: name, votes and share are kept, the rest shed ---- */
+function splitNational() {
+  bodyChrome(true, 2, 18);
+  put(2, 2, "Zastupitelstva obcí", S.primary, S.bg, true);
+  put(3, 2, "průběžné · obnoveno 20:41:33", S.muted, S.bg);
+  const cols = [
+    { h: " Volební strana", w: 24 }, { h: "Hlasy", w: 12, a: "right" }, { h: "Podíl", w: 11, a: "right" },
+  ];
+  table(5, cols, NATIONAL.map((d) => [
+    { t: " " + d.n }, votesCell(d), { t: fmtP(d.p), a: "right" },
+  ]), 0, LEFT_END);
+}
+function splitCouncil() {
+  bodyChrome(true, 2, 24);
+  put(2, 2, "Říčany", S.primary, S.bg, true);
+  put(3, 2, "18 / 18 okrsků · účast ▲48,12 %", S.muted, S.bg);
+  const cols = [
+    { h: "  Č.", w: 4, a: "right" }, { h: " Volební strana", w: 19 },
+    { h: "Hlasy", w: 12, a: "right" }, { h: "Podíl", w: 11, a: "right" },
+  ];
+  table(5, cols, COUNCIL.map((d, i) => [
+    { t: String(i + 1), a: "right", fg: S.muted }, { t: " " + d.n }, votesCell(d),
+    { t: fmtP(d.p), a: "right" },
+  ]), 1, LEFT_END);
+}
+function splitCandidates() {
+  bodyChrome(true, 2, 22);
+  put(2, 2, "Kandidáti · ODS", S.primary, S.bg, true);
+  put(3, 2, "hlasy pro stranu: 29 589 · průběžné", S.muted, S.bg);
+  const cols = [
+    { h: " Poř.", w: 4, a: "right" }, { h: " Kandidát", w: 21 },
+    { h: "Hlasy", w: 9, a: "right" }, { h: "Podíl", w: 8, a: "right" }, { h: "", w: 3 },
+  ];
+  table(5, cols, CANDIDATES.map((d, i) => [
+    { t: String(i + 1), a: "right", fg: S.muted }, { t: " " + d.n }, votesCell(d),
+    { t: fmtP(d.p), a: "right" }, d.el ? { t: "●", fg: S.success, a: "right" } : { t: "" },
+  ]), 0, LEFT_END);
+}
+
+/* ---- the pie pane ---- */
+function sliceStyle(i, other) {
+  return other ? { col: TH.pieOther, tex: TEX_OTHER } : { col: TH.pie[i], tex: TEX[i] };
+}
+/* Cells are ~2:1 (height:width), so the screen circle is an ellipse in cell space:
+   columns count once, rows twice. Slices run clockwise from twelve o'clock. */
+function pie(cx, cy, R, slices) {
+  const total = slices.reduce((s, x) => s + x.p, 0);
+  for (let r = cy - R / 2; r <= cy + R / 2; r++) {
+    for (let c = cx - R; c <= cx + R; c++) {
+      const sx = c - cx, sy = (r - cy) * 2;
+      if (sx * sx + sy * sy > R * R) continue;
+      let a = Math.atan2(sx, -sy);
+      if (a < 0) a += 2 * Math.PI;
+      const frac = a / (2 * Math.PI);
+      let acc = 0, style = sliceStyle(6, true);
+      for (let i = 0; i < slices.length; i++) {
+        acc += slices[i].p / total;
+        if (frac <= acc) { style = sliceStyle(i, slices[i].other); break; }
+      }
+      put(r, c, style.tex, style.col, S.panel);
+    }
+  }
+}
+function pane(title, subtitle, slices) {
+  put(2, PANE_X + 1, " " + title + " ", S.accent, S.panel, true);
+  put(3, PANE_X + 1, " " + subtitle, S.muted, S.panel);
+  pie(PANE_X + 24, 13, 16, slices);
+  slices.forEach((sl, i) => {
+    const r = 22 + i;
+    const style = sliceStyle(i, sl.other);
+    put(r, PANE_X + 1, style.tex + style.tex, style.col, S.panel);
+    put(r, PANE_X + 4, padT(sl.n, 19), sl.other ? S.muted : S.text, S.panel);
+    put(r, PANE_X + 24, padT(marker(sl.c) + fmtI(sl.v), 11, "right"), chgFg(sl.c) || S.text, S.panel);
+    put(r, PANE_X + 36, padT(fmtP(sl.p), 8, "right"), S.subtle, S.panel);
+  });
+}
+const PANE = {
+  national: () => pane("Graf · ČR", "podíl platných hlasů · průběžné", SLICES.national()),
+  council: () => pane("Graf · Říčany", "podíl platných hlasů · průběžné", SLICES.council()),
+  candidates: () => pane("Graf · Kandidáti ODS", "podíl hlasů pro stranu · průběžné", SLICES.candidates()),
+};
+
+/* ---- screens ---- */
+const TRAIL = {
+  national: ["ČR"],
+  council: ["ČR", "Okres Praha-východ", "Říčany"],
+  candidates: ["ČR", "Okres Praha-východ", "Říčany", "ODS"],
+};
+const LABEL = { national: "PŘEHLED", council: "ZASTUPITELSTVO", candidates: "KANDIDÁTI" };
+const VIEW_FULL = { national: fullNational, council: fullCouncil, candidates: fullCandidates };
+const VIEW_SPLIT = { national: splitNational, council: splitCouncil, candidates: splitCandidates };
+const HINTS = {
+  national: [["t","typ zastupitelstva"],["r","obnovit"],["?","nápověda"],["q","konec"]],
+  council: [["↵","kandidáti"],["w","sledovat"],["e","export"],["s","řazení"],["?","nápověda"]],
+  candidates: [["w","sledovat"],["e","export"],["?","nápověda"],["q","konec"]],
+};
+
+/* ---- render loop ---- */
+const term = document.getElementById("term");
+function render() {
+  TH = THEMES[state.theme]; S = TH.s;
+  newMatrix();
+  titleBar(TRAIL[state.ctx]);
+  if (state.open) {
+    VIEW_SPLIT[state.ctx]();
+    PANE[state.ctx]();
+    statusBar(LABEL[state.ctx], [["g","zavřít graf"], ...HINTS[state.ctx]]);
+  } else {
+    VIEW_FULL[state.ctx]();
+    statusBar(LABEL[state.ctx], [["g","graf"], ...HINTS[state.ctx]]);
+  }
+  term.textContent = "";
+  for (const row of M) {
+    const div = document.createElement("div");
+    div.className = "r";
+    let run = null;
+    const flush = () => {
+      if (!run) return;
+      const span = document.createElement("span");
+      span.textContent = run.text;
+      span.style.color = run.fg; span.style.backgroundColor = run.bg;
+      if (run.b) span.style.fontWeight = "700";
+      div.appendChild(span); run = null;
+    };
+    for (const cell of row) {
+      if (run && run.fg === cell.fg && run.bg === cell.bg && run.b === cell.b) run.text += cell.ch;
+      else { flush(); run = { text: cell.ch, fg: cell.fg, bg: cell.bg, b: cell.b }; }
+    }
+    flush();
+    term.appendChild(div);
+  }
+}
+
+/* ---- controls ---- */
+function pressGroup(container, attr, value) {
+  container.querySelectorAll("button").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset[attr] === value));
+  });
+}
+const ctxSeg = document.getElementById("ctxSeg");
+ctxSeg.addEventListener("click", (e) => {
+  const btn = e.target.closest("button"); if (!btn) return;
+  state.ctx = btn.dataset.ctx; pressGroup(ctxSeg, "ctx", state.ctx); render();
+});
+const openSeg = document.getElementById("openSeg");
+function setOpen(open) {
+  state.open = open; pressGroup(openSeg, "open", String(open)); render();
+}
+openSeg.addEventListener("click", (e) => {
+  const btn = e.target.closest("button"); if (!btn) return;
+  setOpen(btn.dataset.open === "true");
+});
+const themeSeg = document.getElementById("themeSeg");
+for (const [key, th] of Object.entries(THEMES)) {
+  const btn = document.createElement("button");
+  btn.textContent = th.label; btn.dataset.th = key;
+  btn.setAttribute("aria-pressed", String(key === state.theme));
+  themeSeg.appendChild(btn);
+}
+themeSeg.addEventListener("click", (e) => {
+  const btn = e.target.closest("button"); if (!btn) return;
+  state.theme = btn.dataset.th; pressGroup(themeSeg, "th", state.theme); render();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "g") { setOpen(!state.open); e.preventDefault(); }
+  else if (e.key === "Escape" && state.open) { setOpen(false); e.preventDefault(); }
+});
+render();
+</script>
