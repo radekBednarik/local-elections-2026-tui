@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite"
 import { beforeEach, describe, expect, test } from "bun:test"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
+import { readNationalParties } from "../../src/storage/queries/national.ts"
 import { readCurrent, readPrevious, type SnapshotInput, writeSnapshot } from "../../src/storage/snapshots.ts"
 
 let db: Database
@@ -232,5 +233,40 @@ describe("child rows", () => {
     const rows = db.query("SELECT COUNT(*) AS n FROM party_result").get() as { n: number }
     // Two snapshots survive, so two sets of party rows, never more.
     expect(rows.n).toBe(2)
+  })
+})
+
+describe("previous votes for the chart (006 research R8)", () => {
+  const national = (publishedAt: string, votes: number): SnapshotInput =>
+    snapshot({
+      areaKind: "national",
+      areaId: "",
+      oznacTypu: "OBEC",
+      publishedAt,
+      parties: [
+        {
+          vstrana: "768",
+          ballotOrder: null,
+          name: "ANO 2011",
+          votes,
+          votesPct: 20,
+          candidates: null,
+          seatsWon: 4,
+          seatsPct: 19.05,
+        },
+      ],
+    })
+
+  test("national parties carry their votes from the previous snapshot", () => {
+    writeSnapshot(db, national("2026-10-09T20:00:00", 8000))
+    writeSnapshot(db, national("2026-10-09T20:01:00", 9000))
+    const [party] = readNationalParties(db, "OBEC")
+    expect(party?.votes).toBe(9000)
+    expect(party?.previousVotes).toBe(8000)
+  })
+
+  test("after a single snapshot there is no previous figure", () => {
+    writeSnapshot(db, national("2026-10-09T20:00:00", 8000))
+    expect(readNationalParties(db, "OBEC")[0]?.previousVotes).toBeNull()
   })
 })

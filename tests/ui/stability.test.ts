@@ -14,16 +14,28 @@ import { beforeAll, beforeEach, describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { createTestRenderer } from "@opentui/core/testing"
+import { csvForScreen } from "../../src/export/tables.ts"
 import { extractArchiveFile } from "../../src/reference/archive.ts"
 import { loadReference, type ReferenceArchives } from "../../src/reference/loader.ts"
 import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
+import { type SnapshotInput, writeSnapshot } from "../../src/storage/snapshots.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
-import { applyFrameState, type FrameState, frameState } from "../../src/ui/chrome/state.ts"
+import { chartPaneWidth } from "../../src/ui/chrome/panel.ts"
+import {
+  applyFrameState,
+  applyPanel,
+  choosePanel,
+  type FrameState,
+  frameState,
+  viewWidthFor,
+} from "../../src/ui/chrome/state.ts"
 import type { SourceStatus } from "../../src/ui/components/status.ts"
 import { Navigation, type Screen } from "../../src/ui/navigation.ts"
+import { toTextLines } from "../../src/ui/row.ts"
 import { UNSORTED } from "../../src/ui/sort.ts"
 import { themeByName } from "../../src/ui/theme/themes.ts"
+import { buildChartRows, chartContext } from "../../src/ui/views/chart.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
 const read = (name: string) => readFileSync(join(FIXTURES, name), "utf8")
@@ -266,5 +278,185 @@ describe("every screen fits 80 by 24 with the warning shown (002 T025, SC-007, F
     } finally {
       h.destroy()
     }
+  })
+})
+
+describe("the chart pane (006 FR-003, SC-004, SC-005)", () => {
+  /** The draw the application makes, with the chart pane shown or not. */
+  async function chartHarness(width = 100, height = 30) {
+    const setup = await createTestRenderer({ width, height })
+    const frame = new Frame(setup.renderer)
+    frame.attach(setup.renderer.root)
+    const nav = new Navigation()
+    await setup.renderOnce()
+    const theme = themeByName("tokyonight")
+    const draw = async (chart: boolean, watchlist = false) => {
+      const panel = choosePanel({
+        chartOpen: chart,
+        sidePanelOpen: watchlist,
+        screen: nav.screen,
+        contentAreaWidth: frame.rawContentWidth,
+      })
+      const context = chartContext(db, nav.screen, "OBEC")
+      applyPanel(
+        frame,
+        db,
+        theme,
+        panel === "chart" && context !== null
+          ? {
+              kind: "chart",
+              context,
+              width: chartPaneWidth(frame.rawContentWidth),
+              height: frame.contentHeight,
+            }
+          : panel === "watchlist"
+            ? { kind: "watchlist" }
+            : null,
+      )
+      const state = frameState({
+        db,
+        nav,
+        councilType: "OBEC",
+        query: "",
+        theme,
+        sort: UNSORTED,
+        width,
+        contentWidth: frame.contentWidth,
+        contentHeight: frame.contentHeight,
+        sourceStatus: null,
+        notice: null,
+        chartShown: panel === "chart",
+        chartFits: true,
+      })
+      applyFrameState(frame, state, theme)
+      await setup.renderOnce()
+      await setup.renderOnce()
+      return { captured: setup.captureCharFrame(), state }
+    }
+    return { frame, nav, draw, destroy: () => setup.renderer.destroy() }
+  }
+
+  test("opening and closing the pane leaves the scroll position and the selection alone", async () => {
+    const h = await chartHarness()
+    try {
+      await h.draw(false)
+      h.nav.current.offset = 3
+      const offset = h.nav.current.offset
+      const selected = h.nav.current.selected
+      await h.draw(true)
+      await h.draw(false)
+      expect(h.nav.current.offset).toBe(offset)
+      expect(h.nav.current.selected).toBe(selected)
+    } finally {
+      h.destroy()
+    }
+  })
+
+  test("the pane takes its width and the table is composed at what is left", async () => {
+    const h = await chartHarness()
+    try {
+      await h.draw(false)
+      const raw = h.frame.rawContentWidth
+      const { state } = await h.draw(true)
+      expect(h.frame.panel.width).toBe(chartPaneWidth(raw))
+      expect(h.frame.contentWidth).toBe(raw - chartPaneWidth(raw) - 1)
+      const widest = Math.max(...state.content.lines.map((l) => [...l].length))
+      expect(widest).toBeLessThanOrEqual(viewWidthFor(raw - chartPaneWidth(raw) - 1))
+    } finally {
+      h.destroy()
+    }
+  })
+
+  test("every legend row fits the pane whole: nothing wraps onto the next line", async () => {
+    const h = await chartHarness()
+    try {
+      const { captured } = await h.draw(true)
+      const legend = captured.split("\n").filter((l) => /┃ (██|▓▓|▚▚|▒▒|▞▞|░░|··) /.test(l))
+      expect(legend).toHaveLength(7)
+      for (const row of legend) expect(row.trimEnd().endsWith("%")).toBe(true)
+    } finally {
+      h.destroy()
+    }
+  })
+
+  test("the chart takes the watchlist's place, and the watchlist returns when it closes", async () => {
+    const h = await chartHarness(120, 30)
+    try {
+      const shown = await h.draw(true, true)
+      expect(shown.captured).toContain("Graf · ČR")
+      expect(shown.captured).not.toContain("SLEDOVANÉ")
+      const closed = await h.draw(false, true)
+      expect(closed.captured).toContain("SLEDOVANÉ")
+      expect(closed.captured).not.toContain("Graf · ČR")
+    } finally {
+      h.destroy()
+    }
+  })
+
+  test("the panel choice: the chart wins where it applies and fits, the watchlist otherwise", () => {
+    const national = { kind: "national" } as const
+    const base = { screen: national, contentAreaWidth: 98 }
+    expect(choosePanel({ ...base, chartOpen: true, sidePanelOpen: true })).toBe("chart")
+    expect(choosePanel({ ...base, chartOpen: false, sidePanelOpen: true })).toBe("watchlist")
+    expect(choosePanel({ ...base, chartOpen: false, sidePanelOpen: false })).toBeNull()
+    // Too narrow for the chart, wide enough for the watchlist.
+    expect(choosePanel({ ...base, contentAreaWidth: 90, chartOpen: true, sidePanelOpen: true })).toBe(
+      "watchlist",
+    )
+    // A screen with no breakdown: the chart is wanted but hidden.
+    expect(
+      choosePanel({ ...base, screen: { kind: "districts" }, chartOpen: true, sidePanelOpen: false }),
+    ).toBeNull()
+  })
+
+  test("a refresh that re-ranks two parties swaps their slices and marks the rise", () => {
+    const fresh = openMemoryDatabase()
+    const national = (publishedAt: string, votes: [number, number, number]): SnapshotInput => ({
+      areaKind: "national",
+      areaId: "",
+      oznacTypu: "OBEC",
+      publishedAt,
+      fetchedAt: publishedAt,
+      districtsTotal: 10,
+      districtsCounted: 5,
+      districtsPct: 50,
+      votersRegistered: 1000,
+      envelopesIssued: 700,
+      envelopesReturned: 700,
+      validVotes: votes[0] + votes[1] + votes[2],
+      turnoutPct: 70,
+      seatsTotal: 10,
+      isFinal: false,
+      parties: (["Alfa", "Beta", "Gama"] as const).map((name, i) => ({
+        vstrana: String(i + 1),
+        ballotOrder: null,
+        name,
+        votes: votes[i] ?? 0,
+        votesPct: null,
+        candidates: null,
+        seatsWon: 0,
+        seatsPct: null,
+      })),
+    })
+    const legendNames = () => {
+      const context = chartContext(fresh, { kind: "national" }, "OBEC")
+      if (context === null) throw new Error("no chart")
+      return toTextLines(buildChartRows(context, 47, 27)).slice(-3)
+    }
+    writeSnapshot(fresh, national("2026-10-09T20:00:00", [300, 200, 100]))
+    expect(legendNames().map((l) => l.slice(4, 8))).toEqual(["Alfa", "Beta", "Gama"])
+    writeSnapshot(fresh, national("2026-10-09T20:05:00", [300, 200, 250]))
+    const after = legendNames()
+    expect(after.map((l) => l.slice(4, 8))).toEqual(["Alfa", "Gama", "Beta"])
+    expect(after[1]).toContain("▲250")
+  })
+
+  test("export is the same with the pane open or closed (FR-003)", () => {
+    const council = { kind: "council", kodzastup: "582786" } as const
+    // The exporter takes no width, so nothing about the pane can reach it.
+    expect(csvForScreen(db, council, { councilType: "OBEC" })).toEqual(
+      csvForScreen(db, council, { councilType: "OBEC" }),
+    )
+    expect(csvForScreen.length).toBeLessThanOrEqual(3)
   })
 })

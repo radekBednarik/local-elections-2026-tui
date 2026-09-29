@@ -7,12 +7,17 @@
  */
 
 import { describe, expect, test } from "bun:test"
+import { formatInteger, formatPercent, pad } from "../../src/ui/format.ts"
+import { toTextLines } from "../../src/ui/row.ts"
 import {
+  buildChartRows,
   type ChartContext,
   type ChartEntry,
+  chartAfterResize,
   chartLayout,
   pieCells,
   rankSlices,
+  TEXTURES,
 } from "../../src/ui/views/chart.ts"
 
 function entry(
@@ -166,5 +171,131 @@ describe("pie geometry (research R1, R3)", () => {
     const fractions = [0.4, 0.2, 0.15, 0.1, 0.07, 0.05, 0.03]
     const cells = new Set(pieCells(fractions, 16).flat())
     for (let i = 0; i < fractions.length; i += 1) expect(cells.has(i)).toBe(true)
+  })
+})
+
+describe("pane rows (contract § 3)", () => {
+  const WIDTH = 40
+  const HEIGHT = 21
+  const context = parties([
+    entry("ANO 2011", 1234567, 24.31, 1200000),
+    entry("Strana s velmi dlouhým názvem, která se nevejde", 900000, 17.72, 900000),
+    ...falling(8),
+  ])
+  const rows = buildChartRows(context, WIDTH, HEIGHT)
+  const lines = toTextLines(rows)
+  const slices = rankSlices(context)
+  const { radius } = chartLayout(WIDTH, HEIGHT, slices.length)
+  const pieHeight = 2 * Math.floor(radius / 2) + 1
+
+  test("opens with the title and the subtitle, in their roles", () => {
+    expect(lines[0]).toBe("Graf · ČR")
+    expect(lines[1]).toBe("podíl platných hlasů · průběžné")
+    expect(rows[0]?.cells[0]?.role).toBe("accent")
+    expect(rows[1]?.cells[0]?.role).toBe("muted")
+    expect(lines[2]).toBe("")
+  })
+
+  test("a title longer than the pane is cut with an ellipsis", () => {
+    const long = { ...context, title: "Graf · Statutární město s opravdu velmi dlouhým jménem" }
+    const title = toTextLines(buildChartRows(long, WIDTH, HEIGHT))[0] ?? ""
+    expect([...title]).toHaveLength(WIDTH)
+    expect(title.endsWith("…")).toBe(true)
+  })
+
+  test("then the pie: centred rows of textures and spaces only", () => {
+    const pie = lines.slice(3, 3 + pieHeight)
+    const allowed = new Set([...TEXTURES, "·", " "])
+    for (const line of pie) {
+      expect(line.trim()).not.toBe("")
+      for (const ch of line) expect(allowed.has(ch)).toBe(true)
+    }
+    // The middle row spans the whole disc, which is centred in the pane.
+    const middle = pie[Math.floor(pieHeight / 2)] ?? ""
+    expect(middle.length - middle.trimStart().length).toBe(Math.floor((WIDTH - (2 * radius + 1)) / 2))
+    expect(middle.trim()).toHaveLength(2 * radius + 1)
+  })
+
+  test("then a blank and one legend row per slice, in rank order", () => {
+    expect(lines[3 + pieHeight]).toBe("")
+    const legend = lines.slice(4 + pieHeight)
+    expect(legend).toHaveLength(slices.length)
+    const first = slices[0]
+    expect(legend[0]).toBe(
+      ` ${TEXTURES[0]}${TEXTURES[0]} ${pad("ANO 2011", WIDTH - 26)} ${pad(`▲${formatInteger(1234567)}`, 12, "right")} ${pad(formatPercent(24.31), 8, "right")}`,
+    )
+    expect(first?.name).toBe("ANO 2011")
+    // "Ostatní (4 strany)" is wider than a 40-column pane's name column, so it is cut.
+    expect(legend[6]?.startsWith(" ·· Ostatní (4 st…")).toBe(true)
+    for (const line of legend) expect([...line].length).toBeLessThanOrEqual(WIDTH)
+  })
+
+  test("a long name is cut with an ellipsis and never pushes the figures out", () => {
+    const legend = lines.slice(4 + pieHeight)
+    expect(legend[1]).toContain("…")
+    expect(legend[1]?.endsWith(formatPercent(17.72))).toBe(true)
+  })
+
+  test("the swatch, the votes, the share and the aggregate take their colours", () => {
+    const legendRows = rows.slice(4 + pieHeight)
+    const cellWith = (index: number, text: string) =>
+      legendRows[index]?.cells.find((c) => c.text.includes(text))
+    expect(cellWith(0, TEXTURES[0])?.fgSlot).toBe("slice1")
+    expect(cellWith(1, TEXTURES[1])?.fgSlot).toBe("slice2")
+    expect(cellWith(6, "··")?.fgSlot).toBe("muted")
+    expect(cellWith(0, formatInteger(1234567))?.role).toBe("increase")
+    expect(cellWith(0, "24,31")?.role).toBe("subtle")
+    expect(cellWith(6, "Ostatní")?.role).toBe("muted")
+  })
+
+  test("the pie is drawn in runs: one cell per stretch of one slice", () => {
+    for (const row of rows.slice(3, 3 + pieHeight)) {
+      for (let i = 1; i < row.cells.length; i += 1) {
+        const [before, after] = [row.cells[i - 1], row.cells[i]]
+        if (before?.fgSlot !== undefined) expect(after?.fgSlot).not.toBe(before.fgSlot)
+      }
+      for (const c of row.cells) if (c.fgSlot !== undefined) expect(new Set(c.text).size).toBe(1)
+    }
+  })
+
+  test("with nothing to chart, the pane says so instead of drawing", () => {
+    for (const empty of [parties([]), parties([entry("A", 0), entry("B", 0)])]) {
+      const text = toTextLines(buildChartRows(empty, WIDTH, HEIGHT))
+      expect(text).toEqual([
+        "Graf · ČR",
+        "podíl platných hlasů · průběžné",
+        "",
+        "Zatím není co zobrazit.",
+        "Graf se vykreslí, jakmile",
+        "budou zveřejněny výsledky.",
+      ])
+    }
+  })
+
+  test("at the smallest supported height the whole pane fits", () => {
+    expect(buildChartRows(parties(falling(10)), 40, 20).length).toBeLessThanOrEqual(20)
+  })
+})
+
+describe("closing on shrink (research R4)", () => {
+  const shown = { open: true, shownLastDraw: true, onChartScreen: true }
+  const CLOSED = "Graf zavřen: okno je pro něj příliš úzké."
+
+  test("a shown chart that no longer fits closes, and says why", () => {
+    expect(chartAfterResize(shown, false)).toEqual({ open: false, notice: CLOSED })
+  })
+
+  test("a chart that still fits stays", () => {
+    expect(chartAfterResize(shown, true)).toEqual({ open: true, notice: null })
+  })
+
+  test("a chart that was not on screen is not reported as closed", () => {
+    expect(chartAfterResize({ ...shown, shownLastDraw: false }, false)).toEqual({ open: true, notice: null })
+    expect(chartAfterResize({ ...shown, onChartScreen: false }, false)).toEqual({ open: true, notice: null })
+  })
+
+  test("widening again does not reopen it", () => {
+    const closed = chartAfterResize(shown, false)
+    expect(chartAfterResize({ ...shown, open: closed.open }, true)).toEqual({ open: false, notice: null })
   })
 })

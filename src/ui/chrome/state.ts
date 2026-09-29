@@ -17,7 +17,7 @@ import type { LogEntry } from "../../logging/logger.ts"
 import { availableCouncilTypes } from "../../storage/queries/national.ts"
 import { type SourceStatus, statusBarLine, statusBarRow } from "../components/status.ts"
 import { clampLines } from "../format.ts"
-import type { Navigation } from "../navigation.ts"
+import type { Navigation, Screen } from "../navigation.ts"
 import type { ActionContext } from "../palette/actions.ts"
 import { type Cell, cellsWide, type SemanticRow, type Surface } from "../row.ts"
 import { composeScreen, type ScreenContent } from "../screen.ts"
@@ -25,9 +25,10 @@ import type { SortState } from "../sort.ts"
 import { readsOn, styledBlock, styledRow } from "../theme/apply.ts"
 import type { Role } from "../theme/roles.ts"
 import type { Slot, Theme } from "../theme/themes.ts"
+import { buildChartRows, type ChartContext, isChartScreen } from "../views/chart.ts"
 import { breadcrumbFor, breadcrumbSegments, segmentsFor } from "./breadcrumb.ts"
 import type { Frame } from "./frame.ts"
-import { buildPanelRows, PANEL_WIDTH } from "./panel.ts"
+import { buildPanelRows, chartFits, PANEL_WIDTH, panelFits } from "./panel.ts"
 
 /**
  * Columns reserved to the left of every row for the selection marker.
@@ -83,6 +84,10 @@ export interface FrameInputs {
   paletteOpen?: boolean
   /** This session's log entries, for the logs screens (004). */
   logEntries?: readonly LogEntry[]
+  /** The chart pane is on screen, which renames its footer chip and lets Esc close it (006). */
+  chartShown?: boolean
+  /** The terminal is wide enough for the chart pane (006 FR-013). */
+  chartFits?: boolean
 }
 
 export interface FrameState {
@@ -163,6 +168,8 @@ export function frameState(inputs: FrameInputs): FrameState {
     councilTypes: availableCouncilTypes(db).length,
     searchActive: nav.screen.kind === "search",
     sortableColumns: content.sortableColumns,
+    chartOpen: inputs.chartShown === true,
+    chartFits: inputs.chartFits === true,
   }
 
   const selected = nav.current.selected
@@ -387,8 +394,48 @@ export function applyPlainLines(frame: Frame, lines: string[], width: number): v
   frame.setRows(clampLines(lines, width))
 }
 
-/** The side panel, rendered as one styled block (FR-056). */
-export function applyPanel(frame: Frame, db: Database, theme: Theme, visible: boolean): void {
-  frame.setPanelVisible(visible)
-  if (visible) frame.setPanelContent(styledBlock(buildPanelRows(db), theme, PANEL_WIDTH))
+/**
+ * What the side region shows (006 research R2): the chart pane, the watchlist, or
+ * nothing. The two share one region; the chart wins while it is shown.
+ */
+export type PanelContent =
+  | { kind: "watchlist" }
+  | { kind: "chart"; context: ChartContext; width: number; height: number }
+  | null
+
+/**
+ * Which panel belongs on screen now.
+ *
+ * Both flags are the user's intent. Whether each is honoured is decided here on every
+ * draw: the chart only on a screen with a breakdown and when it fits, the watchlist only
+ * when it fits (FR-057). The watchlist's intent is never touched by the chart, which is
+ * what brings it back when the chart closes.
+ */
+export function choosePanel(input: {
+  chartOpen: boolean
+  sidePanelOpen: boolean
+  screen: Screen
+  contentAreaWidth: number
+}): "chart" | "watchlist" | null {
+  if (input.chartOpen && isChartScreen(input.screen) && chartFits(input.contentAreaWidth)) return "chart"
+  if (input.sidePanelOpen && panelFits(input.contentAreaWidth)) return "watchlist"
+  return null
+}
+
+/** The side panel, rendered as one styled block (FR-056, 006). */
+export function applyPanel(frame: Frame, db: Database, theme: Theme, panel: PanelContent): void {
+  if (panel === null) {
+    frame.setPanelVisible(false)
+    return
+  }
+  if (panel.kind === "chart") {
+    frame.setPanelVisible(true, panel.width)
+    // The panel's box includes its rail, so its text has one column less than the box. A
+    // row composed at the full width wraps its last character onto the next line.
+    const inner = panel.width - 1
+    frame.setPanelContent(styledBlock(buildChartRows(panel.context, inner, panel.height), theme, inner))
+    return
+  }
+  frame.setPanelVisible(true, PANEL_WIDTH)
+  frame.setPanelContent(styledBlock(buildPanelRows(db), theme, PANEL_WIDTH))
 }

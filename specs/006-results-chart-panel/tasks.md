@@ -188,7 +188,7 @@ unchanged full-width view.
 
 ### Tests (write first, observe failing)
 
-- [ ] T017 [P] [US1] Add to `tests/integration/screen.test.ts` a `describe("national chart context (research R8)")`, using the existing fixture database helper:
+- [X] T017 [P] [US1] Add to `tests/integration/screen.test.ts` a `describe("national chart context (research R8)")`, using the existing fixture database helper:
   - `chartContext(db, { kind: "national" }, "OBEC")` holds **every** party in the current snapshot. Assert its entry count equals `SELECT COUNT(*) FROM party_result WHERE snapshot_id = <current national>`, which is more than the 20 the table shows.
   - Entries are in the table's order: seats DESC, votes DESC, rowid.
   - `whole` = Σ votes, `total === entries.length`, and `unit === "stran"`.
@@ -196,7 +196,7 @@ unchanged full-width view.
   - Before any national snapshot exists, `entries` is empty.
   - For a non-chart screen, `chartContext` returns `null`.
   - Also add `describe("previous votes for the chart (006 research R8)")` to `tests/integration/snapshots.test.ts`. Write two national snapshots with `writeSnapshot`, where one party's votes rose. `readNationalParties` must return `previousVotes` equal to that party's old votes. After a single snapshot, `previousVotes` is `null`. This is the failing test for T022.
-- [ ] T018 [P] [US1] Add `describe("pane rows (contract § 3)")` to `tests/unit/chart.test.ts`, calling `buildChartRows(context, paneWidth, contentHeight)` and asserting on `toTextLines`:
+- [X] T018 [P] [US1] Add `describe("pane rows (contract § 3)")` to `tests/unit/chart.test.ts`, calling `buildChartRows(context, paneWidth, contentHeight)` and asserting on `toTextLines`:
   - Row 0 is the title and row 1 the subtitle. Both are truncated with `…` when longer than `paneWidth`. The title's cell role is `accent` and the subtitle's `muted`.
   - Row 2 is blank. Then come `2·⌊R/2⌋ + 1` pie rows, centred in `paneWidth`, containing only textures and spaces. Then a blank row, then one legend row per slice.
   - A legend row reads `" " + swatch(2) + " " + name(paneWidth − 26) + " " + votes(12, right) + " " + share(8, right)`, where:
@@ -209,58 +209,62 @@ unchanged full-width view.
     - the share cell's role is `subtle`,
     - the aggregate's name cell's role is `muted`.
   - Pie cells are grouped in runs: consecutive equal cells become one `Cell` with `fgSlot` set to the slice slot.
-  - An empty context, or one with `whole <= 0`, gives title, subtitle, blank, `Zatím není co zobrazit.`, and `Graf se vykreslí, jakmile budou zveřejněny výsledky.` (muted), with no pie rows.
+  - An empty context, or one with `whole <= 0`, gives title, subtitle, blank, `Zatím není co zobrazit.`, then `Graf se vykreslí, jakmile` and `budou zveřejněny výsledky.` (muted, two lines so the message fits the narrowest pane), with no pie rows.
   - At `(40, 20)` with 7 slices, the total row count is ≤ 20.
-- [ ] T019 [P] [US1] Add to `tests/ui/national.test.ts`:
+- [X] T019 [P] [US1] Add to `tests/ui/national.test.ts`:
   - At width 76 the rows are byte-identical to the current output. Snapshot the lines before changing code.
   - At width 48:
     - the header has exactly `Volební strana`, `Hlasy`, `Podíl`,
     - no row is longer than 48,
     - every party's votes and share text appears whole, with no `…` in those cells.
   - At width 62 (the watchlist overflow case, research R5), the seat columns are shed and no line exceeds 62.
-- [ ] T020 [P] [US1] Add to `tests/ui/colour.test.ts`:
+  - (Done 2026-09-29. The byte-identity check is a Bun snapshot, `tests/ui/__snapshots__/national.test.ts.snap`, recorded at widths 76 and 100 before `national-rows.ts` changed.)
+- [X] T020 [P] [US1] Add to `tests/ui/colour.test.ts`:
   - With the pane shown on `national` in `tokyonight`, a pie chunk for rank 1 has `fg` equal to `slotColor(theme, "slice1")` and `bg` equal to `panel`.
   - The pane repaints after a theme switch.
   - Under `MONOCHROME` no pane chunk has an `fg` or a `bg`, and the textures are still present.
-- [ ] T021 [US1] Add to `tests/ui/stability.test.ts` a `describe("chart pane (FR-003, SC-004, SC-005)")`, driving `frameState` / `applyFrameState` / `applyPanel` the way the watchlist panel tests do:
+- [X] T021 [US1] Add to `tests/ui/stability.test.ts` a `describe("chart pane (FR-003, SC-004, SC-005)")`, driving `frameState` / `applyFrameState` / `applyPanel` the way the watchlist panel tests do:
   - Opening and closing on `national` leaves `nav.current.selected`, `nav.current.offset` and the sort state unchanged.
   - With the pane shown, the frame's panel width is `chartPaneWidth(raw)`, and the content is composed at `viewWidthFor(raw − paneWidth − 1)`.
   - With the watchlist wanted and the chart shown, the panel shows chart rows. When the chart closes, it shows `SLEDOVANÉ` again.
   - After a new national snapshot in which parties 2 and 3 swap by votes, the next draw ranks them swapped in the legend with `▲` on the one that rose, and no key press is needed.
   - Export is unaffected (FR-003). `csvForScreen(db, screen, { councilType })` returns identical content whether or not the pane is shown. It takes no width, and this assertion keeps it that way.
+  - (Done 2026-09-29. The panel decision the App makes is the pure `choosePanel` in `state.ts`, so the chart-over-watchlist precedence is tested directly. The legend re-rank uses a fresh database with two synthetic national snapshots. Added during T029: a no-wrap test, see T029.)
 
 ### Implementation
 
-- [ ] T022 [US1] In `src/storage/queries/national.ts`:
+- [X] T022 [US1] In `src/storage/queries/national.ts`:
   - Add `previousVotes: number | null` to `PartyRow`, filled from the `previous` map that is already built.
   - Document that `limit = -1` returns every party (SQLite).
   - Makes the `snapshots.test.ts` part of T017 pass. Existing tests must stay green.
-- [ ] T023 [US1] In `src/ui/views/chart.ts`, add `chartContext(db, screen, councilType): ChartContext | null`:
+- [X] T023 [US1] In `src/ui/views/chart.ts`, add `chartContext(db, screen, councilType): ChartContext | null`:
   - For `national`, use `readNationalTotals` and `readNationalParties(db, councilType, -1)`, mapping each row to `ChartEntry { name, votes, sharePct: votesPct, previousVotes }`.
   - Set `whole = Σ votes`, `total = entries.length`, `unit = "stran"` and `aggregate = "sum"`.
   - Title and subtitle as in T017, with the type suffixes ` · obce` for `OBEC` and ` · MČ a MO` for `MCMO`.
   - Return `null` for any screen not yet supported. US2 and US3 add their kinds.
   - Makes T017 pass.
-- [ ] T024 [US1] In `src/ui/views/chart.ts`, add `buildChartRows(context, paneWidth, contentHeight): SemanticRow[]` per T018:
+- [X] T024 [US1] In `src/ui/views/chart.ts`, add `buildChartRows(context, paneWidth, contentHeight): SemanticRow[]` per T018:
   - Use `rankSlices` and `chartLayout`, with `legendRows` equal to the slice count.
   - Build pie rows from `pieCells`, grouped into runs.
   - Centre the pie with leading spaces of `⌊(paneWidth − (2R + 1)) / 2⌋`.
   - Reuse `pad`, `formatInteger`, `formatPercent`, `withChange` and `roleForChange`, with no new formatter.
   - Makes T018 pass.
-- [ ] T025 [US1] In `src/ui/views/national-rows.ts`, shed the seat columns by width (research R5):
+- [X] T025 [US1] In `src/ui/views/national-rows.ts`, shed the seat columns by width (research R5):
   - `seats = width >= 47 + 20`. When false, drop both `Mandáty` and the seat `Podíl` columns and their cells.
   - Bars require `seats && barsFit(...)`.
   - The name width is `Math.max(20, width − fixed − bar)` when seats are kept, and `Math.max(14, width − 25)` when shed.
   - Comment the rule with FR-074 / 006 FR-012.
   - Makes T019 pass.
-- [ ] T026 [US1] In `src/ui/chrome/state.ts`:
+  - (Done 2026-09-29. Found while testing at width 48: the compact national summary lines (61 and 55 columns) would lose the turnout and the elected count to the clamp. `summaryLines` now wraps a summary line between its items, never inside one, and only when the line would not fit. Every line that fitted before is unchanged, which the T019 snapshot confirms.)
+- [X] T026 [US1] In `src/ui/chrome/state.ts`:
   - Add `chartShown?: boolean` and `chartFits?: boolean` to `FrameInputs`, and pass both into the `ActionContext` that `frameState` builds.
   - Change `applyPanel(frame, db, theme, visible)` to `applyPanel(frame, db, theme, panel: { kind: "watchlist" } | { kind: "chart"; context: ChartContext; width: number; height: number } | null)`:
     - for a chart, call `frame.setPanelVisible(true, width)` and `setPanelContent(styledBlock(buildChartRows(context, width, height), theme, width))`,
     - for the watchlist, keep today's behaviour,
     - for null, hide the panel.
   - Update the existing callers in `tests/ui/panel.test.ts`.
-- [ ] T027 [US1] In `src/ui/app.ts`, wire the chart (research R4):
+  - (Done 2026-09-29. Added `choosePanel`, the pure form of the App's panel decision. Callers in `tests/ui/panel.test.ts`, `tools/verify/amendment.ts` and `tools/verify/soak.ts` were moved to the new `applyPanel` form.)
+- [X] T027 [US1] In `src/ui/app.ts`, wire the chart (research R4):
   - Add `private chartOpen = false` and `private chartShownLastDraw = false`.
   - Add a helper `private chartShown(): boolean`, returning `chartOpen && isChartScreen(nav.screen) && frame !== null && chartFits(frame.rawContentWidth)`.
   - `actionContext()` sets `chartOpen: this.chartShown()` and `chartFits`.
@@ -277,7 +281,8 @@ unchanged full-width view.
     - Set `chartShownLastDraw` to the result.
     - Pass `chartShown` and `chartFits` into `frameState`.
   - Makes T020 and T021 pass.
-- [ ] T028 [US1] Move the shrink decision into a pure function, and test it first.
+  - (Done 2026-09-29. The shrink check calls `chartAfterResize` (T028) from the start, rather than an inline check replaced later.)
+- [X] T028 [US1] Move the shrink decision into a pure function, and test it first.
   - **Test (red first)**, in `tests/unit/chart.test.ts`, `describe("closing on shrink (research R4)")`, for `chartAfterResize({ open, shownLastDraw, onChartScreen }, fits): { open: boolean; notice: string | null }`:
     - `({ open: true, shownLastDraw: true, onChartScreen: true }, false)` gives `{ open: false, notice: "Graf zavřen: okno je pro něj příliš úzké." }`.
     - The same state with `fits: true` gives `{ open: true, notice: null }`.
@@ -285,11 +290,13 @@ unchanged full-width view.
     - `onChartScreen: false` gives `{ open: true, notice: null }`.
     - Feeding the result back with `open: false` and `fits: true` stays closed, so widening does not reopen it.
   - **Implementation**: add `chartAfterResize` to `src/ui/views/chart.ts`. Replace the inline check in `App.draw()` from T027 with a call to it, still made before the `isTooSmall` early return.
-- [ ] T029 [US1] REVIEW Phase 3 against Principles I–III and contract § 2, § 3, § 4 (national), § 6 and § 7. Check that:
+  - (Done 2026-09-29. Red first: the suite failed on the missing export.)
+- [X] T029 [US1] REVIEW Phase 3 against Principles I–III and contract § 2, § 3, § 4 (national), § 6 and § 7. Check that:
   - the legend's first six votes and shares equal the national table's cells for the same snapshot,
   - the full-width national output at 76 is byte-identical,
   - `back` closes the pane before popping,
   - no path in `app.ts` adds or removes body children other than through `setPanelVisible`.
+  - (Done 2026-09-29. 1141 pass, 0 fail; typecheck and biome clean. Two findings, both fixed. (1) A headless render (`tools/verify/chart-view.ts`) showed every legend row wrapping its last character: the panel box includes its rail, so its text is one column narrower than the box. `applyPanel` now composes the pane at `width − 1`, pinned by a new stability test that was seen failing first. (2) The SC-002 test assumed every top-six party appears in the national table. `Sdružení PRAHA SOBĚ` is fifth by votes but outside the table's twenty, which are ordered by seats. The test compares the parties in both, and requires at least five. Not a defect: the legend's figures are the published ones. Quickstart § 2 was checked by rendering at 100 × 30 and 93 × 24 rather than interactively. Noted, out of scope: the national overview has no selectable rows, so `ensureVisible` scrolls it to the bottom and hides its title rows on short terminals. This happens with or without the pane, and predates 006.)
 
   Run quickstart § 2 by hand, and record the result. Run `bun test`, `bun run typecheck` and `bun run check`. Fix every finding.
 

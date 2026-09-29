@@ -12,9 +12,12 @@ import { extractArchiveFile } from "../../src/reference/archive.ts"
 import { loadReference, type ReferenceArchives } from "../../src/reference/loader.ts"
 import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
+import { availableCouncilTypes } from "../../src/storage/queries/national.ts"
 import { segmentsFor } from "../../src/ui/chrome/breadcrumb.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
 import { composeScreen, shownSources, sourcesForScreen } from "../../src/ui/screen.ts"
+import { buildChartRows, chartContext, rankSlices } from "../../src/ui/views/chart.ts"
+import { buildNationalRows } from "../../src/ui/views/national-rows.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
 const read = (name: string) => readFileSync(join(FIXTURES, name), "utf8")
@@ -254,5 +257,87 @@ describe("the logs screens (004 FR-009, FR-011)", () => {
     expect(
       segmentsFor(db, [{ kind: "national" }, { kind: "logs" }, { kind: "log-entry", seq: 1 }]).slice(1),
     ).toEqual(["Záznamy", "Záznam"])
+  })
+})
+
+describe("national chart context (006 research R8)", () => {
+  const currentNational = () =>
+    db
+      .query(
+        `SELECT id FROM result_snapshot
+          WHERE area_kind = 'national' AND oznac_typu = 'OBEC' AND is_current = 1`,
+      )
+      .get() as { id: number }
+
+  test("holds every party in the snapshot, not only the twenty the table shows", () => {
+    const context = chartContext(db, { kind: "national" }, "OBEC")
+    const { n } = db
+      .query("SELECT COUNT(*) AS n FROM party_result WHERE snapshot_id = $id")
+      .get({ id: currentNational().id }) as { n: number }
+    expect(n).toBeGreaterThan(20)
+    expect(context?.entries).toHaveLength(n)
+  })
+
+  test("keeps the table's order: seats, then votes", () => {
+    const entries = chartContext(db, { kind: "national" }, "OBEC")?.entries ?? []
+    const table = db
+      .query(
+        `SELECT name FROM party_result WHERE snapshot_id = $id
+          ORDER BY seats_won DESC, votes DESC, rowid ASC`,
+      )
+      .all({ id: currentNational().id }) as { name: string }[]
+    expect(entries.map((e) => e.name)).toEqual(table.map((r) => r.name))
+  })
+
+  test("the whole is the sum of the votes, and every party is counted", () => {
+    const context = chartContext(db, { kind: "national" }, "OBEC")
+    expect(context?.whole).toBe(context?.entries.reduce((sum, e) => sum + e.votes, 0))
+    expect(context?.total).toBe(context?.entries.length)
+    expect(context?.unit).toBe("stran")
+    expect(context?.aggregate).toBe("sum")
+  })
+
+  test("the title names the country and the council type, the subtitle the count's state", () => {
+    const context = chartContext(db, { kind: "national" }, "OBEC")
+    expect(availableCouncilTypes(db).length).toBeGreaterThan(1)
+    expect(context?.title).toBe("Graf · ČR · obce")
+    expect(chartContext(db, { kind: "national" }, "MCMO")?.title).toBe("Graf · ČR · MČ a MO")
+    // The fixture is the final national result.
+    expect(context?.subtitle).toBe("podíl platných hlasů · konečné")
+  })
+
+  test("before anything is published there is nothing to chart", () => {
+    const empty = openMemoryDatabase()
+    const context = chartContext(empty, { kind: "national" }, "OBEC")
+    expect(context?.entries).toEqual([])
+    expect(context?.title).toBe("Graf · ČR")
+    expect(context?.subtitle).toBe("podíl platných hlasů · průběžné")
+  })
+
+  test("every ranked legend figure is the table's figure for the same party (SC-002)", () => {
+    const context = chartContext(db, { kind: "national" }, "OBEC")
+    if (context === null) throw new Error("no chart")
+    const table = buildNationalRows(db, { width: 100 }).filter((r) => r.kind === "data")
+    const legend = buildChartRows(context, 47, 27).slice(-7)
+    // The table lists twenty parties by seats and the chart ranks by votes, so a party
+    // strong in votes but not in seats can be charted without being in the table. Every
+    // party that is in both must read the same in both.
+    let compared = 0
+    rankSlices(context)
+      .slice(0, 6)
+      .forEach((slice, index) => {
+        const row = table.find((r) => r.cells[0]?.text === slice.name)
+        if (row === undefined) return
+        const text = legend[index]?.cells.map((c) => c.text).join("") ?? ""
+        expect(text).toContain(row.cells[1]?.text ?? "?")
+        expect(text).toContain(row.cells[2]?.text ?? "?")
+        compared += 1
+      })
+    expect(compared).toBeGreaterThanOrEqual(5)
+  })
+
+  test("a screen without a breakdown has no chart", () => {
+    expect(chartContext(db, { kind: "districts" }, "OBEC")).toBeNull()
+    expect(chartContext(db, { kind: "help" }, "OBEC")).toBeNull()
   })
 })

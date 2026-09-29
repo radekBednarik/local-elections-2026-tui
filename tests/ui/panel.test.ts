@@ -110,7 +110,12 @@ describe("the content area always wins (FR-057, T152)", () => {
       const nav = new Navigation()
       nav.push({ kind: "council", kodzastup: "582786" })
 
-      applyPanel(frame, db, themeByName("tokyonight"), panelFits(frame.rawContentWidth))
+      applyPanel(
+        frame,
+        db,
+        themeByName("tokyonight"),
+        panelFits(frame.rawContentWidth) ? { kind: "watchlist" } : null,
+      )
       applyFrameState(
         frame,
         frameState({
@@ -148,7 +153,12 @@ describe("the content area always wins (FR-057, T152)", () => {
 
       // Two passes: the first lets the layout settle so the measured width is real.
       for (let pass = 0; pass < 2; pass += 1) {
-        applyPanel(frame, db, themeByName("tokyonight"), panelFits(frame.rawContentWidth))
+        applyPanel(
+          frame,
+          db,
+          themeByName("tokyonight"),
+          panelFits(frame.rawContentWidth) ? { kind: "watchlist" } : null,
+        )
         applyFrameState(
           frame,
           frameState({
@@ -188,7 +198,7 @@ describe("the content area always wins (FR-057, T152)", () => {
       const frame = new Frame(setup.renderer)
       frame.attach(setup.renderer.root)
       for (const visible of [true, false, true]) {
-        applyPanel(frame, db, themeByName("tokyonight"), visible)
+        applyPanel(frame, db, themeByName("tokyonight"), visible ? { kind: "watchlist" } : null)
         frame.setRows(Array.from({ length: 40 }, (_, i) => `  řádek ${i}`))
         await setup.renderOnce()
         for (const line of setup

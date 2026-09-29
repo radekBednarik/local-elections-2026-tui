@@ -35,12 +35,26 @@ import {
 } from "../storage/queries/preferences.ts"
 import { toggleWatchlist, watchedCodes } from "../storage/queries/watchlist.ts"
 import { Frame } from "./chrome/frame.ts"
-import { panelFits } from "./chrome/panel.ts"
-import { applyFrameState, applyPanel, applyPlainLines, frameState, viewWidthFor } from "./chrome/state.ts"
+import { chartFits, chartPaneWidth, panelFits } from "./chrome/panel.ts"
+import {
+  applyFrameState,
+  applyPanel,
+  applyPlainLines,
+  choosePanel,
+  frameState,
+  type PanelContent,
+  viewWidthFor,
+} from "./chrome/state.ts"
 import { allFinal, isTooSmall, sourceStatus, tooSmallMessage } from "./components/status.ts"
 import { type Intent, intentFor } from "./keymap.ts"
 import { Navigation } from "./navigation.ts"
-import { type ActionContext, type ActionId, NOT_AVAILABLE_HERE, themeOfAction } from "./palette/actions.ts"
+import {
+  type ActionContext,
+  type ActionId,
+  actionById,
+  NOT_AVAILABLE_HERE,
+  themeOfAction,
+} from "./palette/actions.ts"
 import { Palette } from "./palette/view.ts"
 import { type FetchResult, ManualRefresh } from "./refresh.ts"
 import { composeScreen, type ScreenContent, shownSources, sourcesForScreen } from "./screen.ts"
@@ -55,6 +69,7 @@ import {
   withCapabilities,
 } from "./theme/detect.ts"
 import { nextTheme, type Theme, type ThemeName, themeLabel } from "./theme/themes.ts"
+import { chartAfterResize, chartContext, isChartScreen } from "./views/chart.ts"
 import { openLogs, performCopy, syncLogSelection } from "./views/logs.ts"
 
 /** How close two clicks on one row must be to count as a double click. */
@@ -83,6 +98,13 @@ export class App {
   private paletteTheme: Theme | null = null
   /** Whether the user WANTS the panel. Whether it fits is decided every draw (FR-057). */
   private sidePanelOpen = true
+  /**
+   * Whether the user WANTS the chart pane (006). Whether it is shown also depends on the
+   * screen and the width, decided every draw like the side panel's (research R4).
+   */
+  private chartOpen = false
+  /** Whether the last draw showed the chart, so a shrink can tell it is closing one. */
+  private chartShownLastDraw = false
   /** The last row clicked and when, so a second click on it counts as a double (T157). */
   private lastClick: { row: number; at: number } | null = null
   private loop: ReturnType<typeof setInterval> | null = null
@@ -379,7 +401,21 @@ export class App {
       case "open":
         this.open(content)
         break
+      case "chart":
+        // The palette offers the entry greyed where it cannot run; reached by key there,
+        // it says so rather than silently doing nothing.
+        if (actionById("chart")?.unavailable(this.actionContext(content)) !== null) {
+          this.notice = NOT_AVAILABLE_HERE
+        } else {
+          this.chartOpen = !this.chartOpen
+        }
+        break
       case "back":
+        // Esc closes the chart before it goes anywhere (research R4).
+        if (this.chartShown()) {
+          this.chartOpen = false
+          break
+        }
         if (this.nav.pop()) {
           this.sort = UNSORTED
           this.syncSubscriptions()
@@ -498,9 +534,19 @@ export class App {
     }
   }
 
+  /** Whether the chart pane is on screen: wanted, on a screen with a breakdown, and fitting. */
+  private chartShown(): boolean {
+    const frame = this.frame
+    return (
+      this.chartOpen && frame !== null && isChartScreen(this.nav.screen) && chartFits(frame.rawContentWidth)
+    )
+  }
+
   /** What the action registry needs to judge which actions apply here (FR-064). */
   private actionContext(content: ScreenContent): ActionContext {
     return {
+      chartOpen: this.chartShown(),
+      chartFits: this.frame !== null && chartFits(this.frame.rawContentWidth),
       screen: this.nav.screen,
       depth: this.nav.depth,
       rowCount: content.rowCount,
@@ -777,6 +823,20 @@ export class App {
     const height = renderer.height
     this.logsDroppedSeen = syncLogSelection(this.nav, this.logsDroppedSeen, this.deps.log.dropped)
 
+    // Before the too-small path, so a window shrunk past both limits still closes the
+    // chart it was showing (006 research R4).
+    const raw = frame.rawContentWidth
+    const resized = chartAfterResize(
+      {
+        open: this.chartOpen,
+        shownLastDraw: this.chartShownLastDraw,
+        onChartScreen: isChartScreen(this.nav.screen),
+      },
+      chartFits(raw),
+    )
+    this.chartOpen = resized.open
+    if (resized.notice !== null) this.notice = resized.notice
+
     if (isTooSmall(width, height)) {
       frame.setBreadcrumb("")
       frame.setWarning(null)
@@ -785,9 +845,24 @@ export class App {
       return
     }
 
-    // The panel is shown only when the user wants it AND it fits beside a readable
-    // content area. The content area never loses columns to keep it open (FR-057).
-    applyPanel(frame, this.deps.db, this.theme, this.sidePanelOpen && panelFits(frame.rawContentWidth))
+    // Each panel is shown only when the user wants it AND it fits beside a readable
+    // content area. The content area never loses columns to keep one open (FR-057). The
+    // chart and the watchlist share the region, and the chart wins (006 research R2).
+    const choice = choosePanel({
+      chartOpen: this.chartOpen,
+      sidePanelOpen: this.sidePanelOpen,
+      screen: this.nav.screen,
+      contentAreaWidth: raw,
+    })
+    const context = choice === "chart" ? chartContext(this.deps.db, this.nav.screen, this.councilType) : null
+    const panel: PanelContent =
+      context !== null
+        ? { kind: "chart", context, width: chartPaneWidth(raw), height: frame.contentHeight }
+        : choice === "watchlist"
+          ? { kind: "watchlist" }
+          : null
+    applyPanel(frame, this.deps.db, this.theme, panel)
+    this.chartShownLastDraw = panel?.kind === "chart"
 
     const theme = this.theme
     // The palette is painted separately from the frame; both follow a theme switch in the
@@ -821,6 +896,8 @@ export class App {
         lastSuccessAt: latestSuccess(subscriptions),
         paletteOpen: this.palette?.open === true,
         logEntries: this.deps.log.entries(),
+        chartShown: this.chartShownLastDraw,
+        chartFits: chartFits(raw),
       }),
       theme,
     )

@@ -92,7 +92,12 @@ async function paint(
 
     // Two passes: the first settles the layout so the measured widths are real.
     for (let pass = 0; pass < 2; pass += 1) {
-      applyPanel(frame, db, theme, wantPanel && panelFits(frame.rawContentWidth))
+      applyPanel(
+        frame,
+        db,
+        theme,
+        wantPanel && panelFits(frame.rawContentWidth) ? { kind: "watchlist" } : null,
+      )
       applyFrameState(
         frame,
         frameState({

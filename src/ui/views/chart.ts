@@ -13,9 +13,16 @@
  * refresh and the next, and between contexts, so the legend is always the mapping.
  */
 
+import type { Database } from "bun:sqlite"
 import { type ChangeKind, compareValue } from "../../domain/status.ts"
-import { plural } from "../format.ts"
+import {
+  availableCouncilTypes,
+  readNationalParties,
+  readNationalTotals,
+} from "../../storage/queries/national.ts"
+import { formatInteger, formatPercent, pad, plural, withChange } from "../format.ts"
 import type { Screen } from "../navigation.ts"
+import { blank, type Cell, line, roleForChange, type SemanticRow } from "../row.ts"
 import type { Slot } from "../theme/themes.ts"
 
 /** One entry of a vote breakdown, before ranking (data-model.md § ChartEntry). */
@@ -68,6 +75,26 @@ export const CHART_SCREENS: readonly Screen["kind"][] = ["national"]
 
 export function isChartScreen(screen: Screen): boolean {
   return CHART_SCREENS.includes(screen.kind)
+}
+
+/** What the status row says when a shrinking window closes the chart (research R4). */
+export const CHART_CLOSED_NOTICE = "Graf zavřen: okno je pro něj příliš úzké."
+
+/**
+ * Whether the chart survives a resize.
+ *
+ * A chart that was on screen and no longer fits CLOSES, rather than hiding until the
+ * window widens again (FR-013), and the user is told why. One that was never on screen
+ * - wanted on a screen without a breakdown - is left alone and nothing is said.
+ */
+export function chartAfterResize(
+  state: { open: boolean; shownLastDraw: boolean; onChartScreen: boolean },
+  fits: boolean,
+): { open: boolean; notice: string | null } {
+  if (state.open && state.shownLastDraw && state.onChartScreen && !fits) {
+    return { open: false, notice: CHART_CLOSED_NOTICE }
+  }
+  return { open: state.open, notice: null }
 }
 
 /** How many entries get a slice of their own. */
@@ -190,4 +217,134 @@ export function pieCells(fractions: number[], radius: number): (number | null)[]
     grid.push(cells)
   }
   return grid
+}
+
+/** The council type, as the national chart's title names it when there is a choice. */
+const TYPE_SUFFIX: Record<string, string> = { OBEC: " · obce", MCMO: " · MČ a MO" }
+
+/** `průběžné` or `konečné`, the same distinction every view's badge makes (FR-015). */
+function countState(isFinal: boolean): string {
+  return isFinal ? "konečné" : "průběžné"
+}
+
+/**
+ * What the chart for this screen shows, or null for a screen that offers none.
+ *
+ * Entries come in the table's own order, which is what breaks ties (research R9), and
+ * straight from the queries the tables use, so a legend figure is the table's figure.
+ */
+export function chartContext(db: Database, screen: Screen, councilType: string): ChartContext | null {
+  if (screen.kind !== "national") return null
+  const totals = readNationalTotals(db, councilType)
+  // Every party, not the table's twenty: the aggregate sums all of them (research R8).
+  const entries: ChartEntry[] =
+    totals === null
+      ? []
+      : readNationalParties(db, councilType, -1).map((party) => ({
+          name: party.name,
+          votes: party.votes,
+          sharePct: party.votesPct,
+          previousVotes: party.previousVotes,
+        }))
+  const suffix = availableCouncilTypes(db).length > 1 ? (TYPE_SUFFIX[councilType] ?? "") : ""
+  return {
+    kind: "national",
+    title: `Graf · ČR${suffix}`,
+    subtitle: `podíl platných hlasů · ${countState(totals?.isFinal === true)}`,
+    entries,
+    whole: entries.reduce((sum, e) => sum + e.votes, 0),
+    total: entries.length,
+    unit: "stran",
+    aggregate: "sum",
+    previousWhole: null,
+  }
+}
+
+/** The texture and slot a slice is drawn in: both belong to its rank. */
+function sliceLook(slice: Slice): { texture: string; slot: Slot } {
+  if (slice.rank === "other") return { texture: OTHER_TEXTURE, slot: "muted" }
+  return { texture: TEXTURES[slice.rank], slot: SLICE_SLOTS[slice.rank] ?? "muted" }
+}
+
+/** Columns a legend row spends on everything but the name (contract § 3). */
+const LEGEND_FIXED = 26
+
+/**
+ * One pie row as cells: a run of cells per stretch of one slice, so a row costs a
+ * handful of chunks rather than one per character.
+ */
+function pieRow(cells: (number | null)[], slices: Slice[], lead: number): SemanticRow {
+  const out: Cell[] = [{ text: " ".repeat(lead) }]
+  let index = 0
+  while (index < cells.length) {
+    const value = cells[index] ?? null
+    let end = index
+    while (end < cells.length && (cells[end] ?? null) === value) end += 1
+    const slice = value === null ? undefined : slices[value]
+    if (slice === undefined) {
+      out.push({ text: " ".repeat(end - index) })
+    } else {
+      const { texture, slot } = sliceLook(slice)
+      out.push({ text: texture.repeat(end - index), fgSlot: slot })
+    }
+    index = end
+  }
+  return { cells: out }
+}
+
+/** One legend row: swatch, name, votes with their change marker, share. */
+function legendRow(slice: Slice, width: number): SemanticRow {
+  const { texture, slot } = sliceLook(slice)
+  const name: Cell = { text: pad(slice.name, Math.max(1, width - LEGEND_FIXED)) }
+  if (slice.rank === "other") name.role = "muted"
+  const votes: Cell = { text: ` ${pad(withChange(formatInteger(slice.votes), slice.change), 12, "right")}` }
+  const role = roleForChange(slice.change)
+  if (role !== undefined) votes.role = role
+  return {
+    cells: [
+      { text: " " },
+      { text: texture.repeat(2), fgSlot: slot },
+      { text: " " },
+      name,
+      votes,
+      { text: ` ${pad(formatPercent(slice.sharePct), 8, "right")}`, role: "subtle" },
+    ],
+  }
+}
+
+/**
+ * The chart pane's rows: title, subtitle, the pie, the legend (contract § 3).
+ *
+ * The exact figures are never replaced by the picture: every slice has a legend row with
+ * its votes and share (FR-008). With nothing published yet, the pane says so rather than
+ * drawing an empty or misleading pie (FR-011).
+ */
+export function buildChartRows(context: ChartContext, width: number, contentHeight: number): SemanticRow[] {
+  const rows: SemanticRow[] = [
+    line(pad(context.title, width), "accent"),
+    line(pad(context.subtitle, width), "muted"),
+    blank(),
+  ]
+  if (context.entries.length === 0 || context.whole <= 0) {
+    // Two short lines rather than one long one, so the message fits the narrowest pane.
+    rows.push(
+      line("Zatím není co zobrazit."),
+      line("Graf se vykreslí, jakmile", "muted"),
+      line("budou zveřejněny výsledky.", "muted"),
+    )
+    return rows
+  }
+
+  const slices = rankSlices(context)
+  const { radius } = chartLayout(width, contentHeight, slices.length)
+  const lead = Math.max(0, Math.floor((width - (2 * radius + 1)) / 2))
+  for (const cells of pieCells(
+    slices.map((s) => s.fraction),
+    radius,
+  )) {
+    rows.push(pieRow(cells, slices, lead))
+  }
+  rows.push(blank())
+  for (const slice of slices) rows.push(legendRow(slice, width))
+  return rows
 }

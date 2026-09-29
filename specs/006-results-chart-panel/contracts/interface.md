@@ -75,7 +75,8 @@ watchlist panel is not. The watchlist returns on close if the user has it open a
 
 ```
 Zatím není co zobrazit.
-Graf se vykreslí, jakmile budou zveřejněny výsledky.
+Graf se vykreslí, jakmile
+budou zveřejněny výsledky.
 ```
 
 **Aggregate labels** follow Czech plurals through the existing plural helper:

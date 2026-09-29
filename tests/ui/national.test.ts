@@ -217,3 +217,36 @@ describe("the summary as cards (002 T049, T050, FR-020, FR-021, FR-026)", () => 
     expect(summary(tight).split("\n").length).toBeLessThan(summary(roomy).split("\n").length)
   })
 })
+
+describe("the narrow table beside the chart (006 FR-012, research R5)", () => {
+  beforeEach(() => {
+    ingestNational(db, NATIONAL)
+  })
+  const NOW = new Date("2026-10-09T21:20:00Z")
+  const lines = (width: number) => toTextLines(buildNationalRows(db, { width, now: NOW }))
+
+  test("at full width the table is exactly what it was before the chart existed", () => {
+    // Recorded before 006 changed the builder: an 80- or 102-column terminal without
+    // the pane must not move by a single character.
+    expect(lines(76)).toMatchSnapshot()
+    expect(lines(100)).toMatchSnapshot()
+  })
+
+  test("at the pane's width only the name, the votes and the share remain, whole", () => {
+    const rows = buildNationalRows(db, { width: 48, now: NOW })
+    const header = rows.find((r) => r.kind === "header")
+    expect(header?.cells.map((c) => c.text)).toEqual(["Volební strana", "Hlasy", "Podíl"])
+    for (const line of toTextLines(rows)) expect([...line].length).toBeLessThanOrEqual(48)
+    for (const row of rows.filter((r) => r.kind === "data")) {
+      expect(row.cells[1]?.text).not.toContain("…")
+      expect(row.cells[2]?.text).not.toContain("…")
+    }
+  })
+
+  test("beside the watchlist the seat columns go rather than being cut", () => {
+    const rows = buildNationalRows(db, { width: 62, now: NOW })
+    const header = rows.find((r) => r.kind === "header")
+    expect(header?.cells.map((c) => c.text)).not.toContain("Mandáty")
+    for (const line of toTextLines(rows)) expect([...line].length).toBeLessThanOrEqual(62)
+  })
+})
