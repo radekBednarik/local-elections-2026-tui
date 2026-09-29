@@ -480,8 +480,9 @@ describe("chart action (006 research R6)", () => {
     { kind: "logs" },
   ]
 
-  test("is available on the national overview when it fits", () => {
+  test("is available on the national overview and a council when it fits", () => {
     expect(chart?.unavailable(ctx(NATIONAL, { chartFits: true }))).toBeNull()
+    expect(chart?.unavailable(ctx({ kind: "council", kodzastup: "582786" }, { chartFits: true }))).toBeNull()
   })
 
   test("is unavailable, with the reason, on screens without a breakdown", () => {

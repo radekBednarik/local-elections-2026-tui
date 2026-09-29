@@ -13,7 +13,9 @@ import { extractArchiveFile } from "../../src/reference/archive.ts"
 import { loadReference, type ReferenceArchives } from "../../src/reference/loader.ts"
 import { ingestCouncil, ingestDistrict } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
+import { formatPercent } from "../../src/ui/format.ts"
 import { type SemanticRow, toTextLines } from "../../src/ui/row.ts"
+import { composeScreen } from "../../src/ui/screen.ts"
 import {
   buildCouncilRows,
   OKRSKY_NOTE,
@@ -23,6 +25,7 @@ import {
   renderDistrictList,
   seatStrip,
 } from "../../src/ui/views/areas.ts"
+import { chartContext } from "../../src/ui/views/chart.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
 const EDGE = join(import.meta.dir, "../../fixtures/edge-cases")
@@ -267,5 +270,50 @@ describe("the council summary and seat strip (002 T051, T052, FR-022, FR-023)", 
     const strip = seatStrip([{ seatsWon: 60 }, { seatsWon: 5 }], 40)
     expect(strip).toBeNull()
     expect(seatStrip([{ seatsWon: 3 }, { seatsWon: 2 }], 40)).not.toBeNull()
+  })
+})
+
+describe("the council table beside the chart (006 FR-012, research R5)", () => {
+  beforeEach(seedBrno)
+  const header = (rows: SemanticRow[]) => rows.find((r) => r.kind === "header")?.cells.map((c) => c.text)
+
+  test("at full width the table is exactly what it was before the chart existed", () => {
+    expect(toTextLines(buildCouncilRows(db, "582786", 76).rows)).toMatchSnapshot()
+    expect(toTextLines(buildCouncilRows(db, "551082", 100).rows)).toMatchSnapshot()
+  })
+
+  test("at the pane's width only the number, name, votes and share remain, whole", () => {
+    const { rows } = buildCouncilRows(db, "582786", 48)
+    expect(header(rows)).toEqual(["Č.", "Volební strana", "Hlasy", "Podíl"])
+    // The polling-district note is prose, and is cut at every width as it always was.
+    for (const line of toTextLines(rows).filter((l) => l !== OKRSKY_NOTE)) {
+      expect([...line].length).toBeLessThanOrEqual(48)
+    }
+    // The chips wrap rather than lose a figure off the end.
+    const text = toTextLines(rows).join("\n")
+    expect(text).toContain(formatPercent(41.9))
+    expect(text).toContain("Mandáty  55")
+    for (const row of rows.filter((r) => r.kind === "data")) {
+      expect(row.cells[2]?.text).not.toContain("…")
+      expect(row.cells[3]?.text).not.toContain("…")
+    }
+  })
+
+  test("a shed column is no longer offered for sorting", () => {
+    const council = { kind: "council", kodzastup: "582786" } as const
+    expect(composeScreen(db, council, { width: 48, councilType: "OBEC" }).sortableColumns).toBe(4)
+    expect(composeScreen(db, council, { width: 76, councilType: "OBEC" }).sortableColumns).toBe(5)
+  })
+
+  test("re-sorting the narrow table reorders it but not the chart (US2 scenario 3)", () => {
+    const byVotes = { column: 2, direction: "desc" } as const
+    const names = (width: number) =>
+      buildCouncilRows(db, "582786", width, byVotes)
+        .rows.filter((r) => r.kind === "data")
+        .map((r) => r.cells[1]?.text)
+    expect(names(48)).toEqual(names(76))
+    const before = chartContext(db, { kind: "council", kodzastup: "582786" }, "OBEC")?.entries
+    buildCouncilRows(db, "582786", 48, byVotes)
+    expect(chartContext(db, { kind: "council", kodzastup: "582786" }, "OBEC")?.entries).toEqual(before)
   })
 })

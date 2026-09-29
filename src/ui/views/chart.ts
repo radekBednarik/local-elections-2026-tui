@@ -15,6 +15,7 @@
 
 import type { Database } from "bun:sqlite"
 import { type ChangeKind, compareValue } from "../../domain/status.ts"
+import { listCouncilParties, readCouncil } from "../../storage/queries/areas.ts"
 import {
   availableCouncilTypes,
   readNationalParties,
@@ -71,7 +72,7 @@ export interface Slice {
 }
 
 /** The screens that show a vote breakdown and so offer the chart. */
-export const CHART_SCREENS: readonly Screen["kind"][] = ["national"]
+export const CHART_SCREENS: readonly Screen["kind"][] = ["national", "council"]
 
 export function isChartScreen(screen: Screen): boolean {
   return CHART_SCREENS.includes(screen.kind)
@@ -234,6 +235,7 @@ function countState(isFinal: boolean): string {
  * straight from the queries the tables use, so a legend figure is the table's figure.
  */
 export function chartContext(db: Database, screen: Screen, councilType: string): ChartContext | null {
+  if (screen.kind === "council") return councilChart(db, screen.kodzastup)
   if (screen.kind !== "national") return null
   const totals = readNationalTotals(db, councilType)
   // Every party, not the table's twenty: the aggregate sums all of them (research R8).
@@ -247,10 +249,25 @@ export function chartContext(db: Database, screen: Screen, councilType: string):
           previousVotes: party.previousVotes,
         }))
   const suffix = availableCouncilTypes(db).length > 1 ? (TYPE_SUFFIX[councilType] ?? "") : ""
+  return partyChart(
+    "national",
+    `Graf · ČR${suffix}`,
+    `podíl platných hlasů · ${countState(totals?.isFinal === true)}`,
+    entries,
+  )
+}
+
+/** A context for parties: the whole is their votes, and the aggregate their sum. */
+function partyChart(
+  kind: ChartContext["kind"],
+  title: string,
+  subtitle: string,
+  entries: ChartEntry[],
+): ChartContext {
   return {
-    kind: "national",
-    title: `Graf · ČR${suffix}`,
-    subtitle: `podíl platných hlasů · ${countState(totals?.isFinal === true)}`,
+    kind,
+    title,
+    subtitle,
     entries,
     whole: entries.reduce((sum, e) => sum + e.votes, 0),
     total: entries.length,
@@ -258,6 +275,26 @@ export function chartContext(db: Database, screen: Screen, councilType: string):
     aggregate: "sum",
     previousWhole: null,
   }
+}
+
+/** One council's parties, straight from the query its table uses (US2). */
+function councilChart(db: Database, kodzastup: string): ChartContext {
+  const council = readCouncil(db, kodzastup)
+  const entries: ChartEntry[] =
+    council === null || !council.hasResult
+      ? []
+      : listCouncilParties(db, kodzastup).map((party) => ({
+          name: party.name,
+          votes: party.votes,
+          sharePct: party.votesPct,
+          previousVotes: party.previousVotes,
+        }))
+  return partyChart(
+    "council",
+    `Graf · ${council?.name ?? kodzastup}`,
+    `podíl platných hlasů · ${countState(council?.isFinal === true)}`,
+    entries,
+  )
 }
 
 /** The texture and slot a slice is drawn in: both belong to its rank. */

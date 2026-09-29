@@ -40,6 +40,7 @@ import {
   blank,
   type Cell,
   cell,
+  cellsWide,
   chip,
   line,
   roleForChange,
@@ -66,6 +67,11 @@ export interface BuiltView<T = unknown> {
    * that assumption would have silently opened the wrong council.
    */
   items: T[]
+  /**
+   * How many columns can be sorted by, when the builder decides it: a table that sheds a
+   * column at a narrow width offers one fewer (006 research R5).
+   */
+  sortableColumns?: number
 }
 
 /**
@@ -239,6 +245,23 @@ function councilCells(council: CouncilRow): Cell[] {
   ]
 }
 
+/**
+ * Chip groups side by side, wrapped between groups when one row cannot hold them all.
+ *
+ * Beside the chart pane the council's badge and chips no longer fit one row, and the
+ * clamp would cut the figures at its end (006 FR-012). A group is never split, and a row
+ * that fits is exactly the row it always was.
+ */
+function chipRows(groups: Cell[][], width: number): SemanticRow[] {
+  const rows: Cell[][] = []
+  for (const group of groups) {
+    const last = rows[rows.length - 1]
+    if (last !== undefined && cellsWide(last) + 1 + cellsWide(group) <= width) last.push(cell(" "), ...group)
+    else rows.push([...group])
+  }
+  return rows.map((cells) => ({ cells }))
+}
+
 /** One council: its parties, seats and status. */
 export function renderCouncil(db: Database, kodzastup: string, width = 100): string[] {
   return toLines(buildCouncilRows(db, kodzastup, width), width)
@@ -287,17 +310,17 @@ export function buildCouncilRows(
     publishedPct: null,
     isFinal: council.isFinal,
   })
-  rows.push({
-    cells: [
-      badge(`${council.isFinal ? "✓" : "◌"} ${status}`),
-      cell(" "),
-      ...chip("Okrsky", formatProgress(council.districtsCounted, council.districtsTotal)),
-      cell(" "),
-      ...chip("Účast", formatPercent(council.turnoutPct)),
-      cell(" "),
-      ...chip("Mandáty", formatInteger(council.seatsTotal)),
-    ],
-  })
+  rows.push(
+    ...chipRows(
+      [
+        [badge(`${council.isFinal ? "✓" : "◌"} ${status}`)],
+        chip("Okrsky", formatProgress(council.districtsCounted, council.districtsTotal)),
+        chip("Účast", formatPercent(council.turnoutPct)),
+        chip("Mandáty", formatInteger(council.seatsTotal)),
+      ],
+      width,
+    ),
+  )
   rows.push(blank())
 
   const parties = applySort(listCouncilParties(db, kodzastup), sort, partyKey)
@@ -310,16 +333,24 @@ export function buildCouncilRows(
 
   // Bars are affordable only once the table itself has what it needs. Below that they
   // are dropped whole rather than squeezed: losing the aid is always better than losing
-  // or distorting a figure (FR-074).
+  // or distorting a figure (FR-074). The seat column goes next, while a name of twenty
+  // columns no longer fits beside it: beside the chart pane the table keeps the number,
+  // the name, the votes and the share (006 FR-012).
   const FIXED = 4 + 12 + 11 + 10 + 4
-  const bars = barsFit(width, FIXED + MIN_NAME_COLUMNS)
+  const seats = width >= FIXED + 20
+  const bars = seats && barsFit(width, FIXED + MIN_NAME_COLUMNS)
   const columns: Column[] = [
     { header: "Č.", width: 4, align: "right" },
-    { header: "Volební strana", width: Math.max(20, width - FIXED - (bars ? BAR_WIDTH + 1 : 0)) },
+    {
+      header: "Volební strana",
+      width: seats
+        ? Math.max(20, width - FIXED - (bars ? BAR_WIDTH + 1 : 0))
+        : Math.max(14, width - 4 - 12 - 11 - 3),
+    },
     { header: "Hlasy", width: 12, align: "right" },
     { header: "Podíl", width: 11, align: "right" },
     ...(bars ? [{ header: "", width: BAR_WIDTH } satisfies Column] : []),
-    { header: "Mandáty", width: 10, align: "right" },
+    ...(seats ? [{ header: "Mandáty", width: 10, align: "right" } satisfies Column] : []),
   ]
   rows.push(...tableHeader(columns, sort))
   const firstRow = rows.length
@@ -336,7 +367,14 @@ export function buildCouncilRows(
         // shown whether or not the bar is (FR-070, FR-071).
         cell(formatPercent(party.votesPct)),
         ...(bars ? [{ text: bar(party.votesPct === null ? null : party.votesPct / 100), bar: true }] : []),
-        cell(withChange(formatInteger(party.seatsWon), party.seatsChange), roleForChange(party.seatsChange)),
+        ...(seats
+          ? [
+              cell(
+                withChange(formatInteger(party.seatsWon), party.seatsChange),
+                roleForChange(party.seatsChange),
+              ),
+            ]
+          : []),
       ],
     })
   }
@@ -355,7 +393,9 @@ export function buildCouncilRows(
 
   rows.push(blank())
   rows.push(line(OKRSKY_NOTE, "muted"))
-  return { rows, firstRow, items: parties }
+  // A sort on the seat column keeps ordering the rows once the column is shed; it is
+  // only no longer offered, so the sort key never lands on a column the user cannot see.
+  return { rows, firstRow, items: parties, sortableColumns: seats ? 5 : 4 }
 }
 
 /**

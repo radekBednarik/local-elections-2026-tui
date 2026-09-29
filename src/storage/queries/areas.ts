@@ -51,6 +51,8 @@ export interface CouncilPartyRow {
   candidates: number | null
   votesChange: ChangeKind
   seatsChange: ChangeKind
+  /** The party's votes in the previous snapshot, or null when there is none (006 R8). */
+  previousVotes: number | null
 }
 
 export interface ElectedRow {
@@ -215,6 +217,7 @@ export function listCouncilParties(db: Database, kodzastup: string): CouncilPart
       candidates: typeof row.candidates === "number" ? row.candidates : null,
       votesChange: compareValue(votes, prev?.votes ?? null),
       seatsChange: compareValue(seats, prev?.seats ?? null),
+      previousVotes: prev?.votes ?? null,
     }
   })
 }

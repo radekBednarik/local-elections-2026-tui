@@ -10,12 +10,14 @@ import { join } from "node:path"
 import type { LogEntry } from "../../src/logging/logger.ts"
 import { extractArchiveFile } from "../../src/reference/archive.ts"
 import { loadReference, type ReferenceArchives } from "../../src/reference/loader.ts"
-import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
+import { ingestCouncil, ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
+import { listCouncilParties } from "../../src/storage/queries/areas.ts"
 import { availableCouncilTypes } from "../../src/storage/queries/national.ts"
 import { segmentsFor } from "../../src/ui/chrome/breadcrumb.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
 import { composeScreen, shownSources, sourcesForScreen } from "../../src/ui/screen.ts"
+import { buildCouncilRows } from "../../src/ui/views/areas.ts"
 import { buildChartRows, chartContext, rankSlices } from "../../src/ui/views/chart.ts"
 import { buildNationalRows } from "../../src/ui/views/national-rows.ts"
 
@@ -333,11 +335,64 @@ describe("national chart context (006 research R8)", () => {
         expect(text).toContain(row.cells[2]?.text ?? "?")
         compared += 1
       })
-    expect(compared).toBeGreaterThanOrEqual(5)
+    // At least half, so the test cannot pass by comparing nothing. In the fixture two of
+    // the six are outside the table's twenty.
+    expect(compared).toBeGreaterThanOrEqual(3)
   })
 
   test("a screen without a breakdown has no chart", () => {
     expect(chartContext(db, { kind: "districts" }, "OBEC")).toBeNull()
     expect(chartContext(db, { kind: "help" }, "OBEC")).toBeNull()
+  })
+})
+
+describe("council chart context (006 US2)", () => {
+  const BRNO = { kind: "council", kodzastup: "582786" } as const
+  beforeEach(() => {
+    ingestCouncil(db, "582786", read("vysledky_obec_582786.xml"))
+  })
+
+  test("one entry per party, in the table's unsorted order", () => {
+    const context = chartContext(db, BRNO, "OBEC")
+    expect(context?.entries.map((e) => e.name)).toEqual(listCouncilParties(db, "582786").map((p) => p.name))
+    expect(context?.total).toBe(context?.entries.length)
+    expect(context?.whole).toBe(context?.entries.reduce((sum, e) => sum + e.votes, 0))
+    expect(context?.unit).toBe("stran")
+  })
+
+  test("the title names the council and the subtitle the count's state", () => {
+    const context = chartContext(db, BRNO, "OBEC")
+    expect(context?.title).toBe("Graf · Brno")
+    expect(context?.subtitle).toMatch(/^podíl platných hlasů · (průběžné|konečné)$/)
+  })
+
+  test("a council without a result, or an unknown one, has nothing to chart", () => {
+    // A council in the codelist that no fetched document has reported on yet.
+    const { kodzastup } = db
+      .query(
+        `SELECT kodzastup FROM council c WHERE NOT EXISTS (
+           SELECT 1 FROM result_snapshot s
+            WHERE s.area_kind = 'council' AND s.area_id = c.kodzastup AND s.is_current = 1)
+         LIMIT 1`,
+      )
+      .get() as { kodzastup: string }
+    expect(chartContext(db, { kind: "council", kodzastup }, "OBEC")?.entries).toEqual([])
+    expect(chartContext(db, { kind: "council", kodzastup: "000000" }, "OBEC")?.entries).toEqual([])
+  })
+
+  test("every ranked legend figure appears verbatim in the council table (SC-002)", () => {
+    const context = chartContext(db, BRNO, "OBEC")
+    if (context === null) throw new Error("no chart")
+    const table = buildCouncilRows(db, "582786", 100).rows.filter((r) => r.kind === "data")
+    const legend = buildChartRows(context, 47, 27).slice(-7)
+    rankSlices(context)
+      .slice(0, 6)
+      .forEach((slice, index) => {
+        const row = table.find((r) => r.cells[1]?.text === slice.name)
+        const text = legend[index]?.cells.map((c) => c.text).join("") ?? ""
+        expect(row).toBeDefined()
+        expect(text).toContain(row?.cells[2]?.text ?? "?")
+        expect(text).toContain(row?.cells[3]?.text ?? "?")
+      })
   })
 })

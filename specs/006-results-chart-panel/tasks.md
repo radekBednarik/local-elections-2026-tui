@@ -315,7 +315,7 @@ without results.
 
 ### Tests (write first, observe failing)
 
-- [ ] T030 [P] [US2] Add to `tests/integration/screen.test.ts` a `describe("council chart context")`:
+- [X] T030 [P] [US2] Add to `tests/integration/screen.test.ts` a `describe("council chart context")`:
   - `chartContext(db, { kind: "council", kodzastup: "582786" }, "OBEC")` has one entry per `listCouncilParties` row, in its **unsorted** order.
   - The title is `Graf · Brno`, and the subtitle follows `isFinal`.
   - `whole` = Σ votes.
@@ -323,7 +323,7 @@ without results.
   - Every legend votes/share text from `buildChartRows` for the six ranked slices appears verbatim in the council table rows from `buildCouncilRows` at the same snapshot (SC-002).
   - `total === entries.length`.
   - Also add to the `describe("previous votes for the chart (006 research R8)")` block in `tests/integration/snapshots.test.ts`. Write two council snapshots, where one party's votes rose. `listCouncilParties` must return `previousVotes` equal to the old votes, keyed by party and ballot order. After a single snapshot, `previousVotes` is `null`. This is the failing test for T032.
-- [ ] T031 [P] [US2] Add to `tests/ui/areas.test.ts`:
+- [X] T031 [P] [US2] Add to `tests/ui/areas.test.ts`:
   - `buildCouncilRows` at width 76 is byte-identical to the current output.
   - At width 48:
     - the header is exactly `Č.`, `Volební strana`, `Hlasy`, `Podíl`,
@@ -331,25 +331,29 @@ without results.
     - no votes or share cell holds `…`.
   - `composeScreen` for `council` at width 48 reports `sortableColumns === 4`, and 5 at 76.
   - Re-sorting with the pane width in use (US2, acceptance scenario 3): `buildCouncilRows` at width 48 with a sort on column 2 (`Hlasy`) orders the rows by votes, exactly as at width 76. The chart context's entry order is unchanged by the sort.
+  - (Done 2026-09-29. The byte-identity check is a Bun snapshot at widths 76 and 100, recorded before `buildCouncilRows` changed.)
 
 ### Implementation
 
-- [ ] T032 [US2] In `src/storage/queries/areas.ts`, add `previousVotes: number | null` to `CouncilPartyRow`, from the `before` map, and null when there is no previous snapshot. Makes the `snapshots.test.ts` part of T030 pass.
-- [ ] T033 [US2] In `src/ui/views/areas.ts` `buildCouncilRows`, shed `Mandáty` by width:
+- [X] T032 [US2] In `src/storage/queries/areas.ts`, add `previousVotes: number | null` to `CouncilPartyRow`, from the `before` map, and null when there is no previous snapshot. Makes the `snapshots.test.ts` part of T030 pass.
+- [X] T033 [US2] In `src/ui/views/areas.ts` `buildCouncilRows`, shed `Mandáty` by width:
   - `seats = width >= 41 + 20`. When false, drop the column and its cells, and give the name `Math.max(14, width − 30)`.
   - Bars require `seats && barsFit(...)`.
   - Return `sortableColumns` on the built view (5 or 4). In `src/ui/screen.ts`, use it for `council` instead of the literal 5. A sort on a shed column keeps ordering the rows; this is documented in a comment.
   - Makes T031 pass.
-- [ ] T034 [US2] In `src/ui/views/chart.ts`, extend `chartContext` for `council`:
+  - (Done 2026-09-29. Found at width 48: the badge-and-chips row is 70 columns, and the clamp would cut `Účast` and `Mandáty`. `chipRows` now wraps it between chip groups, never inside one, and only when it would not fit, so the full-width snapshot is unchanged. The polling-district note is prose, 116 columns long, and is cut at every width as before 006, so the width test exempts it explicitly.)
+- [X] T034 [US2] In `src/ui/views/chart.ts`, extend `chartContext` for `council`:
   - Use `readCouncil` and `listCouncilParties`. An entry per party is `{ name, votes, sharePct: votesPct, previousVotes }`.
   - Set `whole = Σ votes`, `total = entries.length`, `unit = "stran"` and `aggregate = "sum"`.
   - The title is `Graf · ${council.name}`, and the subtitle as for national, from `council.isFinal`.
   - `!council.hasResult` gives empty entries.
   - Add `"council"` to `CHART_SCREENS`, and extend T008's availability assertion to `council` first (red).
   - Makes T030 pass.
-- [ ] T035 [US2] REVIEW Phase 4 against Principles I–III and contract § 3–§ 5 (council). Check that:
+  - (Done 2026-09-29. Red first: T008's assertion extended to `council` failed before `CHART_SCREENS` grew. The shared party-context shape is `partyChart`, used by both national and council. Test fix: Brno-Bohunice has a result from the district document, so the no-result case now picks a council with no current snapshot by query.)
+- [X] T035 [US2] REVIEW Phase 4 against Principles I–III and contract § 3–§ 5 (council). Check that:
   - the tie-break uses the unsorted order, so re-sorting the table with `s` never reorders the chart,
   - the full-width council output is unchanged.
+  - (Done 2026-09-29. 1150 pass, 0 fail; typecheck and biome clean. The tie-break uses `listCouncilParties`' own order, and the re-sort test confirms the chart's entries are unaffected by a table sort. Quickstart § 3 step 1 was checked by a headless render of Brno at 100 × 30 (`SCREEN=council:582786 bun tools/verify/chart-view.ts`): the legend equals the table row for row, and `Ostatní (8 stran)` holds the rest. National SC-002 test: two of the national top six fall outside the table's twenty, so the threshold is at least three compared. Findings: none open.)
 
   Run quickstart § 3, step 1, by hand. Run `bun test`, `bun run typecheck` and `bun run check`. Fix every finding.
 
