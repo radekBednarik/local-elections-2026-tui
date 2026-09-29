@@ -17,6 +17,7 @@ import { formatPercent } from "../../src/ui/format.ts"
 import { type SemanticRow, toTextLines } from "../../src/ui/row.ts"
 import { composeScreen } from "../../src/ui/screen.ts"
 import {
+  buildCandidatesRows,
   buildCouncilRows,
   OKRSKY_NOTE,
   renderCandidates,
@@ -315,5 +316,72 @@ describe("the council table beside the chart (006 FR-012, research R5)", () => {
     const before = chartContext(db, { kind: "council", kodzastup: "582786" }, "OBEC")?.entries
     buildCouncilRows(db, "582786", 48, byVotes)
     expect(chartContext(db, { kind: "council", kodzastup: "582786" }, "OBEC")?.entries).toEqual(before)
+  })
+})
+
+describe("the candidate table (006 US3, research R5)", () => {
+  const BOHUNICE = read(FIXTURES, "vysledky_obec_551082.xml")
+  beforeEach(() => {
+    seedBrno()
+    ingestCouncil(db, "551082", BOHUNICE)
+  })
+  const header = (rows: SemanticRow[]) => rows.find((r) => r.kind === "header")?.cells.map((c) => c.text)
+  const data = (rows: SemanticRow[]) => rows.filter((r) => r.kind === "data")
+
+  test("gains the published share of the party's votes, or a dash where none is published", () => {
+    const { rows } = buildCandidatesRows(db, "551082", "768", 3, 76)
+    expect(header(rows)).toEqual(["Poř.", "Kandidát", "Hlasy", "Podíl", "Mandát"])
+    const first = data(rows)[0]
+    expect(first?.cells[3]?.text).toBe(formatPercent(5.18))
+    const unelected = data(rows).find((r) => r.cells[4]?.text === "")
+    expect(unelected?.cells[2]?.text).toBe("–")
+    expect(unelected?.cells[3]?.text).toBe("–")
+  })
+
+  test("marks a change in a candidate's votes as the legend does", () => {
+    const later = BOHUNICE.replace(
+      'DATUM_CAS_GENEROVANI="2026-10-09T21:15:00"',
+      'DATUM_CAS_GENEROVANI="2026-10-09T21:30:00"',
+    )
+      .replace(
+        'PRIJMENI="Brzobohatý" TITULPRED="Ing." TITULZA="" HLASY="868"',
+        'PRIJMENI="Brzobohatý" TITULPRED="Ing." TITULZA="" HLASY="900"',
+      )
+      // The party's votes are the sum of its candidates', so they rise with them.
+      .replace('NAZEV_STRANY="ANO 2011" HLASY="16752"', 'NAZEV_STRANY="ANO 2011" HLASY="16784"')
+    ingestCouncil(db, "551082", later)
+    const rows = data(buildCandidatesRows(db, "551082", "768", 3, 76).rows)
+    expect(rows[0]?.cells[2]?.text).toBe("▲900")
+    expect(rows[0]?.cells[2]?.role).toBe("increase")
+    const unelected = rows.find((r) => r.cells[4]?.text === "")
+    expect(unelected?.cells[2]?.text).toBe("–")
+  })
+
+  test("beside the chart, the seat column collapses to a marker and no figure is cut", () => {
+    const { rows } = buildCandidatesRows(db, "551082", "768", 3, 48)
+    expect(header(rows)).toEqual(["Poř.", "Kandidát", "Hlasy", "Podíl", ""])
+    for (const row of data(rows)) {
+      const marker = row.cells[4]
+      expect(["●", ""]).toContain(marker?.text ?? "?")
+      if (marker?.text === "●") expect(marker.role).toBe("increase")
+      expect(row.cells[2]?.text).not.toContain("…")
+      expect(row.cells[3]?.text).not.toContain("…")
+    }
+    // The table itself; the explanatory notes above it are prose, cut as they always were.
+    for (const line of toTextLines(rows.filter((r) => r.kind !== undefined))) {
+      expect([...line].length).toBeLessThanOrEqual(48)
+    }
+  })
+
+  test("the elected-only list, without reference data, has the same columns", () => {
+    const bare = openMemoryDatabase()
+    try {
+      ingestCouncil(bare, "551082", BOHUNICE)
+      const { rows } = buildCandidatesRows(bare, "551082", "768", 3, 76)
+      expect(header(rows)).toEqual(["Poř.", "Kandidát", "Hlasy", "Podíl", "Mandát"])
+      expect(data(rows)[0]?.cells[3]?.text).toBe(formatPercent(5.18))
+    } finally {
+      bare.close()
+    }
   })
 })

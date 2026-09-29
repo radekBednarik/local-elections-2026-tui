@@ -458,13 +458,31 @@ export function buildCandidatesRows(
   ]
 
   const registered = listRegisteredCandidates(db, kodzastup, vstrana)
+  // The party's own ballot position, so a list reached from search - which knows only
+  // the party code - finds the same elected members as one reached from the council.
+  const elected = listElected(db, kodzastup, vstrana, party?.ballotOrder ?? ballotOrder)
+  // Beside the chart pane the seat column collapses to a one-cell marker rather than
+  // squeezing the name or cutting a figure (006 FR-012, research R5).
+  const narrow = width < 6 + 10 + 11 + 8 + 4 + 24
   const columns: Column[] = [
     { header: "Poř.", width: 6, align: "right" },
-    { header: "Kandidát", width: Math.max(24, width - 34) },
+    { header: "Kandidát", width: narrow ? Math.max(14, width - 32) : Math.max(24, width - 39) },
     { header: "Hlasy", width: 10, align: "right" },
-    { header: "Mandát", width: 8 },
+    { header: "Podíl", width: 11, align: "right" },
+    narrow ? { header: "", width: 1 } : { header: "Mandát", width: 8 },
   ]
   const header = tableHeader(columns)
+  const mandate = (isElected: boolean): Cell =>
+    narrow ? (isElected ? cell("●", "increase") : cell("")) : cell(isElected ? "ano" : "")
+  // Votes carry the same change marker the legend shows (006 contract § 4). A candidate
+  // whose votes were never published keeps a bare dash: there is nothing to compare.
+  const byNumber = new Map(elected.map((person) => [person.ballotNumber, person]))
+  const votesCell = (votes: number | null, ballotNumber: number): Cell => {
+    const change = byNumber.get(ballotNumber)?.votesChange
+    return votes === null || change === undefined
+      ? cell(formatInteger(votes))
+      : cell(withChange(formatInteger(votes), change), roleForChange(change))
+  }
 
   if (registered.length > 0) {
     rows.push(line(`Kandidátní listina (${registered.length})`))
@@ -479,8 +497,9 @@ export function buildCandidatesRows(
         cells: [
           cell(String(candidate.ballotNumber), "muted"),
           cell(candidate.name),
-          cell(formatInteger(candidate.votes)),
-          cell(candidate.elected ? "ano" : ""),
+          votesCell(candidate.votes, candidate.ballotNumber),
+          cell(formatPercent(candidate.votesPct)),
+          mandate(candidate.elected),
         ],
       })
     }
@@ -489,7 +508,6 @@ export function buildCandidatesRows(
     return { rows, firstRow: rows.length, items: [] }
   }
 
-  const elected = listElected(db, kodzastup, vstrana, ballotOrder)
   if (elected.length === 0) {
     rows.push(line("Pro tuto volební stranu nejsou k dispozici žádní kandidáti."))
     return { rows, firstRow: rows.length, items: [] }
@@ -504,8 +522,9 @@ export function buildCandidatesRows(
       cells: [
         cell(String(person.ballotNumber), "muted"),
         cell(person.name),
-        cell(formatInteger(person.votes)),
-        cell("ano"),
+        votesCell(person.votes, person.ballotNumber),
+        cell(formatPercent(person.votesPct)),
+        mandate(true),
       ],
     })
   }

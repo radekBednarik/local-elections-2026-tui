@@ -299,3 +299,55 @@ describe("closing on shrink (research R4)", () => {
     expect(chartAfterResize({ ...shown, open: closed.open }, true)).toEqual({ open: false, notice: null })
   })
 })
+
+describe("remainder aggregate (research R8, spec amendment FR-009)", () => {
+  /** A party's candidates: votes are published only for those elected. */
+  function candidates(entries: ChartEntry[], previousWhole: number | null = null): ChartContext {
+    return {
+      kind: "candidates",
+      title: "Graf · ANO 2011",
+      subtitle: "podíl hlasů strany · průběžné",
+      entries,
+      whole: 6916,
+      total: 21,
+      unit: "kand.",
+      aggregate: "remainder",
+      previousWhole,
+    }
+  }
+
+  test("the rest of the party's votes form the aggregate, counted over every other candidate", () => {
+    const slices = rankSlices(
+      candidates([entry("A", 481, 6.95), entry("B", 372, 5.37), entry("C", 300, 4.34)]),
+    )
+    expect(slices.map((s) => s.rank)).toEqual([0, 1, 2, "other"])
+    const other = slices[3]
+    expect(other?.votes).toBe(6916 - 1153)
+    expect(other?.sharePct).toBeCloseTo((5763 / 6916) * 100, 10)
+    expect(other?.count).toBe(18)
+    expect(other?.name).toBe("Ostatní (18 kand.)")
+    expect(slices.reduce((sum, s) => sum + s.fraction, 0)).toBeCloseTo(1, 10)
+  })
+
+  test("elected candidates beyond the sixth are counted in the aggregate", () => {
+    const eight = Array.from({ length: 8 }, (_, i) => entry(`K${i}`, 500 - i * 10))
+    const slices = rankSlices(candidates(eight))
+    const ranked = slices.slice(0, 6).reduce((sum, s) => sum + s.votes, 0)
+    expect(slices[6]?.count).toBe(21 - 6)
+    expect(slices[6]?.votes).toBe(6916 - ranked)
+  })
+
+  test("no aggregate when the charted candidates hold every vote", () => {
+    const all = { ...candidates([entry("A", 4000), entry("B", 2916)]), total: 2 }
+    expect(rankSlices(all).map((s) => s.rank)).toEqual([0, 1])
+  })
+
+  test("the aggregate's change compares the remainder with the previous remainder", () => {
+    const now = [entry("A", 481, null, 400), entry("B", 372, null, 300)]
+    // Previous whole 6000: remainder then 6000 - 700 = 5300, now 6916 - 853 = 6063.
+    expect(rankSlices(candidates(now, 6000))[2]?.change).toBe("increased")
+    expect(rankSlices(candidates(now, null))[2]?.change).toBe("new")
+    const unknown = [entry("A", 481, null, null), entry("B", 372, null, 300)]
+    expect(rankSlices(candidates(unknown, 6000))[2]?.change).toBe("new")
+  })
+})

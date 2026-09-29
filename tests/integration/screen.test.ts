@@ -396,3 +396,40 @@ describe("council chart context (006 US2)", () => {
       })
   })
 })
+
+describe("candidates chart context (006 US3)", () => {
+  const ANO = { kind: "candidates", kodzastup: "551082", vstrana: "768", ballotOrder: 3 } as const
+  beforeEach(() => {
+    ingestCouncil(db, "551082", read("vysledky_obec_551082.xml"))
+  })
+
+  test("the elected candidates, in ballot order, with their published share of the party", () => {
+    const context = chartContext(db, ANO, "OBEC")
+    expect(context?.entries.map((e) => [e.votes, e.sharePct])).toEqual([
+      [868, 5.18],
+      [862, 5.14],
+      [821, 4.9],
+      [824, 4.91],
+    ])
+    expect(context?.entries[0]?.name).toBe("Ing. Antonín Brzobohatý")
+  })
+
+  test("the whole is the party's votes and the total its candidate count", () => {
+    const context = chartContext(db, ANO, "OBEC")
+    expect(context?.whole).toBe(16752)
+    expect(context?.total).toBe(21)
+    expect(context?.unit).toBe("kand.")
+    expect(context?.aggregate).toBe("remainder")
+    expect(context?.title).toBe("Graf · ANO 2011")
+    expect(context?.subtitle).toMatch(/^podíl hlasů strany · (průběžné|konečné)$/)
+  })
+
+  test("a party reached from search, without a ballot position, finds the same candidates", () => {
+    const fromSearch = chartContext(db, { ...ANO, ballotOrder: null }, "OBEC")
+    expect(fromSearch?.entries).toEqual(chartContext(db, ANO, "OBEC")?.entries ?? [])
+  })
+
+  test("a party with nobody elected has nothing to chart", () => {
+    expect(chartContext(db, { ...ANO, vstrana: "999999" }, "OBEC")?.entries).toEqual([])
+  })
+})

@@ -15,7 +15,7 @@
 
 import type { Database } from "bun:sqlite"
 import { type ChangeKind, compareValue } from "../../domain/status.ts"
-import { listCouncilParties, readCouncil } from "../../storage/queries/areas.ts"
+import { listCouncilParties, listElected, readCouncil } from "../../storage/queries/areas.ts"
 import {
   availableCouncilTypes,
   readNationalParties,
@@ -72,7 +72,7 @@ export interface Slice {
 }
 
 /** The screens that show a vote breakdown and so offer the chart. */
-export const CHART_SCREENS: readonly Screen["kind"][] = ["national", "council"]
+export const CHART_SCREENS: readonly Screen["kind"][] = ["national", "council", "candidates"]
 
 export function isChartScreen(screen: Screen): boolean {
   return CHART_SCREENS.includes(screen.kind)
@@ -163,6 +163,26 @@ export function rankSlices(context: ChartContext): Slice[] {
     return slices
   }
 
+  // Candidates: only the elected have published votes, so the rest of the party's votes
+  // is the only honest figure for everyone else (research R8). It stands for every
+  // candidate without a slice of their own, elected beyond the sixth included.
+  const charted = slices.reduce((sum, s) => sum + s.votes, 0)
+  const votes = whole - charted
+  const count = context.total - slices.length
+  if (votes <= 0 || count <= 0) return slices
+  const chartedBefore = sumKnown(ranked.map((e) => e.previousVotes))
+  slices.push({
+    rank: "other",
+    name: otherName(count, context.unit),
+    votes,
+    sharePct: whole > 0 ? (votes / whole) * 100 : null,
+    fraction: fraction(votes),
+    change: compareValue(
+      votes,
+      context.previousWhole === null || chartedBefore === null ? null : context.previousWhole - chartedBefore,
+    ),
+    count,
+  })
   return slices
 }
 
@@ -236,6 +256,8 @@ function countState(isFinal: boolean): string {
  */
 export function chartContext(db: Database, screen: Screen, councilType: string): ChartContext | null {
   if (screen.kind === "council") return councilChart(db, screen.kodzastup)
+  if (screen.kind === "candidates")
+    return candidatesChart(db, screen.kodzastup, screen.vstrana, screen.ballotOrder)
   if (screen.kind !== "national") return null
   const totals = readNationalTotals(db, councilType)
   // Every party, not the table's twenty: the aggregate sums all of them (research R8).
@@ -295,6 +317,43 @@ function councilChart(db: Database, kodzastup: string): ChartContext {
     `podíl platných hlasů · ${countState(council?.isFinal === true)}`,
     entries,
   )
+}
+
+/**
+ * One party's candidates (US3): the elected, whose votes are published, against the
+ * party's own votes. The party is found as the candidate table finds it, so a list
+ * reached from search charts the same candidates as one reached from the council.
+ */
+function candidatesChart(
+  db: Database,
+  kodzastup: string,
+  vstrana: string,
+  ballotOrder: number | null,
+): ChartContext {
+  const council = readCouncil(db, kodzastup)
+  const party = listCouncilParties(db, kodzastup).find(
+    (p) => p.vstrana === vstrana && (ballotOrder === null || p.ballotOrder === ballotOrder),
+  )
+  const entries: ChartEntry[] =
+    party === undefined
+      ? []
+      : listElected(db, kodzastup, vstrana, party.ballotOrder).map((person) => ({
+          name: person.name,
+          votes: person.votes,
+          sharePct: person.votesPct,
+          previousVotes: person.previousVotes,
+        }))
+  return {
+    kind: "candidates",
+    title: `Graf · ${party?.name ?? `Volební strana ${vstrana}`}`,
+    subtitle: `podíl hlasů strany · ${countState(council?.isFinal === true)}`,
+    entries,
+    whole: party?.votes ?? 0,
+    total: party?.candidates ?? entries.length,
+    unit: "kand.",
+    aggregate: "remainder",
+    previousWhole: party?.previousVotes ?? null,
+  }
 }
 
 /** The texture and slot a slice is drawn in: both belong to its rank. */

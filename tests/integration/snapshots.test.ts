@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite"
 import { beforeEach, describe, expect, test } from "bun:test"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
-import { listCouncilParties } from "../../src/storage/queries/areas.ts"
+import { listCouncilParties, listElected } from "../../src/storage/queries/areas.ts"
 import { readNationalParties } from "../../src/storage/queries/national.ts"
 import { readCurrent, readPrevious, type SnapshotInput, writeSnapshot } from "../../src/storage/snapshots.ts"
 
@@ -294,5 +294,47 @@ describe("previous votes for the chart (006 research R8)", () => {
     const [party] = listCouncilParties(db, "551082")
     expect(party?.votes).toBe(9500)
     expect(party?.previousVotes).toBe(8000)
+  })
+
+  test("an elected candidate carries the change in their votes, and the previous figure", () => {
+    // A party's votes are the sum of its candidates', so a candidate's rise always moves
+    // the party too: that is what makes the snapshot a new one.
+    const withCandidate = (publishedAt: string, votes: number) =>
+      snapshot({
+        publishedAt,
+        parties: [
+          {
+            vstrana: "768",
+            ballotOrder: 3,
+            name: "ANO 2011",
+            votes: 7200 + votes,
+            votesPct: 20.0,
+            candidates: 21,
+            seatsWon: 4,
+            seatsPct: 19.05,
+          },
+        ],
+        candidates: [
+          {
+            vstrana: "768",
+            ballotOrder: 3,
+            ballotNumber: 1,
+            givenName: "Antonín",
+            familyName: "Brzobohatý",
+            titleBefore: "Ing.",
+            titleAfter: null,
+            votes,
+            votesPct: 5.18,
+          },
+        ],
+      })
+    writeSnapshot(db, withCandidate("2026-10-09T20:00:00", 800))
+    const [first] = listElected(db, "551082", "768", 3)
+    expect(first?.votesChange).toBe("new")
+    expect(first?.previousVotes).toBeNull()
+    writeSnapshot(db, withCandidate("2026-10-09T20:01:00", 868))
+    const [second] = listElected(db, "551082", "768", 3)
+    expect(second?.votesChange).toBe("increased")
+    expect(second?.previousVotes).toBe(800)
   })
 })

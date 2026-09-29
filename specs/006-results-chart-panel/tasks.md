@@ -374,17 +374,18 @@ rest of the party's votes as `Ostatní (N kand.)`. The candidate table gains the
 
 ### Tests (write first, observe failing)
 
-- [ ] T036 [P] [US3] Add to `tests/unit/chart.test.ts` `describe("remainder aggregate (research R8, spec amendment FR-009)")`, with `aggregate: "remainder"`, `whole: 6916`, `total: 21` and three entries of 481, 372 and 300 votes:
+- [X] T036 [P] [US3] Add to `tests/unit/chart.test.ts` `describe("remainder aggregate (research R8, spec amendment FR-009)")`, with `aggregate: "remainder"`, `whole: 6916`, `total: 21` and three entries of 481, 372 and 300 votes:
   - 3 ranked slices, then an aggregate with `votes: 6916 − 1153 = 5763`, `sharePct: 5763 / 6916 × 100`, `count: 18` and `name: "Ostatní (18 kand.)"`.
   - With 8 entries, 6 are ranked and the other 2 are counted in the aggregate: `count = total − 6`, and `votes = whole − Σ ranked`.
   - No aggregate when the remainder is 0.
   - The aggregate's change compares `whole − Σ ranked` with `previousWhole − Σ ranked previous`. The context gains `previousWhole: number | null`, and the result is `"new"` when either side is null.
-- [ ] T037 [P] [US3] Add to `tests/integration/screen.test.ts` a `describe("candidates chart context")`, for a fixture party in `551082`:
+  - (Done 2026-09-29. Red first, except "no aggregate when the remainder is 0", which passed at once: the placeholder `remainder` branch already returned only the ranked slices.)
+- [X] T037 [P] [US3] Add to `tests/integration/screen.test.ts` a `describe("candidates chart context")`, for a fixture party in `551082`:
   - Entries are the elected candidates from `listElected`, in ballot-number order, with `sharePct` equal to the published `HLASY_PROC`.
   - `whole` is the party's `votes`, and `total` is the party's `candidates`.
   - The title is `Graf · ${party.name}` and the subtitle is `podíl hlasů strany · průběžné`.
   - For a party with no elected candidate, `entries` is empty.
-- [ ] T038 [P] [US3] Add to `tests/ui/areas.test.ts`:
+- [X] T038 [P] [US3] Add to `tests/ui/areas.test.ts`:
   - `buildCandidatesRows` at width 76 has the header `Poř.`, `Kandidát`, `Hlasy`, `Podíl`, `Mandát`. `Podíl` shows the published share for elected candidates and `–` for the others.
   - Change markers (contract § 4, the table carries the same marker as the legend): after two snapshots in which one elected candidate's votes rose, that candidate's `Hlasy` cell reads `▲<votes>` with role `increase`. Unelected candidates' `–` carries no marker.
   - At width 48:
@@ -392,15 +393,16 @@ rest of the party's votes as `Ostatní (N kand.)`. The candidate table gains the
     - no line exceeds 48,
     - no votes or share cell holds `…`.
   - The elected-only fallback path shows the same columns.
-- [ ] T039 [P] [US3] Add to the `describe("previous votes for the chart (006 research R8)")` block in `tests/integration/snapshots.test.ts`: after two council snapshots in which one elected candidate's votes rose, `listElected` returns `votesChange: "increased"` and `previousVotes` equal to the old value. With a single snapshot, `"new"` and `null`.
+- [X] T039 [P] [US3] Add to the `describe("previous votes for the chart (006 research R8)")` block in `tests/integration/snapshots.test.ts`: after two council snapshots in which one elected candidate's votes rose, `listElected` returns `votesChange: "increased"` and `previousVotes` equal to the old value. With a single snapshot, `"new"` and `null`.
+  - (Done 2026-09-29. Test fix: `writeSnapshot`'s digest covers parties, not candidates, so a snapshot changing one candidate alone is discarded as identical. That is faithful to the source, where a party's votes are the sum of its candidates', so the tests raise the party total with the candidate. The T038 change-marker test does the same in the XML.)
 
 ### Implementation
 
-- [ ] T040 [US3] In `src/storage/queries/areas.ts`:
+- [X] T040 [US3] In `src/storage/queries/areas.ts`:
   - `listElected` looks up the council's previous snapshot, exactly as `listCouncilParties` does, keyed by `ballot_number`. It adds `votesChange` and `previousVotes` to `ElectedRow`.
   - `listRegisteredCandidates` selects `r.votes_pct` and returns it as `votesPct: number | null`.
   - Makes T039 pass.
-- [ ] T041 [US3] In `src/ui/views/areas.ts` `buildCandidatesRows`:
+- [X] T041 [US3] In `src/ui/views/areas.ts` `buildCandidatesRows`:
   - Add `{ header: "Podíl", width: 11, align: "right" }` after `Hlasy`, with cells `formatPercent(votesPct)`. At full width, the name is `Math.max(24, width − 39)`.
   - When `width < 63`, replace `Mandát` with `{ header: "", width: 1 }`, holding `cell("●", "increase")` for elected candidates and `""` otherwise. The name is then `Math.max(14, width − 32)`.
   - Apply the same columns in both the registered and the elected-only paths.
@@ -409,7 +411,8 @@ rest of the party's votes as `Ostatní (N kand.)`. The candidate table gains the
     - in the registered path, it comes from a `ballotNumber` → `ElectedRow` map built from one `listElected` call,
     - a candidate without published votes keeps a bare `–`.
   - Makes T038 pass.
-- [ ] T042 [US3] In `src/ui/views/chart.ts`:
+  - (Done 2026-09-29. `listElected` is now called with the matched party's own ballot position, so a candidate list reached from search, which has no ballot position, finds the elected members too. This matches the chart context, and fixes the elected-only fallback for search, which returned no one before.)
+- [X] T042 [US3] In `src/ui/views/chart.ts`:
   - Implement `aggregate: "remainder"` in `rankSlices` (T036).
   - Extend `chartContext` for `candidates`:
     - find the party in `listCouncilParties` by `vstrana` and `ballotOrder`,
@@ -417,9 +420,10 @@ rest of the party's votes as `Ostatní (N kand.)`. The candidate table gains the
     - `whole` is `party.votes`, `previousWhole` is `party.previousVotes`, `total` is `party.candidates ?? entries.length`, and `unit` is `"kand."`.
   - Add `"candidates"` to `CHART_SCREENS`, and extend T008's availability assertion to `candidates` first (red).
   - Makes T036 and T037 pass.
-- [ ] T043 [US3] REVIEW Phase 5 against Principles I–III and contract § 3–§ 5 (candidates). Check that:
+- [X] T043 [US3] REVIEW Phase 5 against Principles I–III and contract § 3–§ 5 (candidates). Check that:
   - no figure is shown for an unelected candidate that the source did not publish,
   - the remainder is labelled as an aggregate.
+  - (Done 2026-09-29. 1163 pass, 0 fail; typecheck and biome clean. No figure is shown for an unelected candidate: their votes and share read `–`, and the remainder is labelled `Ostatní (17 kand.)`. Quickstart § 3 step 2 was checked by a headless render (`SCREEN=candidates:551082:768`). The legend's votes and shares equal the table's, and the remainder is 16 752 − 3 375 = 13 377 (79,85 %). Fixture artifact, not a defect: the table pairs the 2026 registry's names with the 2022 result's votes by ballot number (fixtures/README.md), so candidate 1 is "Ivo Nádeníček" in the table and "Ing. Antonín Brzobohatý" in the legend. With real 2026 data both come from one election. Findings: none open.)
 
   Run quickstart § 3, step 2, by hand. Run `bun test`, `bun run typecheck` and `bun run check`. Fix every finding.
 

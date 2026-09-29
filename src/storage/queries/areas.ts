@@ -62,6 +62,10 @@ export interface ElectedRow {
   name: string
   votes: number
   votesPct: number | null
+  /** How the candidate's votes moved since the previous snapshot (006 FR-010). */
+  votesChange: ChangeKind
+  /** The candidate's votes in the previous snapshot, or null when there is none. */
+  previousVotes: number | null
 }
 
 /** Every district, with how much of it has arrived so far. */
@@ -245,17 +249,39 @@ export function listElected(
     )
     .all({ id: current.id, v: vstrana, b: ballotOrder }) as Record<string, unknown>[]
 
+  // The same candidates in the previous snapshot, keyed by ballot number, exactly as
+  // listCouncilParties compares parties (006 research R8).
+  const previous = db
+    .query("SELECT id FROM result_snapshot WHERE area_kind = 'council' AND area_id = $k AND is_current = 0")
+    .get({ k: kodzastup }) as { id: number } | null
+  const before = new Map<number, number>()
+  if (previous !== null) {
+    for (const row of db
+      .query(
+        `SELECT ballot_number, votes FROM candidate_result
+          WHERE snapshot_id = $id AND vstrana = $v AND COALESCE(ballot_order, -1) = COALESCE($b, -1)`,
+      )
+      .all({ id: previous.id, v: vstrana, b: ballotOrder }) as Record<string, unknown>[]) {
+      before.set(Number(row.ballot_number ?? 0), Number(row.votes ?? 0))
+    }
+  }
+
   return rows.map((row) => {
     const parts = [row.title_before, row.given_name, row.family_name, row.title_after]
       .map((p) => (p === null || p === undefined ? "" : String(p)))
       .filter((p) => p !== "")
+    const ballotNumber = Number(row.ballot_number ?? 0)
+    const votes = Number(row.votes ?? 0)
+    const previousVotes = before.get(ballotNumber) ?? null
     return {
       vstrana: String(row.vstrana),
       ballotOrder: typeof row.ballot_order === "number" ? row.ballot_order : null,
-      ballotNumber: Number(row.ballot_number ?? 0),
+      ballotNumber,
       name: parts.join(" "),
-      votes: Number(row.votes ?? 0),
+      votes,
       votesPct: typeof row.votes_pct === "number" ? row.votes_pct : null,
+      votesChange: compareValue(votes, previousVotes),
+      previousVotes,
     }
   })
 }
@@ -272,7 +298,7 @@ export function listRegisteredCandidates(
   db: Database,
   kodzastup: string,
   vstrana: string,
-): { ballotNumber: number; name: string; votes: number | null; elected: boolean }[] {
+): { ballotNumber: number; name: string; votes: number | null; votesPct: number | null; elected: boolean }[] {
   // The registry supplies the FULL list but is published before the election, so its
   // vote counts are all zero and nobody is marked elected. The live result document
   // supplies real votes, but only for those elected. Neither alone answers FR-034, so
@@ -281,7 +307,7 @@ export function listRegisteredCandidates(
     .query(
       `SELECT k.por_str_hl AS ballot_number, k.name,
               k.votes AS registry_votes, k.elected AS registry_elected,
-              r.votes AS result_votes, r.elected AS result_elected
+              r.votes AS result_votes, r.votes_pct AS result_votes_pct, r.elected AS result_elected
          FROM council_party cp
          JOIN candidate k ON k.kodzastup = cp.kodzastup AND k.ostrana = cp.ostrana
          LEFT JOIN result_snapshot s
@@ -305,6 +331,8 @@ export function listRegisteredCandidates(
       // has an UNKNOWN vote count, not zero - and showing zero would state a figure the
       // source never published (FR-029). It renders as a dash.
       votes: resultVotes,
+      // The published share of the party's votes, only where the result carries one.
+      votesPct: typeof row.result_votes_pct === "number" ? row.result_votes_pct : null,
       elected: Number(row.result_elected ?? 0) === 1,
     }
   })
