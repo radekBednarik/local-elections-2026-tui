@@ -836,7 +836,6 @@ export class App {
     if (resized.notice !== null) this.notice = resized.notice
 
     if (isTooSmall(width, height)) {
-      this.chartShownLastDraw = false
       frame.setBreadcrumb("")
       frame.setWarning(null)
       applyPlainLines(frame, tooSmallMessage(width, height), width)

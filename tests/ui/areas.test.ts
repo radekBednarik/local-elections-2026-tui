@@ -373,6 +373,23 @@ describe("the candidate table (006 US3, research R5)", () => {
     }
   })
 
+  test("a list reached from search, with no ballot position, still finds the elected (T049)", () => {
+    const bare = openMemoryDatabase()
+    try {
+      ingestCouncil(bare, "551082", BOHUNICE)
+      const { rows } = buildCandidatesRows(bare, "551082", "768", null, 76)
+      const text = toTextLines(rows).join("\n")
+      expect(text).not.toContain("nejsou k dispozici žádní kandidáti")
+      const elected = data(rows)
+      expect(elected).toHaveLength(4)
+      expect(elected.map((r) => r.cells[3]?.text)).toEqual(
+        [5.18, 5.14, 4.9, 4.91].map((p) => formatPercent(p)),
+      )
+    } finally {
+      bare.close()
+    }
+  })
+
   test("the elected-only list, without reference data, has the same columns", () => {
     const bare = openMemoryDatabase()
     try {

@@ -548,3 +548,12 @@ ships alone.
 - **Red first:** every test task must be seen FAILING before its implementation task starts.
 - **Commits:** one per task, or per test-then-implementation pair, in the repository's
   Conventional Commits style (`feat:`, `test:`, `docs:`).
+
+---
+
+## Phase 7: Convergence
+
+- [X] T049 CRITICAL: Add a failing-first test to `tests/ui/areas.test.ts` for the change T041 made to `buildCandidatesRows` in `src/ui/views/areas.ts:463`. It calls `listElected` with `party?.ballotOrder ?? ballotOrder`, and no test has covered it. The case: without reference data (`openMemoryDatabase()` plus `ingestCouncil(bare, "551082", …)`), `buildCandidatesRows(bare, "551082", "768", null, 76)`, a list reached from search with no ballot position, must list ANO 2011's four elected members with their votes and published `Podíl`. Before T041 it reported "nejsou k dispozici žádní kandidáti". Confirm the test fails with the lookup reverted to `ballotOrder`, then restore it. Per Constitution II (contradicts).
+  - (Done 2026-09-29. Test added in `tests/ui/areas.test.ts`. With the lookup reverted to `ballotOrder` it failed (0 pass, 1 fail); with `party?.ballotOrder ?? ballotOrder` restored it passes. Production code unchanged.)
+- [X] T050 Decide on the `this.chartShownLastDraw = false` line in the too-small branch of `App.draw()` (`src/ui/app.ts:839`), added during T048. No test covers it, and no path observes it: any terminal below the 80-column minimum is also below the chart's 93, so `chartAfterResize` has already closed the chart before the too-small branch runs. Remove it. Or, if a real case needs it, pin that case with a test, extracting a pure helper if the App cannot be driven. Per Constitution II, plan: research R4 (unrequested).
+  - (Done 2026-09-29. Removed. It could not be observed, so there was no behaviour for a test to pin. 1172 pass, 0 fail across 55 files; typecheck and biome clean.)
