@@ -10,11 +10,16 @@ import { join } from "node:path"
 import type { LogEntry } from "../../src/logging/logger.ts"
 import { extractArchiveFile } from "../../src/reference/archive.ts"
 import { loadReference, type ReferenceArchives } from "../../src/reference/loader.ts"
-import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
+import { ingestCouncil, ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
+import { listCouncilParties } from "../../src/storage/queries/areas.ts"
+import { availableCouncilTypes } from "../../src/storage/queries/national.ts"
 import { segmentsFor } from "../../src/ui/chrome/breadcrumb.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
 import { composeScreen, shownSources, sourcesForScreen } from "../../src/ui/screen.ts"
+import { buildCouncilRows } from "../../src/ui/views/areas.ts"
+import { buildChartRows, chartContext, rankSlices } from "../../src/ui/views/chart.ts"
+import { buildNationalRows } from "../../src/ui/views/national-rows.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
 const read = (name: string) => readFileSync(join(FIXTURES, name), "utf8")
@@ -254,5 +259,177 @@ describe("the logs screens (004 FR-009, FR-011)", () => {
     expect(
       segmentsFor(db, [{ kind: "national" }, { kind: "logs" }, { kind: "log-entry", seq: 1 }]).slice(1),
     ).toEqual(["Záznamy", "Záznam"])
+  })
+})
+
+describe("national chart context (006 research R8)", () => {
+  const currentNational = () =>
+    db
+      .query(
+        `SELECT id FROM result_snapshot
+          WHERE area_kind = 'national' AND oznac_typu = 'OBEC' AND is_current = 1`,
+      )
+      .get() as { id: number }
+
+  test("holds every party in the snapshot, not only the twenty the table shows", () => {
+    const context = chartContext(db, { kind: "national" }, "OBEC")
+    const { n } = db
+      .query("SELECT COUNT(*) AS n FROM party_result WHERE snapshot_id = $id")
+      .get({ id: currentNational().id }) as { n: number }
+    expect(n).toBeGreaterThan(20)
+    expect(context?.entries).toHaveLength(n)
+  })
+
+  test("keeps the table's order: seats, then votes", () => {
+    const entries = chartContext(db, { kind: "national" }, "OBEC")?.entries ?? []
+    const table = db
+      .query(
+        `SELECT name FROM party_result WHERE snapshot_id = $id
+          ORDER BY seats_won DESC, votes DESC, rowid ASC`,
+      )
+      .all({ id: currentNational().id }) as { name: string }[]
+    expect(entries.map((e) => e.name)).toEqual(table.map((r) => r.name))
+  })
+
+  test("the whole is the sum of the votes, and every party is counted", () => {
+    const context = chartContext(db, { kind: "national" }, "OBEC")
+    expect(context?.whole).toBe(context?.entries.reduce((sum, e) => sum + e.votes, 0))
+    expect(context?.total).toBe(context?.entries.length)
+    expect(context?.unit).toBe("stran")
+    expect(context?.aggregate).toBe("sum")
+  })
+
+  test("the title names the country and the council type, the subtitle the count's state", () => {
+    const context = chartContext(db, { kind: "national" }, "OBEC")
+    expect(availableCouncilTypes(db).length).toBeGreaterThan(1)
+    expect(context?.title).toBe("Graf · ČR · obce")
+    expect(chartContext(db, { kind: "national" }, "MCMO")?.title).toBe("Graf · ČR · MČ a MO")
+    // The fixture is the final national result.
+    expect(context?.subtitle).toBe("podíl platných hlasů · konečné")
+  })
+
+  test("before anything is published there is nothing to chart", () => {
+    const empty = openMemoryDatabase()
+    const context = chartContext(empty, { kind: "national" }, "OBEC")
+    expect(context?.entries).toEqual([])
+    expect(context?.title).toBe("Graf · ČR")
+    expect(context?.subtitle).toBe("podíl platných hlasů · průběžné")
+  })
+
+  test("every ranked legend figure is the table's figure for the same party (SC-002)", () => {
+    const context = chartContext(db, { kind: "national" }, "OBEC")
+    if (context === null) throw new Error("no chart")
+    const table = buildNationalRows(db, { width: 100 }).filter((r) => r.kind === "data")
+    const legend = buildChartRows(context, 47, 27).slice(-7)
+    // The table lists twenty parties by seats and the chart ranks by votes, so a party
+    // strong in votes but not in seats can be charted without being in the table. Every
+    // party that is in both must read the same in both.
+    let compared = 0
+    rankSlices(context)
+      .slice(0, 6)
+      .forEach((slice, index) => {
+        const row = table.find((r) => r.cells[0]?.text === slice.name)
+        if (row === undefined) return
+        const text = legend[index]?.cells.map((c) => c.text).join("") ?? ""
+        expect(text).toContain(row.cells[1]?.text ?? "?")
+        expect(text).toContain(row.cells[2]?.text ?? "?")
+        compared += 1
+      })
+    // At least half, so the test cannot pass by comparing nothing. In the fixture two of
+    // the six are outside the table's twenty.
+    expect(compared).toBeGreaterThanOrEqual(3)
+  })
+
+  test("a screen without a breakdown has no chart", () => {
+    expect(chartContext(db, { kind: "districts" }, "OBEC")).toBeNull()
+    expect(chartContext(db, { kind: "help" }, "OBEC")).toBeNull()
+  })
+})
+
+describe("council chart context (006 US2)", () => {
+  const BRNO = { kind: "council", kodzastup: "582786" } as const
+  beforeEach(() => {
+    ingestCouncil(db, "582786", read("vysledky_obec_582786.xml"))
+  })
+
+  test("one entry per party, in the table's unsorted order", () => {
+    const context = chartContext(db, BRNO, "OBEC")
+    expect(context?.entries.map((e) => e.name)).toEqual(listCouncilParties(db, "582786").map((p) => p.name))
+    expect(context?.total).toBe(context?.entries.length)
+    expect(context?.whole).toBe(context?.entries.reduce((sum, e) => sum + e.votes, 0))
+    expect(context?.unit).toBe("stran")
+  })
+
+  test("the title names the council and the subtitle the count's state", () => {
+    const context = chartContext(db, BRNO, "OBEC")
+    expect(context?.title).toBe("Graf · Brno")
+    expect(context?.subtitle).toMatch(/^podíl platných hlasů · (průběžné|konečné)$/)
+  })
+
+  test("a council without a result, or an unknown one, has nothing to chart", () => {
+    // A council in the codelist that no fetched document has reported on yet.
+    const { kodzastup } = db
+      .query(
+        `SELECT kodzastup FROM council c WHERE NOT EXISTS (
+           SELECT 1 FROM result_snapshot s
+            WHERE s.area_kind = 'council' AND s.area_id = c.kodzastup AND s.is_current = 1)
+         LIMIT 1`,
+      )
+      .get() as { kodzastup: string }
+    expect(chartContext(db, { kind: "council", kodzastup }, "OBEC")?.entries).toEqual([])
+    expect(chartContext(db, { kind: "council", kodzastup: "000000" }, "OBEC")?.entries).toEqual([])
+  })
+
+  test("every ranked legend figure appears verbatim in the council table (SC-002)", () => {
+    const context = chartContext(db, BRNO, "OBEC")
+    if (context === null) throw new Error("no chart")
+    const table = buildCouncilRows(db, "582786", 100).rows.filter((r) => r.kind === "data")
+    const legend = buildChartRows(context, 47, 27).slice(-7)
+    rankSlices(context)
+      .slice(0, 6)
+      .forEach((slice, index) => {
+        const row = table.find((r) => r.cells[1]?.text === slice.name)
+        const text = legend[index]?.cells.map((c) => c.text).join("") ?? ""
+        expect(row).toBeDefined()
+        expect(text).toContain(row?.cells[2]?.text ?? "?")
+        expect(text).toContain(row?.cells[3]?.text ?? "?")
+      })
+  })
+})
+
+describe("candidates chart context (006 US3)", () => {
+  const ANO = { kind: "candidates", kodzastup: "551082", vstrana: "768", ballotOrder: 3 } as const
+  beforeEach(() => {
+    ingestCouncil(db, "551082", read("vysledky_obec_551082.xml"))
+  })
+
+  test("the elected candidates, in ballot order, with their published share of the party", () => {
+    const context = chartContext(db, ANO, "OBEC")
+    expect(context?.entries.map((e) => [e.votes, e.sharePct])).toEqual([
+      [868, 5.18],
+      [862, 5.14],
+      [821, 4.9],
+      [824, 4.91],
+    ])
+    expect(context?.entries[0]?.name).toBe("Ing. Antonín Brzobohatý")
+  })
+
+  test("the whole is the party's votes and the total its candidate count", () => {
+    const context = chartContext(db, ANO, "OBEC")
+    expect(context?.whole).toBe(16752)
+    expect(context?.total).toBe(21)
+    expect(context?.unit).toBe("kand.")
+    expect(context?.aggregate).toBe("remainder")
+    expect(context?.title).toBe("Graf · ANO 2011")
+    expect(context?.subtitle).toMatch(/^podíl hlasů strany · (průběžné|konečné)$/)
+  })
+
+  test("a party reached from search, without a ballot position, finds the same candidates", () => {
+    const fromSearch = chartContext(db, { ...ANO, ballotOrder: null }, "OBEC")
+    expect(fromSearch?.entries).toEqual(chartContext(db, ANO, "OBEC")?.entries ?? [])
+  })
+
+  test("a party with nobody elected has nothing to chart", () => {
+    expect(chartContext(db, { ...ANO, vstrana: "999999" }, "OBEC")?.entries).toEqual([])
   })
 })

@@ -19,7 +19,8 @@ import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { addToWatchlist } from "../../src/storage/queries/watchlist.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
-import { applyFrameState, type FrameState, frameState } from "../../src/ui/chrome/state.ts"
+import { chartPaneWidth } from "../../src/ui/chrome/panel.ts"
+import { applyFrameState, applyPanel, type FrameState, frameState } from "../../src/ui/chrome/state.ts"
 import type { SourceStatus } from "../../src/ui/components/status.ts"
 import type { Column } from "../../src/ui/format.ts"
 import type { Screen } from "../../src/ui/navigation.ts"
@@ -28,6 +29,7 @@ import { cell, type SemanticRow, toTextLines } from "../../src/ui/row.ts"
 import { composeScreen, type ScreenContent } from "../../src/ui/screen.ts"
 import { nextSort, type SortState, UNSORTED } from "../../src/ui/sort.ts"
 import { MONOCHROME, THEME_NAMES, type Theme, themeByName } from "../../src/ui/theme/themes.ts"
+import { chartContext } from "../../src/ui/views/chart.ts"
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/2026")
 const read = (name: string) => readFileSync(join(FIXTURES, name), "utf8")
@@ -815,6 +817,90 @@ describe("the logs view follows the theme (004 FR-020, SC-005)", () => {
       expect(setup.captureCharFrame()).toContain("VAROVÁNÍ")
     } finally {
       setup.renderer.destroy()
+    }
+  })
+})
+
+describe("the chart pane is painted from the theme (006 FR-006, FR-007)", () => {
+  /** Draws the national overview with the chart pane, in each theme in turn. */
+  async function paintChart(themes: Theme[]): Promise<{ ch: string; fg: string; bg: string }[][]> {
+    const setup = await createTestRenderer({ width: 100, height: 30 })
+    try {
+      const frame = new Frame(setup.renderer)
+      frame.attach(setup.renderer.root)
+      await setup.renderOnce()
+      const context = chartContext(db, { kind: "national" }, "OBEC")
+      if (context === null) throw new Error("no national chart")
+      const width = chartPaneWidth(frame.rawContentWidth)
+      let cells: { ch: string; fg: string; bg: string }[] = []
+      const out: { ch: string; fg: string; bg: string }[][] = []
+      for (const theme of themes) {
+        applyPanel(frame, db, theme, { kind: "chart", context, width, height: frame.contentHeight })
+        applyFrameState(
+          frame,
+          frameState({
+            db,
+            nav: new Navigation(),
+            councilType: "OBEC",
+            query: "",
+            theme,
+            sort: UNSORTED,
+            width: 100,
+            contentWidth: frame.contentWidth,
+            contentHeight: frame.contentHeight,
+            sourceStatus: null,
+            notice: null,
+            chartShown: true,
+            chartFits: true,
+          }),
+          theme,
+        )
+        await setup.renderOnce()
+        const left = frame.panel.x
+        cells = setup
+          .captureSpans()
+          .lines.flatMap((line) =>
+            line.spans.flatMap((span) =>
+              [...span.text].map((ch) => ({ ch, fg: hexOf(span.fg), bg: hexOf(span.bg) })),
+            ),
+          )
+        // Only the pane's cells: every captured line is 100 wide, so a cell's column is
+        // its index modulo the width.
+        out.push(cells.filter((_, index) => index % 100 > left))
+      }
+      return out
+    } finally {
+      setup.renderer.destroy()
+    }
+  }
+
+  test("each slice's texture is drawn in its rank's colour on the panel", async () => {
+    const [pane = []] = await paintChart([TOKYO])
+    const first = pane.filter((c) => c.ch === "█")
+    expect(first.length).toBeGreaterThan(0)
+    for (const c of first) {
+      expect(c.fg).toBe(slot(TOKYO, "slice1"))
+      expect(c.bg).toBe(slot(TOKYO, "panel"))
+    }
+    expect(pane.filter((c) => c.ch === "▓").every((c) => c.fg === slot(TOKYO, "slice2"))).toBe(true)
+  })
+
+  test("a theme switch repaints the pane at once", async () => {
+    const gruvbox = themeByName("gruvbox")
+    const [, pane = []] = await paintChart([TOKYO, gruvbox])
+    const first = pane.filter((c) => c.ch === "█")
+    expect(first.length).toBeGreaterThan(0)
+    for (const c of first) expect(c.fg).toBe(slot(gruvbox, "slice1"))
+  })
+
+  test("without colour nothing is painted and the textures carry the chart", async () => {
+    const [pane = []] = await paintChart([MONOCHROME])
+    for (const texture of ["█", "▓", "▚", "▒", "▞", "░", "·"]) {
+      expect(pane.some((c) => c.ch === texture)).toBe(true)
+    }
+    expect(pane.every((c) => c.bg === "none")).toBe(true)
+    for (const name of ["slice1", "slice2", "slice3"] as const) {
+      expect(pane.some((c) => c.fg === slot(TOKYO, name))).toBe(false)
     }
   })
 })

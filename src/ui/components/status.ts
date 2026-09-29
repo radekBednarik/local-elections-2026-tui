@@ -116,7 +116,7 @@ export const NATIONAL_HINTS: KeyHint[] = [
 export function contextHints(context: ActionContext): KeyHint[] {
   return availableActions(context).map((action) => ({
     key: action.shortKey ?? action.key,
-    label: action.hint,
+    label: action.hintFor?.(context) ?? action.hint,
   }))
 }
 

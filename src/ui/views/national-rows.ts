@@ -14,7 +14,17 @@ import { ageSeconds, formatAge, statusLabel } from "../../domain/status.ts"
 import { readNationalParties, readNationalTotals } from "../../storage/queries/national.ts"
 import { BAR_WIDTH, bar, barsFit } from "../bar.ts"
 import { type Column, formatInteger, formatPercent, formatProgress, pad, withChange } from "../format.ts"
-import { badge, blank, type Cell, cell, line, roleForChange, type SemanticRow, tableHeader } from "../row.ts"
+import {
+  badge,
+  blank,
+  type Cell,
+  cell,
+  cellsWide,
+  line,
+  roleForChange,
+  type SemanticRow,
+  tableHeader,
+} from "../row.ts"
 
 const TYPE_LABELS: Record<string, string> = {
   OBEC: "Zastupitelstva obcí",
@@ -89,6 +99,29 @@ function cardRows(cards: Card[], width: number): SemanticRow[] | null {
 // `roleForChange` moved to row.ts in T116, once the watchlist needed the same mapping.
 export { roleForChange }
 
+/**
+ * Summary items joined on one line, or wrapped between items when that line would not
+ * fit (006 FR-012).
+ *
+ * Beside the chart pane the table is narrow, and a summary line cut by the clamp would
+ * lose a figure off its end. Wrapping happens only between items, so no figure is ever
+ * split, and a line that fits is exactly the line it always was.
+ */
+function summaryLines(items: string[], separator: string, width: number, role?: Cell["role"]): SemanticRow[] {
+  const whole = items.join(separator)
+  if ([...whole].length <= width) return [line(whole, role)]
+  const lines: string[] = []
+  for (const item of items) {
+    const last = lines[lines.length - 1]
+    if (last !== undefined && [...`${last}${separator}${item}`].length <= width) {
+      lines[lines.length - 1] = `${last}${separator}${item}`
+    } else {
+      lines.push(item)
+    }
+  }
+  return lines.map((text) => line(text, role))
+}
+
 /** Builds the national overview as semantic rows. */
 export function buildNationalRows(db: Database, options: NationalRowsOptions = {}): SemanticRow[] {
   const oznacTypu = options.oznacTypu ?? "OBEC"
@@ -107,15 +140,14 @@ export function buildNationalRows(db: Database, options: NationalRowsOptions = {
 
   // The title with the status as a badge, and the publisher's own timestamp (FR-021).
   const age = ageSeconds(totals.publishedAt, now)
+  const title = cell(TYPE_LABELS[oznacTypu] ?? oznacTypu, "heading")
+  const status = badge(`${totals.isFinal ? "✓" : "◌"} ${statusLabel(totals)}`)
   const rows: SemanticRow[] = [
-    {
-      cells: [
-        cell(TYPE_LABELS[oznacTypu] ?? oznacTypu, "heading"),
-        cell("  "),
-        badge(`${totals.isFinal ? "✓" : "◌"} ${statusLabel(totals)}`),
-      ],
-    },
-    line(`Zveřejněno: ${totals.publishedAt} (${formatAge(age)})`, "muted"),
+    // The badge moves under the title rather than being cut off beside the chart pane.
+    ...(cellsWide([title, cell("  "), status]) <= width
+      ? [{ cells: [title, cell("  "), status] }]
+      : [{ cells: [title] }, { cells: [status] }]),
+    ...summaryLines([`Zveřejněno: ${totals.publishedAt}`, `(${formatAge(age)})`], " ", width, "muted"),
     blank(),
   ]
 
@@ -125,7 +157,10 @@ export function buildNationalRows(db: Database, options: NationalRowsOptions = {
   )
   const turnout = withChange(formatPercent(totals.turnoutPct), totals.changes.turnoutPct)
   const valid = withChange(formatInteger(totals.validVotes), totals.changes.validVotes)
-  const detail = `Voliči: ${formatInteger(totals.votersRegistered)}   Vydané obálky: ${formatInteger(totals.envelopesIssued)}`
+  const detail = [
+    `Voliči: ${formatInteger(totals.votersRegistered)}`,
+    `Vydané obálky: ${formatInteger(totals.envelopesIssued)}`,
+  ]
 
   // Cards cost their three rows, the detail line and a blank; collapse only when that
   // would leave fewer than ten table rows in view (FR-021).
@@ -161,13 +196,21 @@ export function buildNationalRows(db: Database, options: NationalRowsOptions = {
     : null
 
   if (cards !== null) {
-    rows.push(...cards, line(detail, "muted"), blank())
+    rows.push(...cards, ...summaryLines(detail, "   ", width, "muted"), blank())
   } else {
     // The compact form: the same figures and labels on as few lines as stay readable.
     rows.push(
-      line(`Sečteno okrsků: ${counted}   ${formatPercent(totals.districtsPct)}   Účast: ${turnout}`),
-      line(`Platné hlasy: ${valid}   Zvolení zastupitelé: ${formatInteger(totals.seatsTotal)}`),
-      line(detail, "muted"),
+      ...summaryLines(
+        [`Sečteno okrsků: ${counted}`, formatPercent(totals.districtsPct), `Účast: ${turnout}`],
+        "   ",
+        width,
+      ),
+      ...summaryLines(
+        [`Platné hlasy: ${valid}`, `Zvolení zastupitelé: ${formatInteger(totals.seatsTotal)}`],
+        "   ",
+        width,
+      ),
+      ...summaryLines(detail, "   ", width, "muted"),
       blank(),
     )
   }
@@ -179,17 +222,28 @@ export function buildNationalRows(db: Database, options: NationalRowsOptions = {
   }
 
   const fixed = 12 + 11 + 11 + 9 + 4
+  // The seat columns go before any figure is cut (006 FR-012, extending FR-074): they
+  // stay while a name of twenty columns still fits beside them. Beside the chart pane,
+  // or the watchlist on a narrow terminal, the table keeps the name, the votes and the
+  // share, and the name takes whatever is left.
+  const seats = width >= fixed + 20
   // The same budget the council table keeps: a name column below thirty columns stops
   // saying which party a row belongs to, and the name outranks the aid (FR-074).
-  const bars = barsFit(width, fixed + 30)
-  const columns: Column[] = [
-    { header: "Volební strana", width: Math.max(20, width - fixed - (bars ? BAR_WIDTH + 1 : 0)) },
-    { header: "Hlasy", width: 12, align: "right" },
-    { header: "Podíl", width: 11, align: "right" },
-    ...(bars ? [{ header: "", width: BAR_WIDTH } satisfies Column] : []),
-    { header: "Mandáty", width: 11, align: "right" },
-    { header: "Podíl", width: 9, align: "right" },
-  ]
+  const bars = seats && barsFit(width, fixed + 30)
+  const columns: Column[] = seats
+    ? [
+        { header: "Volební strana", width: Math.max(20, width - fixed - (bars ? BAR_WIDTH + 1 : 0)) },
+        { header: "Hlasy", width: 12, align: "right" },
+        { header: "Podíl", width: 11, align: "right" },
+        ...(bars ? [{ header: "", width: BAR_WIDTH } satisfies Column] : []),
+        { header: "Mandáty", width: 11, align: "right" },
+        { header: "Podíl", width: 9, align: "right" },
+      ]
+    : [
+        { header: "Volební strana", width: Math.max(14, width - 12 - 11 - 2) },
+        { header: "Hlasy", width: 12, align: "right" },
+        { header: "Podíl", width: 11, align: "right" },
+      ]
 
   rows.push(...tableHeader(columns))
 
@@ -204,8 +258,15 @@ export function buildNationalRows(db: Database, options: NationalRowsOptions = {
         // replacement for it (FR-070, FR-071).
         cell(formatPercent(party.votesPct)),
         ...(bars ? [{ text: bar(party.votesPct === null ? null : party.votesPct / 100), bar: true }] : []),
-        cell(withChange(formatInteger(party.seatsWon), party.seatsChange), roleForChange(party.seatsChange)),
-        cell(formatPercent(party.seatsPct)),
+        ...(seats
+          ? [
+              cell(
+                withChange(formatInteger(party.seatsWon), party.seatsChange),
+                roleForChange(party.seatsChange),
+              ),
+              cell(formatPercent(party.seatsPct)),
+            ]
+          : []),
       ],
     })
   }

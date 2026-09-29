@@ -3,6 +3,7 @@ import { formatAge } from "../../src/domain/status.ts"
 import type { Subscription } from "../../src/sources/scheduler.ts"
 import {
   allFinal,
+  contextHints,
   isTooSmall,
   keyHintLine,
   MIN_COLUMNS,
@@ -11,6 +12,7 @@ import {
   sourceStatus,
   tooSmallMessage,
 } from "../../src/ui/components/status.ts"
+import type { ActionContext } from "../../src/ui/palette/actions.ts"
 
 function sub(overrides: Partial<Subscription> = {}): Subscription {
   return {
@@ -209,5 +211,27 @@ describe("finality indicator (FR-008)", () => {
 
   test("is off when nothing is shown", () => {
     expect(allFinal([final("national")], [])).toBe(false)
+  })
+})
+
+describe("the chart chip (006 research R6)", () => {
+  const national = (overrides: Partial<ActionContext> = {}): ActionContext => ({
+    screen: { kind: "national" },
+    depth: 1,
+    rowCount: 0,
+    councilTypes: 1,
+    searchActive: false,
+    sortableColumns: 0,
+    ...overrides,
+  })
+  const chip = (context: ActionContext) => contextHints(context).find((h) => h.key === "g")
+
+  test("reads 'g graf' while closed and 'g zavřít graf' while open", () => {
+    expect(chip(national({ chartFits: true }))?.label).toBe("graf")
+    expect(chip(national({ chartFits: true, chartOpen: true }))?.label).toBe("zavřít graf")
+  })
+
+  test("is not offered when the chart does not fit", () => {
+    expect(chip(national({ chartFits: false }))).toBeUndefined()
   })
 })

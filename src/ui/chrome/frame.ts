@@ -34,7 +34,7 @@ import {
 } from "@opentui/core"
 import { slotColor, TRANSPARENT } from "../theme/apply.ts"
 import type { Slot, Theme } from "../theme/themes.ts"
-import { PANEL_COST, PANEL_WIDTH } from "./panel.ts"
+import { PANEL_WIDTH } from "./panel.ts"
 
 /** The vertical scroll bar overlays the last column of the viewport. */
 const SCROLLBAR_WIDTH = 1
@@ -75,6 +75,8 @@ export class Frame {
   /** What each pooled row was last drawn with, so an unchanged row can be skipped. */
   private rowKeys: (string | undefined)[] = []
   private panelVisible = false
+  /** How wide the side panel is: the watchlist's width, or the chart pane's (006 R2). */
+  private panelWidth = PANEL_WIDTH
   /** The theme the surfaces were last painted with, for the warning row's tone. */
   private theme: Theme | null = null
   private rowHandler: ((index: number, event: MouseEvent) => void) | null = null
@@ -222,8 +224,18 @@ export class Frame {
     if (this.theme !== null) this.warningBox.backgroundColor = slotColor(this.theme, tone) ?? TRANSPARENT
   }
 
-  /** Shows or hides the side panel (FR-056). */
-  setPanelVisible(visible: boolean): void {
+  /**
+   * Shows or hides the side panel (FR-056), at the width of what it is showing.
+   *
+   * The watchlist and the chart pane share this one region (006 research R2), so only
+   * its width changes between them. A width change never removes and re-adds the panel:
+   * swapping children of the body is what put the scroll bar on the wrong edge.
+   */
+  setPanelVisible(visible: boolean, width = PANEL_WIDTH): void {
+    if (width !== this.panelWidth) {
+      this.panelWidth = width
+      this.panel.width = width
+    }
     if (visible === this.panelVisible) return
     this.panelVisible = visible
     if (visible) this.body.add(this.panel)
@@ -340,12 +352,13 @@ export class Frame {
   /**
    * Columns a content row may use.
    *
-   * The rail costs one column, the side panel its width, and the scroll bar one:
+   * The rail costs one column, the side panel its width plus its own rail, and the
+   * scroll bar one:
    * the bar draws over the last column of the viewport rather than beside it, so a row
    * written to the full width loses its final character underneath it.
    */
   get contentWidth(): number {
-    return Math.max(0, this.rawContentWidth - (this.panelVisible ? PANEL_COST : 0))
+    return Math.max(0, this.rawContentWidth - (this.panelVisible ? this.panelWidth + 1 : 0))
   }
 
   /** What the content area would have if the panel were closed, for the fit rule. */

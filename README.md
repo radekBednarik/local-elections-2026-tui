@@ -43,6 +43,15 @@ not the row you had selected.
 - **Side panel** (`Ctrl+B`) – your watchlist beside the table, with live turnout. It hides
   itself when the terminal is too narrow to show it without squeezing the table, and comes
   back when there is room. Its state survives a restart.
+- **Chart** (`g`) – on the national overview, a council or a party's candidate list, the
+  view splits: the table stays on the left, still fully usable, and a pie chart of the
+  same breakdown opens on the right with a legend giving each slice's votes and share. The
+  six largest entries get a slice each and the rest are one `Ostatní` slice. For
+  candidates, whose preferential votes are published only for those elected, `Ostatní` is
+  the rest of the party's votes. Every slice has its own fill texture as well as a colour,
+  so the chart reads the same in high contrast and without colour. `g` again, or `Esc`,
+  closes it; the watchlist panel it replaced comes back. It needs a terminal at least 93
+  columns wide, and closes itself if the window shrinks below that.
 - **Logs** (`l`) – everything the application recorded this session, newest selected:
   time, severity, source and message, one line each. `Enter` shows an entry in full,
   `c` copies it and `Shift+C` copies the whole log, `Esc` goes back. Copying uses the
@@ -57,7 +66,8 @@ not the row you had selected.
   match; with `NO_COLOR` nothing is coloured at all. A choice of the old "dark" or "light"
   theme carries over to Tokyo Night or Catppuccin Latte.
 - **Bars** – a proportional bar beside each published share, drawn in eighth-blocks. On a
-  narrow terminal the bars go before any figure does.
+  narrow terminal, or beside the chart, the bars go first and then the seat columns,
+  before any figure is cut.
 - **Mouse, optionally** – click a row to select it, double-click to open it, wheel to
   scroll. Nothing needs a mouse: every action has a key, and the chrome is not clickable.
   `Shift`+drag still gives you your terminal's own text selection.
@@ -68,7 +78,9 @@ Sorting is marked with `▾`, the selected row with `▶`, a risen figure with `
 
 **No electoral party is coloured differently from any other.** With thousands of local
 candidate lists there is no authoritative party colour, and inventing one would imply an
-affiliation the source never published.
+affiliation the source never published. The chart's slice colours belong to the rank, not
+the party: the largest slice always takes the first colour, the next the second. A party's
+colour can therefore change between refreshes, and the legend is always the key.
 
 ## What it deliberately does not do
 

@@ -43,6 +43,34 @@ export function panelFits(contentAreaWidth: number): boolean {
 }
 
 /**
+ * Columns the table keeps beside the chart pane, its selection gutter included (006
+ * research R3). Enough for the reduced tables of every chart screen: name, votes and
+ * share, with the name no narrower than fourteen columns.
+ */
+export const CHART_MIN_TABLE = 50
+
+/** The narrowest chart pane: a pie of radius sixteen and a legend row that fits whole. */
+export const CHART_MIN_PANE = 40
+
+/** Beyond this the pie gains nothing, so the extra width goes to the table. */
+export const CHART_MAX_PANE = 60
+
+/**
+ * The chart pane's width, given what the content area would have without a panel.
+ *
+ * The table's needs come first, as they do for the watchlist (FR-057): the pane takes
+ * what the table can spare, less the pane's own rail, up to its maximum.
+ */
+export function chartPaneWidth(contentAreaWidth: number): number {
+  return Math.min(CHART_MAX_PANE, contentAreaWidth - 1 - CHART_MIN_TABLE)
+}
+
+/** Whether the chart pane fits beside a readable table (006 FR-013): 93 columns and up. */
+export function chartFits(contentAreaWidth: number): boolean {
+  return chartPaneWidth(contentAreaWidth) >= CHART_MIN_PANE
+}
+
+/**
  * The panel's rows.
  *
  * An empty watchlist says how to fill it rather than showing an empty box: a blank

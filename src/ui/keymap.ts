@@ -72,6 +72,9 @@ export function intentFor(key: KeyEvent): Intent | null {
       return { kind: "action", id: shift ? "watchlist" : "watch" }
     case "e":
       return { kind: "action", id: shift ? "export-report" : "export-csv" }
+    // Shift makes no difference to "g": the chart has one action, a toggle (006).
+    case "g":
+      return { kind: "action", id: "chart" }
     case "t":
       return { kind: "action", id: "council-type" }
     case "s":

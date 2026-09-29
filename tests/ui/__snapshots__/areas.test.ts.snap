@@ -1,0 +1,57 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`the council table beside the chart (006 FR-012, research R5) at full width the table is exactly what it was before the chart existed 1`] = `
+[
+  "Brno",
+  "────────────────────────────────────────────────────────────────────────────",
+  "Zastupitelstvo statutárního města",
+  " ✓ konečné výsledky   Okrsky  352 / 352   Účast  41,90 %   Mandáty  55",
+  "",
+  "  Č. Volební strana                             Hlasy       Podíl    Mandáty",
+  "──── ─────────────────────────────────── ──────────── ─────────── ──────────",
+  "  11 SPOLEČNĚ - ODS a TOP 09               ·1 549 837     25,03 %        ·16",
+  "   8 ANO 2011                              ·1 267 461     20,47 %        ·13",
+  "   5 Lidovci a Starostové (KDU-ČSL + St…   ·1 059 032     17,10 %        ·10",
+  "   7 SPD, TRIKOLORA, MORAVANÉ a nezávis…     ·605 982      9,79 %         ·6",
+  "   3 Česká pirátská strana                   ·437 910      7,07 %         ·4",
+  "   1 ČSSD VAŠI STAROSTOVÉ                    ·378 091      6,11 %         ·3",
+  "   4 Zelení a Žít Brno s podporou Ideal…     ·369 539      5,97 %         ·3",
+  "  14 Fakt Brno                               ·157 120      2,54 %         ·0",
+  "   9 PŘÍSAHA - občanské hnutí Roberta Š…     ·118 243      1,91 %         ·0",
+  "   6 Brno Plus a Svobodní                    ·102 015      1,65 %         ·0",
+  "  12 RESTART PRO BRNO                         ·89 436      1,44 %         ·0",
+  "   2 Brno Brňankám a Brňanům! (B3!)           ·56 224      0,91 %         ·0",
+  "  10 Demokratická strana zelených - ZA …       ·1 193      0,02 %         ·0",
+  "  13 JSI PRO? Jistota Solidarita Invest…         ·683      0,01 %         ·0",
+  "",
+  "Městské části a obvody (2)",
+  "  Brno-Bohunice   46,21 %",
+  "  Brno-Bosonohy   62,57 %",
+  "",
+  "Výsledky po jednotlivých okrscích nejsou k dispozici: zveřejňují se pouze dávkově, což je mimo rozsah této aplikace.",
+]
+`;
+
+exports[`the council table beside the chart (006 FR-012, research R5) at full width the table is exactly what it was before the chart existed 2`] = `
+[
+  "Brno-Bohunice (Brno)",
+  "────────────────────────────────────────────────────────────────────────────────────────────────────",
+  "Zastupitelstvo městské části nebo městského obvodu",
+  " ✓ konečné výsledky   Okrsky  13 / 13   Účast  46,21 %   Mandáty  21",
+  "",
+  "  Č. Volební strana                                          Hlasy       Podíl               Mandáty",
+  "──── ──────────────────────────────────────────────── ──────────── ─────────── ────────── ──────────",
+  "   4 KDU-ČSL                                               ·32 584     36,56 % ███▋               ·9",
+  "   3 ANO 2011                                              ·16 752     18,80 % █▉                 ·4",
+  "   8 Pro Bohunice s podporou Sociální demokracie           ·10 121     11,36 % █▏                 ·2",
+  "   2 SPD, Trikolora, Moravané a nezávislí                   ·8 653      9,71 % █                  ·2",
+  "   1 SPOLEČNĚ TOP 09 a nezávislí                            ·6 916      7,76 % ▊                  ·2",
+  "   6 Občanská demokratická strana                           ·6 791      7,62 % ▊                  ·1",
+  "   5 Brno Plus                                              ·6 439      7,22 % ▊                  ·1",
+  "   7 RESTART PRO BRNO                                         ·873      0,98 % ▏                  ·0",
+  "",
+  "Rozdělení mandátů ■■■■■■■■■ ■■■■ ■■ ■■ ■■ ■ ■  21",
+  "",
+  "Výsledky po jednotlivých okrscích nejsou k dispozici: zveřejňují se pouze dávkově, což je mimo rozsah této aplikace.",
+]
+`;

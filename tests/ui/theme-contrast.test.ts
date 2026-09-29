@@ -35,6 +35,14 @@ const PAIRS: [Slot, number, Slot[]][] = [
   ["muted", 3, SURFACES],
   ["subtle", 3, SURFACES],
   ["onAccent", 4.5, ["accent", "primary", "warning", "success"]],
+  // The chart's slice colours are graphics, not text: WCAG 1.4.11 asks 3:1 for non-text
+  // content. The pie and its legend swatches are drawn only on the panel (006 research R7).
+  ["slice1", 3, ["panel"]],
+  ["slice2", 3, ["panel"]],
+  ["slice3", 3, ["panel"]],
+  ["slice4", 3, ["panel"]],
+  ["slice5", 3, ["panel"]],
+  ["slice6", 3, ["panel"]],
 ]
 
 describe.each(THEME_NAMES.map((name) => [name]))("theme %s", (name) => {

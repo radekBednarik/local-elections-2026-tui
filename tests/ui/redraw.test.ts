@@ -19,6 +19,7 @@ import { extractArchiveFile } from "../../src/reference/archive.ts"
 import { loadReference, type ReferenceArchives } from "../../src/reference/loader.ts"
 import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
+import { redrawOnResize } from "../../src/ui/app.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
 import { applyFrameState, frameState, viewWidthFor } from "../../src/ui/chrome/state.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
@@ -318,6 +319,35 @@ describe("the refresh keeps the keystroke budget (002 T065, SC-008)", () => {
       expect(median).toBeLessThan(100)
     } finally {
       h.destroy()
+    }
+  })
+})
+
+describe("a resize is drawn at the new size (006 review, FR-013)", () => {
+  // The resize event arrives before OpenTUI lays the tree out again, so a draw made in
+  // it measured the OLD widths: the table stayed composed for the old terminal, and the
+  // chart pane stayed open on a window too narrow for it, until something else redrew.
+  test("the draw after a resize sees the new content width", async () => {
+    const setup = await createTestRenderer({ width: 100, height: 30 })
+    try {
+      const frame = new Frame(setup.renderer)
+      frame.attach(setup.renderer.root)
+      await setup.renderOnce()
+      const seen: number[] = []
+      redrawOnResize(setup.renderer, () => {
+        seen.push(frame.rawContentWidth)
+      })
+      setup.resize(90, 30)
+      await setup.renderOnce()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(seen.at(-1)).toBe(88)
+      // One settling draw per resize, not one per frame from then on.
+      const count = seen.length
+      await setup.renderOnce()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(seen).toHaveLength(count)
+    } finally {
+      setup.renderer.destroy()
     }
   })
 })

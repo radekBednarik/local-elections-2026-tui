@@ -74,6 +74,10 @@ describe("help completeness (FR-005)", () => {
     expect(body).toMatch(/Shift\+C\s+Kopírovat všechny záznamy/)
   })
 
+  test("lists the chart key (006)", () => {
+    expect(renderHelp().join("\n")).toMatch(/\bg\s+Zobrazit nebo skrýt graf/)
+  })
+
   test("explains the polling limit and the polling-district boundary", () => {
     const body = renderHelp().join("\n")
     expect(body).toContain("60 sekund")

@@ -149,7 +149,7 @@ export function composeScreen(db: Database, screen: Screen, options: ScreenOptio
                 ballotOrder: party.ballotOrder,
               }
         },
-        5,
+        view.sortableColumns ?? 5,
       )
     }
 

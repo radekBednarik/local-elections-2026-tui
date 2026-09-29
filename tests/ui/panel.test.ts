@@ -16,7 +16,17 @@ import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { toggleWatchlist } from "../../src/storage/queries/watchlist.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
-import { buildPanelRows, MIN_CONTENT_COLUMNS, PANEL_COST, panelFits } from "../../src/ui/chrome/panel.ts"
+import {
+  buildPanelRows,
+  CHART_MAX_PANE,
+  CHART_MIN_PANE,
+  CHART_MIN_TABLE,
+  chartFits,
+  chartPaneWidth,
+  MIN_CONTENT_COLUMNS,
+  PANEL_COST,
+  panelFits,
+} from "../../src/ui/chrome/panel.ts"
 import { applyFrameState, applyPanel, frameState } from "../../src/ui/chrome/state.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
 import { toTextLines } from "../../src/ui/row.ts"
@@ -100,7 +110,12 @@ describe("the content area always wins (FR-057, T152)", () => {
       const nav = new Navigation()
       nav.push({ kind: "council", kodzastup: "582786" })
 
-      applyPanel(frame, db, themeByName("tokyonight"), panelFits(frame.rawContentWidth))
+      applyPanel(
+        frame,
+        db,
+        themeByName("tokyonight"),
+        panelFits(frame.rawContentWidth) ? { kind: "watchlist" } : null,
+      )
       applyFrameState(
         frame,
         frameState({
@@ -138,7 +153,12 @@ describe("the content area always wins (FR-057, T152)", () => {
 
       // Two passes: the first lets the layout settle so the measured width is real.
       for (let pass = 0; pass < 2; pass += 1) {
-        applyPanel(frame, db, themeByName("tokyonight"), panelFits(frame.rawContentWidth))
+        applyPanel(
+          frame,
+          db,
+          themeByName("tokyonight"),
+          panelFits(frame.rawContentWidth) ? { kind: "watchlist" } : null,
+        )
         applyFrameState(
           frame,
           frameState({
@@ -178,7 +198,7 @@ describe("the content area always wins (FR-057, T152)", () => {
       const frame = new Frame(setup.renderer)
       frame.attach(setup.renderer.root)
       for (const visible of [true, false, true]) {
-        applyPanel(frame, db, themeByName("tokyonight"), visible)
+        applyPanel(frame, db, themeByName("tokyonight"), visible ? { kind: "watchlist" } : null)
         frame.setRows(Array.from({ length: 40 }, (_, i) => `  řádek ${i}`))
         await setup.renderOnce()
         for (const line of setup
@@ -213,5 +233,25 @@ describe("the panel's look (002 T054, FR-018)", () => {
     expect(text).toContain("Brno")
     // formatPercent writes a no-break space before the sign, hence \s.
     expect(text).toMatch(/41,90\s%\s[█▉▊▋▌▍▎▏]/)
+  })
+})
+
+describe("chart pane fit (006 research R3)", () => {
+  // `raw` is the content area without any side panel: the terminal less the rail and the
+  // scroll bar, so a terminal is raw + 2 columns wide.
+  test("the pane takes what the table can spare, up to its maximum", () => {
+    expect(chartPaneWidth(98)).toBe(47)
+    expect(chartPaneWidth(200)).toBe(60)
+  })
+
+  test("the chart is offered from a 93-column terminal", () => {
+    expect(chartFits(91)).toBe(true)
+    expect(chartFits(90)).toBe(false)
+  })
+
+  test("the limits are the table's needs and the pane's", () => {
+    expect(CHART_MIN_TABLE).toBe(50)
+    expect(CHART_MIN_PANE).toBe(40)
+    expect(CHART_MAX_PANE).toBe(60)
   })
 })

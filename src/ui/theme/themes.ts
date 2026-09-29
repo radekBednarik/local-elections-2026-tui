@@ -9,7 +9,10 @@
  * The values are the published palettes of Tokyo Night, Catppuccin, Gruvbox and Nord,
  * with stripe and selection tones chosen between their own surface colours. Tones that
  * missed the contrast floor were nudged until they passed and nothing else was touched
- * (research R9, specs/002-tui-visual-refresh/data-model.md). The contrast test in
+ * (research R9, specs/002-tui-visual-refresh/data-model.md). Three Catppuccin Latte slice
+ * colours were darkened in their own hue the same way, to reach 3:1 on the panel: green
+ * #40a02b → #3c9628, peach #fe640b → #e45401, sky #04a5e5 → #038cc2 (006 research R7).
+ * High contrast paints every slice white; the textures tell them apart. The contrast test in
  * tests/ui/theme-contrast.test.ts is what keeps it that way.
  *
  * These replace the themes that deferred to the terminal's own palette (FR-006a). A
@@ -35,6 +38,15 @@ export const SLOTS = [
   "warning",
   "onAccent",
   "bar",
+  // The chart's slice colours, one per RANK: the largest slice takes slice1, the next
+  // slice2, and so on (006 research R7). Never a colour per party: the colour says
+  // "largest", not who. Every value reaches 3:1 on the panel the pie is drawn on.
+  "slice1",
+  "slice2",
+  "slice3",
+  "slice4",
+  "slice5",
+  "slice6",
 ] as const
 
 export type Slot = (typeof SLOTS)[number]
@@ -101,6 +113,12 @@ const TOKYO_NIGHT: Theme = {
     warning: "#e0af68",
     onAccent: "#1a1b26",
     bar: "#7aa2f7",
+    slice1: "#7aa2f7",
+    slice2: "#bb9af7",
+    slice3: "#9ece6a",
+    slice4: "#ff9e64",
+    slice5: "#7dcfff",
+    slice6: "#f7768e",
   },
 }
 
@@ -129,6 +147,12 @@ const CATPPUCCIN_MOCHA: Theme = {
     warning: "#f9e2af",
     onAccent: "#1e1e2e",
     bar: "#b4befe",
+    slice1: "#89b4fa",
+    slice2: "#cba6f7",
+    slice3: "#a6e3a1",
+    slice4: "#fab387",
+    slice5: "#89dceb",
+    slice6: "#f38ba8",
   },
 }
 
@@ -157,6 +181,12 @@ const GRUVBOX: Theme = {
     warning: "#fabd2f",
     onAccent: "#282828",
     bar: "#8ec07c",
+    slice1: "#83a598",
+    slice2: "#fabd2f",
+    slice3: "#b8bb26",
+    slice4: "#fe8019",
+    slice5: "#8ec07c",
+    slice6: "#fb4934",
   },
 }
 
@@ -185,6 +215,12 @@ const NORD: Theme = {
     warning: "#ebcb8b",
     onAccent: "#2e3440",
     bar: "#88c0d0",
+    slice1: "#88c0d0",
+    slice2: "#b48ead",
+    slice3: "#a3be8c",
+    slice4: "#d08770",
+    slice5: "#81a1c1",
+    slice6: "#bf616a",
   },
 }
 
@@ -213,6 +249,12 @@ const CATPPUCCIN_LATTE: Theme = {
     warning: "#8b5812",
     onAccent: "#eff1f5",
     bar: "#1e66f5",
+    slice1: "#1e66f5",
+    slice2: "#8839ef",
+    slice3: "#3c9628",
+    slice4: "#e45401",
+    slice5: "#038cc2",
+    slice6: "#d20f39",
   },
 }
 
@@ -248,6 +290,12 @@ const HIGH_CONTRAST: Theme = {
     warning: "#ffff00",
     onAccent: "#000000",
     bar: "#ffffff",
+    slice1: "#ffffff",
+    slice2: "#ffffff",
+    slice3: "#ffffff",
+    slice4: "#ffffff",
+    slice5: "#ffffff",
+    slice6: "#ffffff",
   },
 }
 

@@ -41,6 +41,8 @@ export interface PartyRow {
   seatsPct: number | null
   votesChange: ChangeKind
   seatsChange: ChangeKind
+  /** The party's votes in the previous snapshot, or null when there is none (006 R8). */
+  previousVotes: number | null
 }
 
 type SnapshotRow = Record<string, number | string | null>
@@ -92,6 +94,9 @@ export function readNationalTotals(db: Database, oznacTypu = "OBEC"): NationalTo
  *
  * Ordering is a display decision and is applied consistently; it does not alter any
  * figure, and equal values keep the order the source supplied them in.
+ *
+ * `limit = -1` returns every party (SQLite reads a negative limit as none), which is what
+ * the chart needs: its "Ostatní" slice sums every party beyond the sixth (006 R8).
  */
 export function readNationalParties(db: Database, oznacTypu = "OBEC", limit = 100): PartyRow[] {
   const now = snapshot(db, oznacTypu, true)
@@ -133,6 +138,7 @@ export function readNationalParties(db: Database, oznacTypu = "OBEC", limit = 10
       seatsPct: typeof row.seats_pct === "number" ? row.seats_pct : null,
       votesChange: compareValue(votes, prev?.votes ?? null),
       seatsChange: compareValue(seats, prev?.seats ?? null),
+      previousVotes: prev?.votes ?? null,
     }
   })
 }

@@ -93,7 +93,7 @@ for (let cycle = 0; cycle < CYCLES; cycle++) {
 
   // And the whole redraw, renderables included.
   const t1 = performance.now()
-  applyPanel(frame, db, theme, panelFits(frame.rawContentWidth))
+  applyPanel(frame, db, theme, panelFits(frame.rawContentWidth) ? { kind: "watchlist" } : null)
   applyFrameState(
     frame,
     frameState({
