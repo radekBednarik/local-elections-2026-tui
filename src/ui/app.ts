@@ -42,6 +42,7 @@ import { type Intent, intentFor } from "./keymap.ts"
 import { Navigation } from "./navigation.ts"
 import { type ActionContext, type ActionId, NOT_AVAILABLE_HERE, themeOfAction } from "./palette/actions.ts"
 import { Palette } from "./palette/view.ts"
+import { type FetchResult, ManualRefresh } from "./refresh.ts"
 import { composeScreen, type ScreenContent, shownSources, sourcesForScreen } from "./screen.ts"
 import { applySearchKey, type KeyEvent } from "./search-input.ts"
 import { nextSort, type SortState, UNSORTED } from "./sort.ts"
@@ -90,6 +91,8 @@ export class App {
   private query = ""
   /** One-off confirmation line, cleared on the next key press. */
   private notice: string | null = null
+  /** The manual refresh waiting for its sources, so it can say how it ended. */
+  private readonly manualRefresh: ManualRefresh
   /** The logger's dropped count when the logs list was last corrected (004 FR-012). */
   private logsDroppedSeen = 0
   private councilType = "OBEC"
@@ -113,7 +116,9 @@ export class App {
   private themeName: ThemeName | null = null
   private colorEnvironment: ColorEnvironment = readColorEnvironment()
 
-  constructor(private readonly deps: AppDependencies) {}
+  constructor(private readonly deps: AppDependencies) {
+    this.manualRefresh = new ManualRefresh(deps.log)
+  }
 
   private get location(): SourceLocation {
     return {
@@ -624,12 +629,35 @@ export class App {
     this.councilType = types[(index + 1) % types.length] ?? "OBEC"
   }
 
+  /**
+   * Brings the screen's sources forward and says what came of it (FR-019).
+   *
+   * Every outcome is shown in the status row and written to the log: refused by the
+   * 60-second floor, new figures, identical figures, or a failure. Automatic polling
+   * stays silent on success; a refresh the user asked for does not.
+   */
   private async refreshNow(): Promise<void> {
-    for (const source of sourcesForScreen(this.nav.screen)) {
-      this.deps.scheduler.requestRefresh(source.key as SourceKey)
+    const { scheduler } = this.deps
+    const now = new Date()
+    const keys = [...sourcesForScreen(this.nav.screen).map((s) => s.key as SourceKey), "national" as const]
+    const accepted = keys.filter((key) => scheduler.requestRefresh(key, now))
+
+    if (accepted.length === 0) {
+      const waits = keys.map((key) => scheduler.secondsUntilRefresh(key, now)).filter((s) => s > 0)
+      this.notice = this.manualRefresh.refused(waits.length === 0 ? 0 : Math.min(...waits))
+      this.draw()
+      return
     }
-    this.deps.scheduler.requestRefresh("national")
+
+    this.notice = this.manualRefresh.start(accepted)
+    this.draw()
     await this.tick()
+  }
+
+  /** Records one source's result against the pending manual refresh, and reports it once all are in. */
+  private settleRefresh(key: SourceKey, result: FetchResult): void {
+    const notice = this.manualRefresh.settle(key, result)
+    if (notice !== null) this.notice = notice
   }
 
   /** Delegates to the pure rules in search-input.ts. */
@@ -727,11 +755,12 @@ export class App {
           scheduler.unsubscribe(sub.sourceKey)
           log.warn("Zdroj odhlášen, nelze sestavit adresu", { source: sub.sourceKey })
         }
+        this.settleRefresh(sub.sourceKey, "failed")
         this.draw()
         continue
       }
 
-      recordFetch(db, scheduler, sub.sourceKey, outcome, log)
+      this.settleRefresh(sub.sourceKey, recordFetch(db, scheduler, sub.sourceKey, outcome, log))
       this.draw()
       // Yield, so a burst of due sources cannot monopolise the event loop and delay a
       // keystroke past the 100 ms budget in SC-010.
@@ -836,6 +865,9 @@ function isNewReason(log: Logger, key: SourceKey, previous: string | null, reaso
  *
  * A successful ingest passes the document's finality on, which is what takes a final
  * source out of automatic polling (feature 003, FR-001).
+ *
+ * Returns what the fetch did. Automatic polling ignores it, and stays silent on
+ * success; only a manual refresh reports it.
  */
 export function recordFetch(
   db: Database,
@@ -844,7 +876,7 @@ export function recordFetch(
   outcome: FetchOutcome,
   log: Logger,
   now = new Date(),
-): void {
+): FetchResult {
   // A "no usable data yet" reason is logged only when it changes. Before publication
   // every source repeats one on every retry, and those repeats would flood the logs view
   // with nothing new; a transport failure is still logged each time, since a run of them
@@ -860,22 +892,27 @@ export function recordFetch(
         now,
         result.final,
       )
-    } else {
-      // A document failing validation is a failure of the source, not of the
-      // application: the previous snapshot stays on screen (FR-025, FR-027).
-      scheduler.recordFailure(key, result.reason, now)
-      if (isNewReason(log, key, previous, result.reason))
-        log.warn("Dokument odmítnut", { source: key, reason: result.reason })
+      return result.outcomes.some((o) => o.kind !== "unchanged") ? "changed" : "unchanged"
     }
-  } else if (outcome.kind === "not-modified") {
+    // A document failing validation is a failure of the source, not of the
+    // application: the previous snapshot stays on screen (FR-025, FR-027).
+    scheduler.recordFailure(key, result.reason, now)
+    if (isNewReason(log, key, previous, result.reason))
+      log.warn("Dokument odmítnut", { source: key, reason: result.reason })
+    return "failed"
+  }
+  if (outcome.kind === "not-modified") {
     scheduler.recordSuccess(key, {}, now)
-  } else if (outcome.kind === "not-found") {
+    return "not-modified"
+  }
+  if (outcome.kind === "not-found") {
     scheduler.recordFailure(key, NOT_PUBLISHED, now)
     if (isNewReason(log, key, previous, NOT_PUBLISHED)) log.info(NOT_PUBLISHED, { source: key })
-  } else {
-    scheduler.recordFailure(key, outcome.reason, now)
-    log.warn("Stahování selhalo", { source: key, reason: outcome.reason })
+    return "failed"
   }
+  scheduler.recordFailure(key, outcome.reason, now)
+  log.warn("Stahování selhalo", { source: key, reason: outcome.reason })
+  return "failed"
 }
 
 /** Routes a fetched body to the right ingest function. */

@@ -217,15 +217,25 @@ export class Scheduler {
    * otherwise holding it down would bypass FR-016 entirely.
    */
   canRefreshNow(key: SourceKey, now = new Date()): boolean {
+    return this.secondsUntilRefresh(key, now) === 0
+  }
+
+  /**
+   * Whole seconds until the floor allows a manual refresh, or 0 when it already does,
+   * so a refused refresh can say how long to wait.
+   */
+  secondsUntilRefresh(key: SourceKey, now = new Date()): number {
     const sub = this.get(key)
-    if (sub?.lastAttemptAt == null) return true
+    if (sub?.lastAttemptAt == null) return 0
     const elapsed = (now.getTime() - Date.parse(sub.lastAttemptAt)) / 1000
-    return elapsed >= MIN_INTERVAL_SECONDS
+    return elapsed >= MIN_INTERVAL_SECONDS ? 0 : Math.ceil(MIN_INTERVAL_SECONDS - elapsed)
   }
 
   /** Brings a source forward to now, if the floor permits (FR-019). */
   requestRefresh(key: SourceKey, now = new Date()): boolean {
     if (!this.canRefreshNow(key, now)) return false
+    // A key with no subscription has nothing to fetch, so it is not a refresh at all.
+    if (this.get(key) === null) return false
     this.db
       .query("UPDATE source_subscription SET next_due_at = $now WHERE source_key = $k")
       .run({ now: now.toISOString(), k: key })

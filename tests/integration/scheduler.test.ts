@@ -212,6 +212,22 @@ describe("manual refresh (FR-019)", () => {
     }
     expect(allowed).toBe(0)
   })
+
+  test("says how many seconds remain until the floor allows it", () => {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    scheduler.subscribeAll(liveSources(1), T0)
+    expect(scheduler.secondsUntilRefresh("national", T0)).toBe(0)
+
+    scheduler.recordSuccess("national", {}, T0)
+    expect(scheduler.secondsUntilRefresh("national", at(0))).toBe(60)
+    expect(scheduler.secondsUntilRefresh("national", at(59.2))).toBe(1)
+    expect(scheduler.secondsUntilRefresh("national", at(60))).toBe(0)
+  })
+
+  test("is refused for a source nothing is subscribed to", () => {
+    const scheduler = new Scheduler(db, { intervalSeconds: 60 })
+    expect(scheduler.requestRefresh("council:551082", T0)).toBe(false)
+  })
 })
 
 describe("subscription lifecycle (FR-018a)", () => {
