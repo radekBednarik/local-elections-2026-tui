@@ -26,6 +26,7 @@ describe("every action has a key (FR-078)", () => {
   const PRESSES: Record<RegistryActionId, KeyEvent> = {
     move: press("down"),
     open: press("return"),
+    chart: press("g"),
     back: press("escape"),
     search: press("/"),
     logs: press("l"),
@@ -115,5 +116,12 @@ describe("unknown keys", () => {
   test("are ignored rather than guessed at", () => {
     expect(intentFor(press("f7"))).toBeNull()
     expect(intentFor(press(""))).toBeNull()
+  })
+})
+
+describe("the chart key (006)", () => {
+  test("g toggles the chart, with or without Shift", () => {
+    expect(actionOf(press("g"))).toBe("chart")
+    expect(actionOf(press("g", { shift: true }))).toBe("chart")
   })
 })

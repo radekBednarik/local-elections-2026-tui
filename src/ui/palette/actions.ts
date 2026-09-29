@@ -16,6 +16,7 @@
 
 import type { Screen } from "../navigation.ts"
 import { THEME_NAMES, type ThemeName, themeLabel } from "../theme/themes.ts"
+import { isChartScreen } from "../views/chart.ts"
 
 /** What the registry needs to know about the moment, to judge each action. */
 export interface ActionContext {
@@ -32,11 +33,16 @@ export interface ActionContext {
   searchActive: boolean
   /** Columns this screen offers to sort by; zero when it has no table (FR-037). */
   sortableColumns: number
+  /** The chart pane is on screen (006). Absent means it is not. */
+  chartOpen?: boolean
+  /** The terminal is wide enough for the chart pane (006 FR-013). Absent means it is not. */
+  chartFits?: boolean
 }
 
 export type ActionId =
   | "move"
   | "open"
+  | "chart"
   | "back"
   | "copy-entry"
   | "copy-all"
@@ -65,6 +71,8 @@ export interface Action {
   label: string
   /** Short label, for the status bar where every column counts. */
   hint: string
+  /** The status bar chip text when it depends on state (006 research R6). */
+  hintFor?: (context: ActionContext) => string
   /**
    * The key as the user must press it, written out: "Enter", "Shift+W", "Ctrl+P".
    *
@@ -121,13 +129,29 @@ export const ACTIONS: Action[] = [
     where: "seznamy",
     unavailable: (c) => (c.rowCount > 0 || c.screen.kind === "national" ? null : "není co otevřít"),
   },
+  // Right after "open": on the three screens that have it, the chart is the next thing a
+  // user reaches for, so a narrow bar drops it late (006 research R6).
+  {
+    id: "chart",
+    label: "Zobrazit nebo skrýt graf",
+    hint: "graf",
+    hintFor: (c) => (c.chartOpen === true ? "zavřít graf" : "graf"),
+    key: "g",
+    where: "přehled ČR, zastupitelstvo, kandidáti",
+    unavailable: (c) => {
+      if (!isChartScreen(c.screen)) return "graf je jen pro ČR, zastupitelstvo a kandidáty"
+      return c.chartFits === true ? null : "okno je pro graf příliš úzké"
+    },
+  },
   {
     id: "back",
     label: "Zpět o úroveň výš",
     hint: "zpět",
     key: "Esc",
     where: "všude",
-    unavailable: (c) => (c.depth > 1 ? null : "jste na úvodní obrazovce"),
+    // Esc closes the chart before it goes back, so it does something even on the first
+    // screen while the chart is shown (006 research R4).
+    unavailable: (c) => (c.depth > 1 || c.chartOpen === true ? null : "jste na úvodní obrazovce"),
   },
   // Right after "back" deliberately. They apply only on the logs screens, so everywhere
   // else they are unavailable and cost the status bar nothing; there, a narrow bar keeps

@@ -13,7 +13,7 @@ import { type RGBA, rgbToHex } from "@opentui/core"
 import { createTestRenderer } from "@opentui/core/testing"
 import { Frame } from "../../src/ui/chrome/frame.ts"
 import type { Screen } from "../../src/ui/navigation.ts"
-import { ACTIONS, type ActionContext } from "../../src/ui/palette/actions.ts"
+import { ACTIONS, type ActionContext, actionById } from "../../src/ui/palette/actions.ts"
 import { entryRow, filterEntries, Palette, paletteEntries } from "../../src/ui/palette/view.ts"
 import { line, toTextLines } from "../../src/ui/row.ts"
 import { styledRow } from "../../src/ui/theme/apply.ts"
@@ -464,5 +464,50 @@ describe("choosing a theme by name (002 T042, FR-005)", () => {
 
   test("the themes do not crowd the status bar or the help screen: they live in the palette", () => {
     expect(ACTIONS.some((a) => a.id.startsWith("theme:"))).toBe(false)
+  })
+})
+
+describe("chart action (006 research R6)", () => {
+  const chart = actionById("chart")
+  const back = actionById("back")
+  const NATIONAL: Screen = { kind: "national" }
+  const ELSEWHERE: Screen[] = [
+    { kind: "districts" },
+    { kind: "district", nuts: "CZ0642" },
+    { kind: "watchlist" },
+    { kind: "search" },
+    { kind: "help" },
+    { kind: "logs" },
+  ]
+
+  test("is available on the national overview when it fits", () => {
+    expect(chart?.unavailable(ctx(NATIONAL, { chartFits: true }))).toBeNull()
+  })
+
+  test("is unavailable, with the reason, on screens without a breakdown", () => {
+    for (const screen of ELSEWHERE) {
+      expect(chart?.unavailable(ctx(screen, { chartFits: true }))).toBe(
+        "graf je jen pro ČR, zastupitelstvo a kandidáty",
+      )
+    }
+  })
+
+  test("is unavailable when the terminal is too narrow, and the screen reason wins", () => {
+    expect(chart?.unavailable(ctx(NATIONAL, { chartFits: false }))).toBe("okno je pro graf příliš úzké")
+    expect(chart?.unavailable(ctx(NATIONAL))).toBe("okno je pro graf příliš úzké")
+    expect(chart?.unavailable(ctx({ kind: "districts" }, { chartFits: false }))).toBe(
+      "graf je jen pro ČR, zastupitelstvo a kandidáty",
+    )
+  })
+
+  test("Esc is offered while the chart is shown, even on the first screen", () => {
+    expect(back?.unavailable(ctx(NATIONAL, { chartOpen: true }))).toBeNull()
+    expect(back?.unavailable(ctx(NATIONAL))).toBe("jste na úvodní obrazovce")
+  })
+
+  test("the palette lists it with its key", () => {
+    const entry = paletteEntries(ctx(NATIONAL)).find((e) => e.action.id === "chart")
+    expect(entry?.action.label).toBe("Zobrazit nebo skrýt graf")
+    expect(entry?.action.key).toBe("g")
   })
 })

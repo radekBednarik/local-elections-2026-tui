@@ -156,7 +156,7 @@ it gives two ways to lay out one table, and it leaves the watchlist overflow in 
   - label "Zobrazit nebo skrýt graf", hint "graf", key `g`,
   - `where`: "přehled ČR, zastupitelstvo, kandidáti".
   - `unavailable`, checked in this order:
-    1. not a chart screen → "graf je jen u přehledu ČR, zastupitelstva a kandidátů",
+    1. not a chart screen → "graf je jen pro ČR, zastupitelstvo a kandidáty",
     2. `!chartFits` → "okno je pro graf příliš úzké".
 - **`ActionContext`** gains optional `chartOpen?: boolean` (the pane is shown) and
   `chartFits?: boolean`, each read as false when absent. They are optional because many existing

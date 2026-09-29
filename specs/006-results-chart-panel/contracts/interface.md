@@ -18,7 +18,7 @@ applies (FR-002):
 
 | Condition | Reason |
 |---|---|
-| Screen is not `national`, `council` or `candidates` | `graf je jen u přehledu ČR, zastupitelstva a kandidátů` |
+| Screen is not `national`, `council` or `candidates` | `graf je jen pro ČR, zastupitelstvo a kandidáty` |
 | `chartFits(rawContentWidth)` is false (terminal under 93 columns) | `okno je pro graf příliš úzké` |
 
 - `Esc` closes the pane when it is shown, and does nothing else. Pressed again, it goes back as

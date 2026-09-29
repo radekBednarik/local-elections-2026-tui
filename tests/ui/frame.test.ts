@@ -15,6 +15,7 @@ import { describe, expect, test } from "bun:test"
 import { type RGBA, rgbToHex } from "@opentui/core"
 import { createTestRenderer } from "@opentui/core/testing"
 import { Frame } from "../../src/ui/chrome/frame.ts"
+import { PANEL_WIDTH } from "../../src/ui/chrome/panel.ts"
 import { titleBarRow } from "../../src/ui/chrome/state.ts"
 import { cellsWide } from "../../src/ui/row.ts"
 import { MONOCHROME, type Theme, themeByName } from "../../src/ui/theme/themes.ts"
@@ -375,5 +376,46 @@ describe("title bar indicator (contract § 2)", () => {
     const cell = titleBarRow(trail, "final", null, 120).cells.find((c) => c.text.includes("konečné"))
     expect(cell?.role).toBe("muted")
     expect(cell?.surface).toBeUndefined()
+  })
+})
+
+describe("the side panel takes the width of what it shows (006 research R2)", () => {
+  test("a chart pane is as wide as asked, and the content gives up exactly that", async () => {
+    const shown = await render(100, 30, (f) => {
+      f.setRows(BODY_LINES)
+      f.setPanelVisible(true, 47)
+    })
+    expect(shown.contentWidth).toBe(shown.rawContentWidth - 48)
+  })
+
+  test("the watchlist keeps its own width by default", async () => {
+    const shown = await render(100, 30, (f) => {
+      f.setRows(BODY_LINES)
+      f.setPanelVisible(true)
+    })
+    expect(shown.contentWidth).toBe(shown.rawContentWidth - (PANEL_WIDTH + 1))
+  })
+
+  test("changing the width while shown does not re-add the panel, so the scroll bar stays put", async () => {
+    const test = await createTestRenderer({ width: 100, height: 30 })
+    try {
+      const frame = new Frame(test.renderer)
+      frame.attach(test.renderer.root)
+      frame.setRows(Array.from({ length: 60 }, (_, i) => `  řádek ${i}`))
+      frame.setPanelVisible(true)
+      await test.renderOnce()
+      const children = frame.body.getChildren()
+      frame.setPanelVisible(true, 47)
+      await test.renderOnce()
+      expect(frame.body.getChildren()).toEqual(children)
+      expect(frame.panel.width).toBe(47)
+      const body = test
+        .captureCharFrame()
+        .split("\n")
+        .filter((l) => l.startsWith(RAIL))
+      for (const line of body) expect([...line][1]).not.toBe("█")
+    } finally {
+      test.renderer.destroy()
+    }
   })
 })

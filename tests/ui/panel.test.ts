@@ -16,7 +16,17 @@ import { ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { toggleWatchlist } from "../../src/storage/queries/watchlist.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
-import { buildPanelRows, MIN_CONTENT_COLUMNS, PANEL_COST, panelFits } from "../../src/ui/chrome/panel.ts"
+import {
+  buildPanelRows,
+  CHART_MAX_PANE,
+  CHART_MIN_PANE,
+  CHART_MIN_TABLE,
+  chartFits,
+  chartPaneWidth,
+  MIN_CONTENT_COLUMNS,
+  PANEL_COST,
+  panelFits,
+} from "../../src/ui/chrome/panel.ts"
 import { applyFrameState, applyPanel, frameState } from "../../src/ui/chrome/state.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
 import { toTextLines } from "../../src/ui/row.ts"
@@ -213,5 +223,25 @@ describe("the panel's look (002 T054, FR-018)", () => {
     expect(text).toContain("Brno")
     // formatPercent writes a no-break space before the sign, hence \s.
     expect(text).toMatch(/41,90\s%\s[█▉▊▋▌▍▎▏]/)
+  })
+})
+
+describe("chart pane fit (006 research R3)", () => {
+  // `raw` is the content area without any side panel: the terminal less the rail and the
+  // scroll bar, so a terminal is raw + 2 columns wide.
+  test("the pane takes what the table can spare, up to its maximum", () => {
+    expect(chartPaneWidth(98)).toBe(47)
+    expect(chartPaneWidth(200)).toBe(60)
+  })
+
+  test("the chart is offered from a 93-column terminal", () => {
+    expect(chartFits(91)).toBe(true)
+    expect(chartFits(90)).toBe(false)
+  })
+
+  test("the limits are the table's needs and the pane's", () => {
+    expect(CHART_MIN_TABLE).toBe(50)
+    expect(CHART_MIN_PANE).toBe(40)
+    expect(CHART_MAX_PANE).toBe(60)
   })
 })
