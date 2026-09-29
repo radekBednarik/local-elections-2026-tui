@@ -72,14 +72,14 @@ export interface Slice {
 }
 
 /** The screens that show a vote breakdown and so offer the chart. */
-export const CHART_SCREENS: readonly Screen["kind"][] = ["national", "council", "candidates"]
+const CHART_SCREENS: readonly Screen["kind"][] = ["national", "council", "candidates"]
 
 export function isChartScreen(screen: Screen): boolean {
   return CHART_SCREENS.includes(screen.kind)
 }
 
 /** What the status row says when a shrinking window closes the chart (research R4). */
-export const CHART_CLOSED_NOTICE = "Graf zavřen: okno je pro něj příliš úzké."
+const CHART_CLOSED_NOTICE = "Graf zavřen: okno je pro něj příliš úzké."
 
 /**
  * Whether the chart survives a resize.
@@ -105,10 +105,10 @@ const RANKED = 6
 export const TEXTURES = ["█", "▓", "▚", "▒", "▞", "░"] as const
 
 /** The aggregate's fill: a sparse field that reads as "the rest". */
-export const OTHER_TEXTURE = "·"
+const OTHER_TEXTURE = "·"
 
 /** One slot per rank; the aggregate takes the theme's muted tone. */
-export const SLICE_SLOTS: readonly Slot[] = ["slice1", "slice2", "slice3", "slice4", "slice5", "slice6"]
+const SLICE_SLOTS: readonly Slot[] = ["slice1", "slice2", "slice3", "slice4", "slice5", "slice6"]
 
 /** Sum of a list, or null when any member is unknown. */
 function sumKnown(values: (number | null)[]): number | null {

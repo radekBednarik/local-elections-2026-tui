@@ -42,6 +42,9 @@ e.g. `podíl platných hlasů · průběžné`), the pie, then one legend row pe
   `sx² + (2·sy)² ≤ R²`. The mock uses `R = 16` columns → a 33 × 17 cell disc.
 - Slices run clockwise from twelve o'clock, ordered by descending votes, angle proportional to
   the entry's share of the whole (valid votes; the party's votes for candidates).
+- **As delivered (research R3):** the pane reserves four rows for its title, subtitle and
+  spacing, so at 100 × 30 the disc has R = 15 (31 × 15 cells). R = 16 is reached from 31
+  rows up, and the radius shrinks with smaller terminals down to R = 8 at 24 rows.
 - Each cell inside a slice is drawn as that slice's texture character in that slice's colour, on
   the pane's `panel` background. No borders between slices; texture and colour changes mark the
   boundary.
@@ -64,8 +67,12 @@ the plan should add them as theme slots validated by the existing contrast test)
 | Catppuccin Mocha | #89b4fa | #cba6f7 | #a6e3a1 | #fab387 | #89dceb | #f38ba8 | #787b90 (muted) |
 | Gruvbox Dark | #83a598 | #fabd2f | #b8bb26 | #fe8019 | #8ec07c | #fb4934 | #928374 (muted) |
 | Nord | #88c0d0 | #b48ead | #a3be8c | #d08770 | #81a1c1 | #bf616a | #848ea2 (muted) |
-| Catppuccin Latte | #1e66f5 | #8839ef | #40a02b | #fe640b | #04a5e5 | #d20f39 | #7b7e8e (muted) |
+| Catppuccin Latte | #1e66f5 | #8839ef | #3c9628 | #e45401 | #038cc2 | #d20f39 | #7b7e8e (muted) |
 | Vysoký kontrast | #ffffff ×6 (textures alone distinguish) | | | | | | #808080 |
+
+**Amended during implementation (research R7):** three Catppuccin Latte tones were darkened
+in their own hue to reach 3:1 on the pane's `panel` background: green `#40a02b` →
+`#3c9628`, peach `#fe640b` → `#e45401`, sky `#04a5e5` → `#038cc2`.
 
 In monochrome / NO_COLOR nothing is painted and the textures carry the whole meaning, matching
 the app's existing principle.

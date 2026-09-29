@@ -433,11 +433,14 @@ rest of the party's votes as `Ostatní (N kand.)`. The candidate table gains the
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T044 [P] Update `README.md`:
+- [X] T044 [P] Update `README.md`:
   - In the keys table, add `g`: show or hide the chart, on the national overview, a council or a candidate list, when the terminal has at least 93 columns.
   - In `## The interface`, add a **Graf** bullet: the split, the rank colours and textures, `Ostatní`, and `Esc` closing it first.
-- [ ] T045 [P] Amend `specs/006-results-chart-panel/visual-design.md` § Rank palettes: replace the three Catppuccin Latte values with the ones T010 recorded, and add a note pointing to research R7. In § The pie, note that the delivered pane draws R = 15 at 100 × 30 and R = 16 from 31 rows up (research R3).
-- [ ] T046 [P] Search `src/`, `tests/` and `tools/` for `PANEL_COST` outside `panel.ts`, its tests and `panelFits`; for the old four-argument `applyPanel` form; and for any unused export from `chart.ts`. Remove the leftovers; there must be no dead code (Quality Standards). Also check that `tools/verify/*` scripts still typecheck.
+  - (Done 2026-09-29. The README has no keys table; the keys live in the `## The interface` bullets, so `g` is documented in a new **Chart** bullet. The **Bars** bullet and the no-party-colours paragraph now cover the chart too.)
+- [X] T045 [P] Amend `specs/006-results-chart-panel/visual-design.md` § Rank palettes: replace the three Catppuccin Latte values with the ones T010 recorded, and add a note pointing to research R7. In § The pie, note that the delivered pane draws R = 15 at 100 × 30 and R = 16 from 31 rows up (research R3).
+  - (Done 2026-09-29. The Latte values were replaced, with an amendment note. § The pie records R = 15 at 100 × 30.)
+- [X] T046 [P] Search `src/`, `tests/` and `tools/` for `PANEL_COST` outside `panel.ts`, its tests and `panelFits`; for the old four-argument `applyPanel` form; and for any unused export from `chart.ts`. Remove the leftovers; there must be no dead code (Quality Standards). Also check that `tools/verify/*` scripts still typecheck.
+  - (Done 2026-09-29. `PANEL_COST` is now read only by `panelFits` and its tests. `CHART_SCREENS`, `OTHER_TEXTURE`, `SLICE_SLOTS` and `CHART_CLOSED_NOTICE` were exported but used only inside `chart.ts`, and are now module-private. No four-argument boolean `applyPanel` call remains. `tools/` typechecks, because tsconfig includes it. The headless viewer used in the reviews is kept as `tools/verify/chart-view.ts`, with a usage header.)
 - [ ] T047 Run quickstart § 4–§ 6 by hand: all six themes, `NO_COLOR=1`, the watchlist handover, the narrow-width close, and a live refresh with `bun run replay -- --duration 120`. Also press `e` with the pane open on a council, and confirm the CSV equals one exported with the pane closed (FR-003). Record the results in this task's notes.
 - [ ] T048 FINAL REVIEW of the whole branch against Principles I–III, spec FR-001 to FR-015, SC-001 to SC-005, and the planning amendments. Every FR must trace to a test named in this file. Run `bun test`, `bun run typecheck` and `bun run check`, and record the counts. Fix every finding, and re-review any fix that changes behaviour.
 
