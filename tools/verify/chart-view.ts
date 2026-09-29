@@ -16,12 +16,11 @@ import { loadReference } from "../../src/reference/loader.ts"
 import { ingestCouncil, ingestDistrict, ingestNational } from "../../src/sources/ingest.ts"
 import { openMemoryDatabase } from "../../src/storage/db.ts"
 import { Frame } from "../../src/ui/chrome/frame.ts"
-import { chartPaneWidth } from "../../src/ui/chrome/panel.ts"
-import { applyFrameState, applyPanel, frameState } from "../../src/ui/chrome/state.ts"
+import { chartFits } from "../../src/ui/chrome/panel.ts"
+import { applyFrameState, applyPanel, frameState, panelFor } from "../../src/ui/chrome/state.ts"
 import { Navigation } from "../../src/ui/navigation.ts"
 import { UNSORTED } from "../../src/ui/sort.ts"
 import { isThemeName, MONOCHROME, themeByName } from "../../src/ui/theme/themes.ts"
-import { chartContext } from "../../src/ui/views/chart.ts"
 
 const [width = 100, height = 30] = process.argv.slice(2).map(Number)
 const themeName = process.env.THEME ?? "tokyonight"
@@ -52,16 +51,15 @@ await setup.renderOnce()
 
 // Twice: the first pass settles the layout so the second is composed at the real widths.
 for (let pass = 0; pass < 2; pass += 1) {
-  const context = chartContext(db, nav.screen, "OBEC")
-  const shown = context !== null && process.env.NOCHART === undefined
-  applyPanel(
-    frame,
-    db,
-    theme,
-    shown
-      ? { kind: "chart", context, width: chartPaneWidth(frame.rawContentWidth), height: frame.contentHeight }
-      : null,
-  )
+  const panel = panelFor(db, {
+    chartOpen: process.env.NOCHART === undefined,
+    sidePanelOpen: false,
+    screen: nav.screen,
+    councilType: "OBEC",
+    contentAreaWidth: frame.rawContentWidth,
+    contentHeight: frame.contentHeight,
+  })
+  applyPanel(frame, db, theme, panel)
   applyFrameState(
     frame,
     frameState({
@@ -76,8 +74,8 @@ for (let pass = 0; pass < 2; pass += 1) {
       contentHeight: frame.contentHeight,
       sourceStatus: null,
       notice: null,
-      chartShown: shown,
-      chartFits: true,
+      chartShown: panel?.kind === "chart",
+      chartFits: chartFits(frame.rawContentWidth),
     }),
     theme,
   )

@@ -243,6 +243,16 @@ describe("the narrow table beside the chart (006 FR-012, research R5)", () => {
     }
   })
 
+  test("the district-council title keeps its status badge beside the chart (review finding 6)", () => {
+    const text = toTextLines(buildNationalRows(db, { oznacTypu: "MCMO", width: 48, now: NOW }))
+    expect(text[0]).toBe("Zastupitelstva městských částí a obvodů")
+    expect(text[1]?.trim().startsWith("✓") || text[1]?.trim().startsWith("◌")).toBe(true)
+    // At full width the title and the badge share a line, as they always did.
+    expect(toTextLines(buildNationalRows(db, { oznacTypu: "MCMO", width: 100, now: NOW }))[0]).toContain(
+      "Zastupitelstva městských částí a obvodů  ",
+    )
+  })
+
   test("beside the watchlist the seat columns go rather than being cut", () => {
     const rows = buildNationalRows(db, { width: 62, now: NOW })
     const header = rows.find((r) => r.kind === "header")

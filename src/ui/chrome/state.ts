@@ -18,17 +18,17 @@ import { availableCouncilTypes } from "../../storage/queries/national.ts"
 import { type SourceStatus, statusBarLine, statusBarRow } from "../components/status.ts"
 import { clampLines } from "../format.ts"
 import type { Navigation, Screen } from "../navigation.ts"
-import type { ActionContext } from "../palette/actions.ts"
+import { type ActionContext, NOT_AVAILABLE_HERE } from "../palette/actions.ts"
 import { type Cell, cellsWide, type SemanticRow, type Surface } from "../row.ts"
 import { composeScreen, type ScreenContent } from "../screen.ts"
 import type { SortState } from "../sort.ts"
 import { readsOn, styledBlock, styledRow } from "../theme/apply.ts"
 import type { Role } from "../theme/roles.ts"
 import type { Slot, Theme } from "../theme/themes.ts"
-import { buildChartRows, type ChartContext, isChartScreen } from "../views/chart.ts"
+import { buildChartRows, type ChartContext, chartContext, isChartScreen } from "../views/chart.ts"
 import { breadcrumbFor, breadcrumbSegments, segmentsFor } from "./breadcrumb.ts"
 import type { Frame } from "./frame.ts"
-import { buildPanelRows, chartFits, PANEL_WIDTH, panelFits } from "./panel.ts"
+import { buildPanelRows, chartFits, chartPaneWidth, PANEL_WIDTH, panelFits } from "./panel.ts"
 
 /**
  * Columns reserved to the left of every row for the selection marker.
@@ -420,6 +420,53 @@ export function choosePanel(input: {
   if (input.chartOpen && isChartScreen(input.screen) && chartFits(input.contentAreaWidth)) return "chart"
   if (input.sidePanelOpen && panelFits(input.contentAreaWidth)) return "watchlist"
   return null
+}
+
+/**
+ * The panel to draw, with everything drawing it needs: the one place the application,
+ * the tests and the verification tools get it from (review finding 2).
+ */
+export function panelFor(
+  db: Database,
+  input: {
+    chartOpen: boolean
+    sidePanelOpen: boolean
+    screen: Screen
+    councilType: string
+    contentAreaWidth: number
+    contentHeight: number
+  },
+): PanelContent {
+  const choice = choosePanel(input)
+  if (choice === "watchlist") return { kind: "watchlist" }
+  if (choice !== "chart") return null
+  const context = chartContext(db, input.screen, input.councilType)
+  if (context === null) return null
+  return {
+    kind: "chart",
+    context,
+    width: chartPaneWidth(input.contentAreaWidth),
+    height: input.contentHeight,
+  }
+}
+
+/**
+ * What `g` and Esc do to the chart (006 research R4).
+ *
+ * `g` toggles it where it applies and says so where it does not. Esc closes a SHOWN
+ * chart and goes nowhere; `handled: false` hands it on to the ordinary back.
+ */
+export function chartAction(
+  action: "chart" | "back",
+  state: { open: boolean; shown: boolean; unavailable: string | null },
+): { open: boolean; notice: string | null; handled: boolean } {
+  if (action === "back") {
+    return state.shown
+      ? { open: false, notice: null, handled: true }
+      : { open: state.open, notice: null, handled: false }
+  }
+  if (state.unavailable !== null) return { open: state.open, notice: NOT_AVAILABLE_HERE, handled: true }
+  return { open: !state.open, notice: null, handled: true }
 }
 
 /** The side panel, rendered as one styled block (FR-056, 006). */

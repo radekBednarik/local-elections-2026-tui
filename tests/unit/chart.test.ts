@@ -225,8 +225,9 @@ describe("pane rows (contract § 3)", () => {
       ` ${TEXTURES[0]}${TEXTURES[0]} ${pad("ANO 2011", WIDTH - 26)} ${pad(`▲${formatInteger(1234567)}`, 12, "right")} ${pad(formatPercent(24.31), 8, "right")}`,
     )
     expect(first?.name).toBe("ANO 2011")
-    // "Ostatní (4 strany)" is wider than a 40-column pane's name column, so it is cut.
-    expect(legend[6]?.startsWith(" ·· Ostatní (4 st…")).toBe(true)
+    // "Ostatní (4 strany)" is wider than a 40-column pane's name column, so the count
+    // stays and the noun goes.
+    expect(legend[6]?.startsWith(" ·· Ostatní (4) ")).toBe(true)
     for (const line of legend) expect([...line].length).toBeLessThanOrEqual(WIDTH)
   })
 
@@ -289,9 +290,11 @@ describe("closing on shrink (research R4)", () => {
     expect(chartAfterResize(shown, true)).toEqual({ open: true, notice: null })
   })
 
-  test("a chart that was not on screen is not reported as closed", () => {
-    expect(chartAfterResize({ ...shown, shownLastDraw: false }, false)).toEqual({ open: true, notice: null })
-    expect(chartAfterResize({ ...shown, onChartScreen: false }, false)).toEqual({ open: true, notice: null })
+  test("a chart that was not on screen closes too, but without a word (review finding 3)", () => {
+    // Otherwise it would hide on a narrow window where g cannot close it, and reappear
+    // unasked when the window widened again (FR-013).
+    expect(chartAfterResize({ ...shown, shownLastDraw: false }, false)).toEqual({ open: false, notice: null })
+    expect(chartAfterResize({ ...shown, onChartScreen: false }, false)).toEqual({ open: false, notice: null })
   })
 
   test("widening again does not reopen it", () => {
@@ -337,6 +340,18 @@ describe("remainder aggregate (research R8, spec amendment FR-009)", () => {
     expect(slices[6]?.votes).toBe(6916 - ranked)
   })
 
+  test("a party with nobody elected says why there is no chart, rather than promising one", () => {
+    const text = toTextLines(buildChartRows(candidates([]), 40, 21))
+    expect(text.slice(3)).toEqual([
+      "Nikdo z této strany nebyl zvolen.",
+      "Hlasy kandidátů se zveřejňují",
+      "jen u zvolených.",
+    ])
+    // With no votes at all it is the ordinary "nothing yet" message.
+    const none = toTextLines(buildChartRows({ ...candidates([]), whole: 0 }, 40, 21))
+    expect(none[3]).toBe("Zatím není co zobrazit.")
+  })
+
   test("no aggregate when the charted candidates hold every vote", () => {
     const all = { ...candidates([entry("A", 4000), entry("B", 2916)]), total: 2 }
     expect(rankSlices(all).map((s) => s.rank)).toEqual([0, 1])
@@ -349,5 +364,19 @@ describe("remainder aggregate (research R8, spec amendment FR-009)", () => {
     expect(rankSlices(candidates(now, null))[2]?.change).toBe("new")
     const unknown = [entry("A", 481, null, null), entry("B", 372, null, 300)]
     expect(rankSlices(candidates(unknown, 6000))[2]?.change).toBe("new")
+  })
+})
+
+describe("the aggregate's label keeps its count (review finding 5)", () => {
+  test("in a pane too narrow for the full label, the count stays and the noun goes", () => {
+    const context = parties(Array.from({ length: 338 }, (_, i) => entry(`Strana ${i}`, 400 - i)))
+    const legend = toTextLines(buildChartRows(context, 39, 21)).at(-1) ?? ""
+    expect(legend).toContain("Ostatní (332)")
+    expect(legend).not.toContain("…")
+  })
+
+  test("where it fits, the full label is used", () => {
+    const legend = toTextLines(buildChartRows(parties(falling(10)), 47, 27)).at(-1) ?? ""
+    expect(legend).toContain("Ostatní (4 strany)")
   })
 })

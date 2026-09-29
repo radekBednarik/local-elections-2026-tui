@@ -174,16 +174,19 @@ export function listBoroughs(db: Database, parentKodzastup: string): CouncilRow[
   return rows.map(toCouncilRow)
 }
 
+/** The id of a council's current snapshot, or of the one before it, when there is one. */
+function councilSnapshot(db: Database, kodzastup: string, current: boolean): { id: number } | null {
+  return db
+    .query("SELECT id FROM result_snapshot WHERE area_kind = 'council' AND area_id = $k AND is_current = $c")
+    .get({ k: kodzastup, c: current ? 1 : 0 }) as { id: number } | null
+}
+
 /** Electoral parties in one council, ordered by seats then votes. */
 export function listCouncilParties(db: Database, kodzastup: string): CouncilPartyRow[] {
-  const current = db
-    .query("SELECT id FROM result_snapshot WHERE area_kind = 'council' AND area_id = $k AND is_current = 1")
-    .get({ k: kodzastup }) as { id: number } | null
+  const current = councilSnapshot(db, kodzastup, true)
   if (current === null) return []
 
-  const previous = db
-    .query("SELECT id FROM result_snapshot WHERE area_kind = 'council' AND area_id = $k AND is_current = 0")
-    .get({ k: kodzastup }) as { id: number } | null
+  const previous = councilSnapshot(db, kodzastup, false)
 
   const rows = db
     .query(
@@ -233,9 +236,7 @@ export function listElected(
   vstrana: string,
   ballotOrder: number | null,
 ): ElectedRow[] {
-  const current = db
-    .query("SELECT id FROM result_snapshot WHERE area_kind = 'council' AND area_id = $k AND is_current = 1")
-    .get({ k: kodzastup }) as { id: number } | null
+  const current = councilSnapshot(db, kodzastup, true)
   if (current === null) return []
 
   const rows = db
@@ -251,9 +252,7 @@ export function listElected(
 
   // The same candidates in the previous snapshot, keyed by ballot number, exactly as
   // listCouncilParties compares parties (006 research R8).
-  const previous = db
-    .query("SELECT id FROM result_snapshot WHERE area_kind = 'council' AND area_id = $k AND is_current = 0")
-    .get({ k: kodzastup }) as { id: number } | null
+  const previous = councilSnapshot(db, kodzastup, false)
   const before = new Map<number, number>()
   if (previous !== null) {
     for (const row of db

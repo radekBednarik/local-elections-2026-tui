@@ -84,18 +84,17 @@ const CHART_CLOSED_NOTICE = "Graf zavřen: okno je pro něj příliš úzké."
 /**
  * Whether the chart survives a resize.
  *
- * A chart that was on screen and no longer fits CLOSES, rather than hiding until the
- * window widens again (FR-013), and the user is told why. One that was never on screen
- * - wanted on a screen without a breakdown - is left alone and nothing is said.
+ * A chart that no longer fits CLOSES, rather than hiding until the window widens again
+ * (FR-013): hidden on a narrow window, `g` could not close it, and it would come back
+ * unasked. The user is told only when it was on screen; one wanted on a screen without a
+ * breakdown closes without a word.
  */
 export function chartAfterResize(
   state: { open: boolean; shownLastDraw: boolean; onChartScreen: boolean },
   fits: boolean,
 ): { open: boolean; notice: string | null } {
-  if (state.open && state.shownLastDraw && state.onChartScreen && !fits) {
-    return { open: false, notice: CHART_CLOSED_NOTICE }
-  }
-  return { open: state.open, notice: null }
+  if (!state.open || fits) return { open: state.open, notice: null }
+  return { open: false, notice: state.shownLastDraw && state.onChartScreen ? CHART_CLOSED_NOTICE : null }
 }
 
 /** How many entries get a slice of their own. */
@@ -391,7 +390,12 @@ function pieRow(cells: (number | null)[], slices: Slice[], lead: number): Semant
 /** One legend row: swatch, name, votes with their change marker, share. */
 function legendRow(slice: Slice, width: number): SemanticRow {
   const { texture, slot } = sliceLook(slice)
-  const name: Cell = { text: pad(slice.name, Math.max(1, width - LEGEND_FIXED)) }
+  const room = Math.max(1, width - LEGEND_FIXED)
+  // The aggregate keeps its count before its noun: "Ostatní (331)" rather than
+  // "Ostatní (331…", which would lose what the slice stands for (FR-005).
+  const label =
+    slice.rank === "other" && [...slice.name].length > room ? `Ostatní (${slice.count ?? 0})` : slice.name
+  const name: Cell = { text: pad(label, room) }
   if (slice.rank === "other") name.role = "muted"
   const votes: Cell = { text: ` ${pad(withChange(formatInteger(slice.votes), slice.change), 12, "right")}` }
   const role = roleForChange(slice.change)
@@ -421,6 +425,17 @@ export function buildChartRows(context: ChartContext, width: number, contentHeig
     line(pad(context.subtitle, width), "muted"),
     blank(),
   ]
+  if (context.kind === "candidates" && context.entries.length === 0 && context.whole > 0) {
+    // The party has votes but nobody elected: the source publishes preferential votes
+    // only for those elected, so this chart will never fill. Saying "not yet" would be
+    // a promise the data cannot keep (review finding 1).
+    rows.push(
+      line("Nikdo z této strany nebyl zvolen."),
+      line("Hlasy kandidátů se zveřejňují", "muted"),
+      line("jen u zvolených.", "muted"),
+    )
+    return rows
+  }
   if (context.entries.length === 0 || context.whole <= 0) {
     // Two short lines rather than one long one, so the message fits the narrowest pane.
     rows.push(

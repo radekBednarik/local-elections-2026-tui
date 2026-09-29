@@ -76,6 +76,12 @@ At 100 × 30, on the national overview:
 
 ## 3. Council and candidates (US2, US3)
 
+The replay server does not serve the two reference archives
+(`KV2026reg20260915_xml.zip`, `KV2026ciselniky20260915_xml.zip`). Without them the district
+list and search are empty. For this section, put a small proxy in front of the replay server
+that serves `fixtures/2026/reg.zip` and `fixtures/2026/ciselniky.zip` under those names and
+forwards everything else. Then point `--base-url` at the proxy.
+
 1. Drill into a fixture council, for example Brno (`582786`, district CZ0642). With `g` pressed
    on the way, or pressed now, the pane shows `Graf · Brno`, and its legend matches the council
    table. Press `s` a few times and move the selection: the table re-sorts and the selection

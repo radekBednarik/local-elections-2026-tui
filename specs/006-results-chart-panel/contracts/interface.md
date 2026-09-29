@@ -79,9 +79,20 @@ Graf se vykreslí, jakmile
 budou zveřejněny výsledky.
 ```
 
+**A party with nobody elected** (candidates only, the party has votes). In place of rows 3
+to 6, and never "not yet", because the source will not publish these votes:
+
+```
+Nikdo z této strany nebyl zvolen.
+Hlasy kandidátů se zveřejňují
+jen u zvolených.
+```
+
 **Aggregate labels** follow Czech plurals through the existing plural helper:
 - parties: `Ostatní (1 strana)`, `Ostatní (2 strany)`, `Ostatní (5 stran)`,
 - candidates: `Ostatní (N kand.)`.
+- where the full label is wider than the legend's name column, the count stays and the
+  noun goes: `Ostatní (331)`.
 
 ## 4. Figures (FR-009)
 
@@ -113,6 +124,7 @@ votes, or `–` where none is published. The candidates `Hlasy` column also gain
 | When | Status row text |
 |---|---|
 | The terminal shrinks below the fit while the pane is shown | `Graf zavřen: okno je pro něj příliš úzké.` |
+| The terminal shrinks below the fit while the chart is wanted but hidden (a screen without a breakdown) | the chart closes, and nothing is said |
 | `g` is pressed where the chart is unavailable | the existing `Tento příkaz zde není dostupný.` path, with the reason in the palette |
 
 ## 7. Refresh (FR-010, SC-004)

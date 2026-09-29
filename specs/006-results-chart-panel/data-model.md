@@ -102,8 +102,10 @@ Fit rule, in `panel.ts`:
 | `chartShownLastDraw` | `boolean` | Whether the previous draw showed the pane, to tell a shrink that closes it from a screen that never showed it (research R4). |
 
 The shrink rule is the pure `chartAfterResize({ open, shownLastDraw, onChartScreen }, fits) →
-{ open, notice }` in `src/ui/views/chart.ts`. It closes the chart, with the notice, only when
-all three inputs are true and `fits` is false.
+{ open, notice }` in `src/ui/views/chart.ts`. When `fits` is false it always closes an open
+chart. The notice is given only when the chart was on screen, that is when `shownLastDraw` and
+`onChartScreen` are both true (review finding 3). `App` draws again once a resize is laid
+out (`redrawOnResize`), so the check sees the new width.
 
 Derived on each draw: `chartShown = chartOpen && isChartScreen(screen) && chartFits(raw)`.
 
@@ -115,6 +117,7 @@ open   --g | Esc (while shown)--> closed
 open   --navigate to non-chart screen--> open (hidden; watchlist may show)
 open   --navigate to chart screen--> open (shown, new context)
 open   --shrink below fit while shown--> closed + notice
+open   --shrink below fit while hidden--> closed, silently
 ```
 
 ## ActionContext and Action (additions)

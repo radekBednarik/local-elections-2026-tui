@@ -113,6 +113,11 @@ chartShown = chartOpen && CHART_SCREENS.includes(screen.kind) && chartFits(raw)
   draw, and `!chartFits` sets `chartOpen = false` and a notice: "Graf zavřen: okno je pro něj
   příliš úzké." The spec says the pane closes, not that it hides. Widening the window again does
   not reopen it.
+  *Amended after the final review:* the chart closes whenever it is open and no longer fits,
+  even while it is hidden on a screen without a breakdown. Otherwise, on a narrow window, `g`
+  could not close it and it would come back unasked. The notice is shown only when the chart
+  was on screen. The resize event arrives before OpenTUI lays the new size out, so `App` draws
+  again once the layout has settled (`redrawOnResize`).
 - **Selection, scroll and sort** live on the navigation entry and in `App.sort`. Neither changes
   on open or close. Only the composition width changes (FR-003, SC-005).
 

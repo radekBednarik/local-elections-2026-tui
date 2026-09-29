@@ -25,9 +25,11 @@ import { chartPaneWidth } from "../../src/ui/chrome/panel.ts"
 import {
   applyFrameState,
   applyPanel,
+  chartAction,
   choosePanel,
   type FrameState,
   frameState,
+  panelFor,
   viewWidthFor,
 } from "../../src/ui/chrome/state.ts"
 import type { SourceStatus } from "../../src/ui/components/status.ts"
@@ -291,28 +293,16 @@ describe("the chart pane (006 FR-003, SC-004, SC-005)", () => {
     await setup.renderOnce()
     const theme = themeByName("tokyonight")
     const draw = async (chart: boolean, watchlist = false) => {
-      const panel = choosePanel({
+      // The very decision the application makes, not a copy of it (review finding 2).
+      const panel = panelFor(db, {
         chartOpen: chart,
         sidePanelOpen: watchlist,
         screen: nav.screen,
+        councilType: "OBEC",
         contentAreaWidth: frame.rawContentWidth,
+        contentHeight: frame.contentHeight,
       })
-      const context = chartContext(db, nav.screen, "OBEC")
-      applyPanel(
-        frame,
-        db,
-        theme,
-        panel === "chart" && context !== null
-          ? {
-              kind: "chart",
-              context,
-              width: chartPaneWidth(frame.rawContentWidth),
-              height: frame.contentHeight,
-            }
-          : panel === "watchlist"
-            ? { kind: "watchlist" }
-            : null,
-      )
+      applyPanel(frame, db, theme, panel)
       const state = frameState({
         db,
         nav,
@@ -325,7 +315,7 @@ describe("the chart pane (006 FR-003, SC-004, SC-005)", () => {
         contentHeight: frame.contentHeight,
         sourceStatus: null,
         notice: null,
-        chartShown: panel === "chart",
+        chartShown: panel?.kind === "chart",
         chartFits: true,
       })
       applyFrameState(frame, state, theme)
@@ -458,5 +448,67 @@ describe("the chart pane (006 FR-003, SC-004, SC-005)", () => {
       csvForScreen(db, council, { councilType: "OBEC" }),
     )
     expect(csvForScreen.length).toBeLessThanOrEqual(3)
+  })
+})
+
+describe("what g and Esc do to the chart (006 research R4, review finding 2)", () => {
+  test("g toggles the chart where it applies, and says so where it does not", () => {
+    expect(chartAction("chart", { open: false, shown: false, unavailable: null })).toEqual({
+      open: true,
+      notice: null,
+      handled: true,
+    })
+    expect(chartAction("chart", { open: true, shown: true, unavailable: null })).toEqual({
+      open: false,
+      notice: null,
+      handled: true,
+    })
+    expect(
+      chartAction("chart", { open: false, shown: false, unavailable: "okno je pro graf příliš úzké" }),
+    ).toEqual({
+      open: false,
+      notice: "Tento příkaz zde není dostupný.",
+      handled: true,
+    })
+  })
+
+  test("Esc closes a shown chart and goes nowhere; otherwise it is the ordinary back", () => {
+    expect(chartAction("back", { open: true, shown: true, unavailable: null })).toEqual({
+      open: false,
+      notice: null,
+      handled: true,
+    })
+    // Wanted but hidden (a screen without a breakdown): Esc goes back as usual.
+    expect(chartAction("back", { open: true, shown: false, unavailable: null })).toEqual({
+      open: true,
+      notice: null,
+      handled: false,
+    })
+  })
+
+  test("the panel for the chart carries the context, the pane width and the height", () => {
+    const panel = panelFor(db, {
+      chartOpen: true,
+      sidePanelOpen: true,
+      screen: { kind: "national" },
+      councilType: "OBEC",
+      contentAreaWidth: 98,
+      contentHeight: 27,
+    })
+    expect(panel?.kind).toBe("chart")
+    if (panel?.kind !== "chart") return
+    expect(panel.width).toBe(chartPaneWidth(98))
+    expect(panel.height).toBe(27)
+    expect(panel.context.title).toBe("Graf · ČR · obce")
+    expect(
+      panelFor(db, {
+        chartOpen: false,
+        sidePanelOpen: true,
+        screen: { kind: "national" },
+        councilType: "OBEC",
+        contentAreaWidth: 98,
+        contentHeight: 27,
+      }),
+    ).toEqual({ kind: "watchlist" })
   })
 })

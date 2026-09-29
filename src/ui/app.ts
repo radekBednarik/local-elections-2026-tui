@@ -35,14 +35,14 @@ import {
 } from "../storage/queries/preferences.ts"
 import { toggleWatchlist, watchedCodes } from "../storage/queries/watchlist.ts"
 import { Frame } from "./chrome/frame.ts"
-import { chartFits, chartPaneWidth, panelFits } from "./chrome/panel.ts"
+import { chartFits, panelFits } from "./chrome/panel.ts"
 import {
   applyFrameState,
   applyPanel,
   applyPlainLines,
-  choosePanel,
+  chartAction,
   frameState,
-  type PanelContent,
+  panelFor,
   viewWidthFor,
 } from "./chrome/state.ts"
 import { allFinal, isTooSmall, sourceStatus, tooSmallMessage } from "./components/status.ts"
@@ -69,7 +69,7 @@ import {
   withCapabilities,
 } from "./theme/detect.ts"
 import { nextTheme, type Theme, type ThemeName, themeLabel } from "./theme/themes.ts"
-import { chartAfterResize, chartContext, isChartScreen } from "./views/chart.ts"
+import { chartAfterResize, isChartScreen } from "./views/chart.ts"
 import { openLogs, performCopy, syncLogSelection } from "./views/logs.ts"
 
 /** How close two clicks on one row must be to count as a double click. */
@@ -184,7 +184,7 @@ export class App {
     renderer.keyInput.on("keypress", (key: KeyEvent) => {
       void this.onKey(key)
     })
-    renderer.on("resize", () => {
+    redrawOnResize(renderer, () => {
       this.draw()
     })
 
@@ -402,25 +402,23 @@ export class App {
         this.open(content)
         break
       case "chart":
-        // The palette offers the entry greyed where it cannot run; reached by key there,
-        // it says so rather than silently doing nothing.
-        if (actionById("chart")?.unavailable(this.actionContext(content)) !== null) {
-          this.notice = NOT_AVAILABLE_HERE
-        } else {
-          this.chartOpen = !this.chartOpen
-        }
-        break
-      case "back":
-        // Esc closes the chart before it goes anywhere (research R4).
-        if (this.chartShown()) {
-          this.chartOpen = false
-          break
-        }
+      case "back": {
+        // The palette offers "chart" greyed where it cannot run; reached by key there, it
+        // says so. Esc closes a shown chart before it goes anywhere (research R4).
+        const result = chartAction(id, {
+          open: this.chartOpen,
+          shown: this.chartShown(),
+          unavailable: actionById("chart")?.unavailable(this.actionContext(content)) ?? null,
+        })
+        this.chartOpen = result.open
+        if (result.notice !== null) this.notice = result.notice
+        if (result.handled) break
         if (this.nav.pop()) {
           this.sort = UNSORTED
           this.syncSubscriptions()
         }
         break
+      }
       case "search":
         this.query = ""
         this.sort = UNSORTED
@@ -838,6 +836,7 @@ export class App {
     if (resized.notice !== null) this.notice = resized.notice
 
     if (isTooSmall(width, height)) {
+      this.chartShownLastDraw = false
       frame.setBreadcrumb("")
       frame.setWarning(null)
       applyPlainLines(frame, tooSmallMessage(width, height), width)
@@ -848,19 +847,14 @@ export class App {
     // Each panel is shown only when the user wants it AND it fits beside a readable
     // content area. The content area never loses columns to keep one open (FR-057). The
     // chart and the watchlist share the region, and the chart wins (006 research R2).
-    const choice = choosePanel({
+    const panel = panelFor(this.deps.db, {
       chartOpen: this.chartOpen,
       sidePanelOpen: this.sidePanelOpen,
       screen: this.nav.screen,
+      councilType: this.councilType,
       contentAreaWidth: raw,
+      contentHeight: frame.contentHeight,
     })
-    const context = choice === "chart" ? chartContext(this.deps.db, this.nav.screen, this.councilType) : null
-    const panel: PanelContent =
-      context !== null
-        ? { kind: "chart", context, width: chartPaneWidth(raw), height: frame.contentHeight }
-        : choice === "watchlist"
-          ? { kind: "watchlist" }
-          : null
     applyPanel(frame, this.deps.db, this.theme, panel)
     this.chartShownLastDraw = panel?.kind === "chart"
 
@@ -902,6 +896,30 @@ export class App {
       theme,
     )
   }
+}
+
+/**
+ * Draws on a resize, and again once the new size is laid out.
+ *
+ * OpenTUI emits the resize before it lays the tree out at the new size, so the first
+ * draw measures the OLD widths: tables stayed composed for the previous terminal, and a
+ * chart pane stayed open on a window too narrow for it, until something else redrew. A
+ * one-shot hook after the next frame's layout draws again with the real widths.
+ */
+export function redrawOnResize(
+  renderer: Pick<CliRenderer, "on" | "addPostProcessFn" | "removePostProcessFn">,
+  draw: () => void,
+): void {
+  renderer.on("resize", () => {
+    draw()
+    const settle = () => {
+      renderer.removePostProcessFn(settle)
+      // Outside the frame being rendered: a draw changes renderables, and so asks for the
+      // next frame rather than altering this one mid-way.
+      setTimeout(draw, 0)
+    }
+    renderer.addPostProcessFn(settle)
+  })
 }
 
 /** When any source last refreshed successfully, for the title bar clock. */

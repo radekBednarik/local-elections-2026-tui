@@ -14,7 +14,17 @@ import { ageSeconds, formatAge, statusLabel } from "../../domain/status.ts"
 import { readNationalParties, readNationalTotals } from "../../storage/queries/national.ts"
 import { BAR_WIDTH, bar, barsFit } from "../bar.ts"
 import { type Column, formatInteger, formatPercent, formatProgress, pad, withChange } from "../format.ts"
-import { badge, blank, type Cell, cell, line, roleForChange, type SemanticRow, tableHeader } from "../row.ts"
+import {
+  badge,
+  blank,
+  type Cell,
+  cell,
+  cellsWide,
+  line,
+  roleForChange,
+  type SemanticRow,
+  tableHeader,
+} from "../row.ts"
 
 const TYPE_LABELS: Record<string, string> = {
   OBEC: "Zastupitelstva obcí",
@@ -130,14 +140,13 @@ export function buildNationalRows(db: Database, options: NationalRowsOptions = {
 
   // The title with the status as a badge, and the publisher's own timestamp (FR-021).
   const age = ageSeconds(totals.publishedAt, now)
+  const title = cell(TYPE_LABELS[oznacTypu] ?? oznacTypu, "heading")
+  const status = badge(`${totals.isFinal ? "✓" : "◌"} ${statusLabel(totals)}`)
   const rows: SemanticRow[] = [
-    {
-      cells: [
-        cell(TYPE_LABELS[oznacTypu] ?? oznacTypu, "heading"),
-        cell("  "),
-        badge(`${totals.isFinal ? "✓" : "◌"} ${statusLabel(totals)}`),
-      ],
-    },
+    // The badge moves under the title rather than being cut off beside the chart pane.
+    ...(cellsWide([title, cell("  "), status]) <= width
+      ? [{ cells: [title, cell("  "), status] }]
+      : [{ cells: [title] }, { cells: [status] }]),
     ...summaryLines([`Zveřejněno: ${totals.publishedAt}`, `(${formatAge(age)})`], " ", width, "muted"),
     blank(),
   ]
