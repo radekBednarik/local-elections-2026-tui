@@ -339,6 +339,19 @@ describe("recording a fetch outcome", () => {
     expect(scheduler.get("national")?.lastError).toBe("Server odpověděl 503")
     expect(scheduler.get("national")?.consecutiveFailures).toBe(2)
   })
+
+  test("returns what the fetch did, for the manual refresh summary", () => {
+    const scheduler = subscribed()
+    expect(recordFetch(db, scheduler, "national", ok(NATIONAL), log)).toBe("changed")
+    // The final mirror case: the same document again changes nothing.
+    expect(recordFetch(db, scheduler, "national", ok(NATIONAL), log)).toBe("unchanged")
+    expect(recordFetch(db, scheduler, "national", { kind: "not-modified" }, log)).toBe("not-modified")
+    expect(recordFetch(db, scheduler, "national", ok(MALFORMED), log)).toBe("failed")
+    expect(recordFetch(db, scheduler, "national", { kind: "not-found" }, log)).toBe("failed")
+    expect(
+      recordFetch(db, scheduler, "national", { kind: "failed", reason: "Server odpověděl 503" }, log),
+    ).toBe("failed")
+  })
 })
 
 describe("what a fetch outcome logs (004 research R5)", () => {
@@ -376,6 +389,15 @@ describe("what a fetch outcome logs (004 research R5)", () => {
         "warn Stahování selhalo",
         "info Data zatím nejsou zveřejněna",
       ])
+    })
+  })
+
+  test("automatic polling logs nothing on success, changed or not", async () => {
+    await withLog((log, scheduler) => {
+      recordFetch(db, scheduler, "national", ok(NATIONAL), log, T0)
+      recordFetch(db, scheduler, "national", ok(NATIONAL), log, T0)
+      recordFetch(db, scheduler, "national", { kind: "not-modified" }, log, T0)
+      expect(messages(log)).toEqual([])
     })
   })
 
