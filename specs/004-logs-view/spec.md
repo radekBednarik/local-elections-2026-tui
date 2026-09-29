@@ -164,7 +164,9 @@ and that severities can be told apart with colour turned off.
   as "not yet available", never as corrupt or stale data.
 - Every source on screen is final and a manual refresh fails. As today, this does not
   raise a warning on the main screen (003 behaviour). The failure is visible in the logs
-  view.
+  view. Since bug `manual-refresh-no-feedback` (2026-09-29), a one-off status-row notice
+  also says the refresh failed and points to the logs view. It clears on the next
+  keystroke, so it is not a warning.
 - The user presses `Esc` in the logs view. It closes the view. `Esc` does not also take
   the underlying screen back a level.
 - Log writing to the file has failed. The in-app logs view still shows the entries

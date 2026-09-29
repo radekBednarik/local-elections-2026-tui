@@ -53,7 +53,7 @@ within 60 seconds and confirm no second request is made.
 **Acceptance Scenarios**:
 
 1. **Given** the screen on view shows data from a final source, **When** the user invokes refresh, **Then** that source is requested once and the figures it returns are shown.
-2. **Given** a final source was requested less than 60 seconds ago, **When** the user invokes refresh again, **Then** no request is made, as today.
+2. **Given** a final source was requested less than 60 seconds ago, **When** the user invokes refresh again, **Then** no request is made, as today, and the status row says how many seconds remain until refresh is allowed (added on 2026-09-29 by bug `manual-refresh-no-feedback`).
 3. **Given** a manual refresh of a final source returns the same final data, **When** later polling intervals pass, **Then** the source stays out of automatic polling.
 4. **Given** a manual refresh of a final source returns data that is no longer final, **When** later polling intervals pass, **Then** the source goes back to automatic polling.
 
@@ -89,7 +89,7 @@ past the stale-data threshold and confirm no stale-data warning appears.
 - **The application is restarted after sources became final.** Sources already known final from stored data stay out of automatic polling after the restart, with no fresh request to confirm them.
 - **Stored data is dropped** (`--reset`, or pointing the application at a different election, date or base URL). Finality is forgotten with the data, and every source starts in automatic polling again.
 - **A request for a source that is still in progress fails.** Failure handling and backoff are unchanged. Only final data stops polling, never a failure.
-- **A manual refresh of a final source fails.** The source stays final and unscheduled, the stored figures stay on screen, and the failure is written to the log only. No stale-data warning is raised: the figures are final, not stale, and since nothing retries a final source automatically, such a warning would never clear. A failed refresh therefore looks the same on screen as one that found no change. This is accepted.
+- **A manual refresh of a final source fails.** The source stays final and unscheduled, the stored figures stay on screen, and the failure is written to the log only. No stale-data warning is raised: the figures are final, not stale, and since nothing retries a final source automatically, such a warning would never clear. The failure is reported instead by a one-off status-row notice, "Obnovení selhalo. · l záznamy", which clears on the next keystroke like any other notice, so a failed refresh no longer looks the same on screen as one that found no change ("Obnoveno: beze změny."). The failure is also written to the log. (Changed on 2026-09-29 by bug `manual-refresh-no-feedback`. Originally a failed refresh looked the same on screen as an unchanged one, and that was accepted.)
 - **The user runs the application against an election that is already complete** (a mirror of 2022, for example). Each source is fetched once, found final, and then left alone.
 - **The user opens a council for the first time and it is already final.** It is fetched once to get its figures, then not polled automatically while it stays on screen or on the watchlist.
 

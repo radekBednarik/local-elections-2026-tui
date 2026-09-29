@@ -69,6 +69,6 @@ Notices: `Obnovuji…`, `Obnovení bude možné za N s.`, `Obnoveno: nová data.
 
 ## Follow-ups
 
-- Update the spec 003 edge case "A manual refresh of a final source fails", which says a failed refresh looks the same on screen as an unchanged one. It is now reported once in the status row, still without a stale warning.
+- Update the spec 003 edge case "A manual refresh of a final source fails", which says a failed refresh looks the same on screen as an unchanged one. It is now reported once in the status row, still without a stale warning. (Done 2026-09-29: spec 003 edge case and scenario 2.2, research R7, and the matching spec 004 edge case.)
 - A requested council that gets unsubscribed (the user navigates away) before its fetch never settles. The next refresh replaces the pending one and the notice clears on the next key, so the effect is only a missing summary log entry. Acceptable, but worth knowing.
 - Consider mentioning the refresh notices in the README key help.

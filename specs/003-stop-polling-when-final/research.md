@@ -158,3 +158,8 @@ made.
 
 **Decision**: No change here. Feedback on a blocked refresh is a separate improvement,
 outside what the user asked for.
+
+**Later** (2026-09-29, bug `manual-refresh-no-feedback`): that improvement was made.
+Every manual refresh now ends in one status-row notice and one log entry, including a
+refresh blocked by the floor, which says how many seconds remain. See
+`.specify/bugs/manual-refresh-no-feedback/`.
