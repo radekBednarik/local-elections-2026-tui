@@ -253,6 +253,16 @@ describe("finality of a whole document (research R3)", () => {
     expect(finalityOf(ingestDistrict(db, "CZ0642", body))).toBe(false)
   })
 
+  test("a district document written with the live 2026 flags (1/0) follows them", () => {
+    const live = read(FIXTURES, "vysledky_obce_okres_CZ0642.xml").replaceAll(
+      'JE_SPOCTENO="true"',
+      'JE_SPOCTENO="1"',
+    )
+    expect(finalityOf(ingestDistrict(db, "CZ0642", live))).toBe(true)
+    const counting = live.replace('JE_SPOCTENO="1"', 'JE_SPOCTENO="0"')
+    expect(finalityOf(ingestDistrict(db, "CZ0642", counting))).toBe(false)
+  })
+
   test("a district document whose only council has no result is not final", () => {
     const full = read(FIXTURES, "vysledky_obce_okres_CZ0642.xml")
     const header = full.slice(0, full.indexOf("<OBEC "))
