@@ -73,7 +73,11 @@ function atProgress(xml: string, p: number): string {
   out = out.replace(/ HLASY="(\d+)"/g, (_m, v: string) => ` HLASY="${scale(Number(v))}"`)
 
   if (p < 1) {
-    out = out.replace(/JE_SPOCTENO="true"/g, 'JE_SPOCTENO="false"')
+    // Both xs:boolean spellings: 2022-derived fixtures say "true", a 2026 mirror says "1".
+    out = out.replace(
+      /JE_SPOCTENO="(true|1)"/g,
+      (_m, v: string) => `JE_SPOCTENO="${v === "1" ? "0" : "false"}"`,
+    )
   }
 
   // The publisher's generation timestamp advances with the count. The application must

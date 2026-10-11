@@ -90,6 +90,44 @@ describe("council document", () => {
   })
 })
 
+/**
+ * `JE_SPOCTENO` is an XSD `xs:boolean`, which has two lexical forms. The 2022 data - and so
+ * every fixture derived from it - writes "true"/"false"; the live 2026 publisher writes
+ * "1"/"0". Accepting only the first form rejected every 2026 district and council document.
+ */
+describe("JE_SPOCTENO lexical forms", () => {
+  const withFlag = (xml: string, value: string) =>
+    xml.replaceAll(/JE_SPOCTENO="[^"]*"/g, `JE_SPOCTENO="${value}"`)
+  const district = read(FIXTURES, "vysledky_obce_okres_CZ0100.xml")
+  const council = read(FIXTURES, "vysledky_obec_551082.xml")
+
+  test.each([
+    ["true", true],
+    ["false", false],
+    ["1", true],
+    ["0", false],
+  ])("a district document with JE_SPOCTENO=%p parses as %p", (value, expected) => {
+    const result = parseAndValidate(withFlag(district, value), districtSchema, "CZ0100")
+    if (!result.ok) throw new Error(result.message)
+    for (const obec of result.value.VYSLEDKY_OBCE_OKRES.OBEC) expect(obec.JE_SPOCTENO).toBe(expected)
+  })
+
+  test.each([
+    ["1", true],
+    ["0", false],
+  ])("a council document with JE_SPOCTENO=%p parses as %p", (value, expected) => {
+    const result = parseAndValidate(withFlag(council, value), councilSchema, "551082")
+    if (!result.ok) throw new Error(result.message)
+    expect(result.value.VYSLEDKY_OBEC.OBEC[0]?.JE_SPOCTENO).toBe(expected)
+  })
+
+  test.each(["yes", "", "TRUE", "2"])("still rejects JE_SPOCTENO=%p", (value) => {
+    const result = parseAndValidate(withFlag(district, value), districtSchema, "CZ0100")
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toBe("schema-mismatch")
+  })
+})
+
 describe("rejection (FR-025)", () => {
   test.each([
     ["malformed markup", "malformed.xml", "not-well-formed"],

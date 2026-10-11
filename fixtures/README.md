@@ -31,6 +31,10 @@ That is sound because 2022 and 2026 reference the same schemas – `kv_vysledky.
 the *delivery* changed: 2022 served these through query-parameter endpoints, 2026 serves static files. The
 2026 schema remains authoritative wherever the two are ever found to differ.
 
+One difference was found on election night: `JE_SPOCTENO` is an `xs:boolean`, and the live 2026 files write
+it as `"1"`/`"0"`, where 2022 (and so every file here) writes `"true"`/`"false"`. The schema accepts both
+forms; `tests/contract/results.test.ts` covers the 2026 spelling by rewriting these fixtures.
+
 | File | Covers |
 |---|---|
 | `vysledky.xml` | National aggregate, both `OBEC` and `MCMO` council types |

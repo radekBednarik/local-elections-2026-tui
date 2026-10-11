@@ -28,8 +28,14 @@ export const decimalFromString = z
 export const optionalInt = intFromString.optional().nullable()
 const optionalDecimal = decimalFromString.optional().nullable()
 
-/** `JE_SPOCTENO="true"` - the source writes booleans as text. */
-const booleanFromString = z.enum(["true", "false"]).transform((value) => value === "true")
+/**
+ * `JE_SPOCTENO` - an XSD `xs:boolean`, so both of its lexical forms are valid. The 2022
+ * data writes "true"/"false"; the live 2026 publisher writes "1"/"0". Anything else is
+ * still rejected.
+ */
+const booleanFromString = z
+  .enum(["true", "false", "1", "0"])
+  .transform((value) => value === "true" || value === "1")
 
 /** The publisher's generation timestamp, authoritative for "last updated" (FR-021). */
 export const generatedAt = z
